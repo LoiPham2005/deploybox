@@ -1,0 +1,25 @@
+# deps
+node_modules/
+.pnpm-store/
+
+# build output
+dist/
+.next/
+out/
+*.tsbuildinfo
+
+# deploybox runtime data (repo clone, built sites, build logs)
+.deploybox-data/
+
+# prisma generated client
+**/generated/
+.prisma/
+
+# env & secrets
+.env
+.env.local
+!.env.example
+
+# logs & os
+*.log
+.DS_Store

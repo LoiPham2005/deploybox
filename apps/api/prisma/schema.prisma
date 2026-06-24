@@ -1,0 +1,199 @@
+// DeployBox — schema dữ liệu. Xem giải thích ở
+// deploybox-plan/implementation/01-data-model-prisma.md
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- ENUMS (khớp packages/shared/src/enums.ts) ----------
+
+enum TeamRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum ProjectType {
+  STATIC
+  BACKEND
+}
+
+enum GitProvider {
+  GITHUB
+  GITLAB
+  BITBUCKET
+}
+
+enum DeploymentStatus {
+  QUEUED
+  BUILDING
+  DEPLOYING
+  RUNNING
+  SLEEPING
+  FAILED
+  STOPPED
+  CANCELLED
+}
+
+enum DeploymentTrigger {
+  MANUAL
+  GIT_PUSH
+  REDEPLOY
+}
+
+enum DomainStatus {
+  PENDING_DNS
+  VERIFYING
+  ACTIVE
+  FAILED
+}
+
+enum EnvTarget {
+  BUILD
+  RUNTIME
+  BOTH
+}
+
+// ---------- MODELS ----------
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String?
+  passwordHash String?
+  avatarUrl    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  memberships TeamMember[]
+  apiTokens   ApiToken[]
+}
+
+model Team {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+
+  members  TeamMember[]
+  projects Project[]
+}
+
+model TeamMember {
+  id        String   @id @default(cuid())
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  teamId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  role      TeamRole @default(MEMBER)
+  createdAt DateTime @default(now())
+
+  @@unique([teamId, userId])
+  @@index([userId])
+}
+
+model Project {
+  id             String       @id @default(cuid())
+  team           Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  teamId         String
+  name           String
+  slug           String
+  type           ProjectType  @default(BACKEND)
+
+  // Nguồn code
+  gitProvider    GitProvider?
+  gitRepoUrl     String?
+  gitBranch      String       @default("main")
+  rootDir        String       @default(".")
+  autoDeploy     Boolean      @default(true)
+  webhookSecret  String? // secret HMAC xác thực webhook git (mã hoá at-rest)
+
+  // Cấu hình build/run
+  installCommand String?
+  buildCommand   String?
+  startCommand   String?
+  outputDir      String?
+  internalPort   Int          @default(3000)
+
+  // Vận hành / quota
+  sleepEnabled   Boolean      @default(false)
+  memoryMb       Int          @default(512)
+  cpuLimit       Float        @default(0.5)
+
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  deployments Deployment[]
+  domains     Domain[]
+  envVars     EnvVar[]
+
+  @@unique([teamId, slug])
+  @@index([teamId])
+}
+
+model Deployment {
+  id           String            @id @default(cuid())
+  project      Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId    String
+  status       DeploymentStatus  @default(QUEUED)
+  trigger      DeploymentTrigger @default(MANUAL)
+
+  commitSha    String?
+  commitMsg    String?
+  imageTag     String?
+  containerId  String?
+  staticPath   String?
+  logKey       String?
+  errorMessage String?
+
+  queuedAt   DateTime  @default(now())
+  startedAt  DateTime?
+  finishedAt DateTime?
+  createdBy  String?
+
+  @@index([projectId, queuedAt(sort: Desc)])
+  @@index([status])
+}
+
+model Domain {
+  id          String       @id @default(cuid())
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId   String
+  hostname    String       @unique
+  isPrimary   Boolean      @default(false)
+  isManaged   Boolean      @default(false)
+  status      DomainStatus @default(PENDING_DNS)
+  verifyToken String?
+  createdAt   DateTime     @default(now())
+
+  @@index([projectId])
+}
+
+model EnvVar {
+  id        String    @id @default(cuid())
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId String
+  key       String
+  value     String
+  isSecret  Boolean   @default(false)
+  target    EnvTarget @default(RUNTIME)
+
+  @@unique([projectId, key])
+}
+
+model ApiToken {
+  id         String    @id @default(cuid())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String
+  name       String
+  tokenHash  String    @unique
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
+}

@@ -1,0 +1,145 @@
+'use client';
+
+import { useState, type FormEvent } from 'react';
+import { useRouter } from 'next/navigation';
+import type { ProjectDetailDto, UpdateProjectDto } from '@deploybox/shared';
+import { updateProjectAction } from './actions';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+
+export function EditProjectForm({ project }: { project: ProjectDetailDto }) {
+  const router = useRouter();
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function onSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const f = new FormData(e.currentTarget);
+    const s = (k: string): string | undefined => {
+      const v = (f.get(k) as string)?.trim();
+      return v === '' ? undefined : v;
+    };
+    const dto: UpdateProjectDto = {
+      name: s('name'),
+      gitRepoUrl: s('gitRepoUrl') ?? '',
+      gitBranch: s('gitBranch'),
+      rootDir: s('rootDir'),
+      buildCommand: s('buildCommand'),
+      outputDir: project.type === 'STATIC' ? s('outputDir') : undefined,
+      startCommand: project.type === 'BACKEND' ? s('startCommand') : undefined,
+      internalPort:
+        project.type === 'BACKEND' && s('internalPort')
+          ? Number(s('internalPort'))
+          : undefined,
+      autoDeploy: f.get('autoDeploy') === 'on',
+      sleepEnabled: f.get('sleepEnabled') === 'on',
+    };
+    setSaving(true);
+    setErr(null);
+    setMsg(null);
+    const res = await updateProjectAction(project.id, dto);
+    setSaving(false);
+    if (res.ok) {
+      setMsg('Đã lưu');
+      router.refresh();
+    } else {
+      setErr(res.error);
+    }
+  }
+
+  return (
+    <form onSubmit={onSubmit} className="space-y-3">
+      <div>
+        <Label htmlFor="name">Tên</Label>
+        <Input id="name" name="name" defaultValue={project.name} />
+      </div>
+      <div>
+        <Label htmlFor="gitRepoUrl">Git repo URL</Label>
+        <Input
+          id="gitRepoUrl"
+          name="gitRepoUrl"
+          defaultValue={project.gitRepoUrl ?? ''}
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <Label htmlFor="gitBranch">Branch</Label>
+          <Input
+            id="gitBranch"
+            name="gitBranch"
+            defaultValue={project.gitBranch}
+          />
+        </div>
+        <div>
+          <Label htmlFor="rootDir">Thư mục gốc</Label>
+          <Input id="rootDir" name="rootDir" defaultValue={project.rootDir} />
+        </div>
+      </div>
+      <div>
+        <Label htmlFor="buildCommand">Lệnh build</Label>
+        <Input
+          id="buildCommand"
+          name="buildCommand"
+          defaultValue={project.buildCommand ?? ''}
+        />
+      </div>
+      {project.type === 'STATIC' ? (
+        <div>
+          <Label htmlFor="outputDir">Output dir</Label>
+          <Input
+            id="outputDir"
+            name="outputDir"
+            defaultValue={project.outputDir ?? ''}
+          />
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label htmlFor="startCommand">Lệnh chạy</Label>
+            <Input
+              id="startCommand"
+              name="startCommand"
+              defaultValue={project.startCommand ?? ''}
+            />
+          </div>
+          <div>
+            <Label htmlFor="internalPort">Cổng</Label>
+            <Input
+              id="internalPort"
+              name="internalPort"
+              type="number"
+              defaultValue={project.internalPort}
+            />
+          </div>
+        </div>
+      )}
+      <div className="flex gap-4 text-sm text-white/70">
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            name="autoDeploy"
+            defaultChecked={project.autoDeploy}
+          />
+          Tự deploy khi push
+        </label>
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            name="sleepEnabled"
+            defaultChecked={project.sleepEnabled}
+          />
+          Ngủ khi nhàn rỗi
+        </label>
+      </div>
+      <div className="flex items-center gap-3">
+        <Button type="submit" disabled={saving}>
+          {saving ? 'Đang lưu…' : 'Lưu cấu hình'}
+        </Button>
+        {msg && <span className="text-sm text-emerald-400">{msg}</span>}
+        {err && <span className="text-sm text-red-400">{err}</span>}
+      </div>
+    </form>
+  );
+}

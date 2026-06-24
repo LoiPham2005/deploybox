@@ -1,0 +1,6 @@
+# Config khởi tạo cho Caddy (local dev).
+# Chỉ bật admin API; các route được DeployBox API đẩy vào qua /load.
+{
+	admin localhost:2019
+	auto_https off
+}
