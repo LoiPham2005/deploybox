@@ -6,6 +6,8 @@ import { BuildProcessor } from './build.processor';
 import { HostStaticBuilder } from '../../infra/builder/host-static.builder';
 import { DockerBackendEngine } from '../../infra/builder/docker-backend.engine';
 import { CleanupService } from '../../infra/cleanup/cleanup.service';
+import { SleepService } from '../../infra/sleep/sleep.service';
+import { WakeController } from './wake.controller';
 import { AuthModule } from '../auth/auth.module';
 import { EnvModule } from '../env/env.module';
 import { CaddyModule } from '../../infra/caddy/caddy.module';
@@ -18,13 +20,14 @@ import { BUILD_QUEUE } from './queue.constants';
     CaddyModule,
     BullModule.registerQueue({ name: BUILD_QUEUE }),
   ],
-  controllers: [DeploymentsController],
+  controllers: [DeploymentsController, WakeController],
   providers: [
     DeploymentsService,
     BuildProcessor,
     HostStaticBuilder,
     DockerBackendEngine,
     CleanupService,
+    SleepService,
   ],
   exports: [DeploymentsService],
 })

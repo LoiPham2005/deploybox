@@ -127,6 +127,18 @@ export async function stopProjectAction(
   }
 }
 
+export async function sleepProjectAction(
+  projectId: string,
+): Promise<ActionResult> {
+  try {
+    await serverApi(`/projects/${projectId}/sleep`, { method: 'POST' });
+    revalidatePath(`/projects/${projectId}`);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Ngủ thất bại' };
+  }
+}
+
 export async function rollbackAction(
   deploymentId: string,
 ): Promise<ActionResult<DeploymentDetail>> {

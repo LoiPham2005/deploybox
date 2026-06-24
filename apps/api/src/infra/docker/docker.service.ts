@@ -73,4 +73,14 @@ export class DockerService {
   async remove(name: string): Promise<void> {
     await capture('docker', ['rm', '-f', name]);
   }
+
+  /** Dừng container nhưng GIỮ lại (cho scale-to-zero — start lại được). */
+  async stop(name: string): Promise<void> {
+    await capture('docker', ['stop', name]);
+  }
+
+  /** Khởi động lại container đã stop (giữ nguyên port mapping). */
+  async start(name: string): Promise<void> {
+    await capture('docker', ['start', name]);
+  }
 }

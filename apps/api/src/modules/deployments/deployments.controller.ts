@@ -32,6 +32,14 @@ export class DeploymentsController {
     return this.deployments.stop(user.sub, projectId);
   }
 
+  @Post('projects/:projectId/sleep')
+  sleepProject(
+    @CurrentUser() user: JwtPayload,
+    @Param('projectId') projectId: string,
+  ) {
+    return this.deployments.sleepProject(user.sub, projectId);
+  }
+
   @Get('projects/:projectId/deployments')
   list(@CurrentUser() user: JwtPayload, @Param('projectId') projectId: string) {
     return this.deployments.list(user.sub, projectId);

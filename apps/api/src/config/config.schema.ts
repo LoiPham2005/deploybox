@@ -14,6 +14,13 @@ export const envSchema = z.object({
   PUBLIC_API_URL: z.string().default('http://localhost:4000'),
   CADDY_ADMIN_URL: z.string().default('http://localhost:2019'),
   PROXY_PORT: z.string().default('8080'),
+  SLEEP_IDLE_SECONDS: z.coerce.number().default(120),
+  SLEEP_SWEEP_SECONDS: z.coerce.number().default(30),
+  // Production: bật HTTPS thật (Let's Encrypt) khi chạy trên VPS + domain thật
+  PUBLIC_TLS: z.string().default('false'),
+  ACME_EMAIL: z.string().default(''),
+  WEB_UPSTREAM: z.string().default('localhost:3000'),
+  API_UPSTREAM: z.string().default('localhost:4000'),
 });
 
 export type AppEnv = z.infer<typeof envSchema>;

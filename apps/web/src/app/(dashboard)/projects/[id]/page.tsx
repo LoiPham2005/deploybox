@@ -111,6 +111,7 @@ export default async function ProjectDetailPage({
           <ProjectRuntimeActions
             projectId={project.id}
             canDeploy={deployable}
+            canSleep={project.type === 'BACKEND'}
           />
         </div>
         {project.deployments.length === 0 ? (

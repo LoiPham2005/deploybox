@@ -2,40 +2,45 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { redeployProjectAction, stopProjectAction } from './actions';
+import {
+  redeployProjectAction,
+  sleepProjectAction,
+  stopProjectAction,
+} from './actions';
 import { Button } from '@/components/ui/button';
+
+type RunResult = {
+  ok: boolean;
+  error?: string;
+  data?: { id: string };
+};
 
 export function ProjectRuntimeActions({
   projectId,
   canDeploy,
+  canSleep,
 }: {
   projectId: string;
   canDeploy: boolean;
+  canSleep: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function onRedeploy() {
-    setBusy('redeploy');
+  async function run(name: string, fn: () => Promise<RunResult>) {
+    setBusy(name);
     setError(null);
-    const res = await redeployProjectAction(projectId);
+    const res = await fn();
     setBusy(null);
-    if (res.ok && res.data) {
-      router.push(`/projects/${projectId}/deployments/${res.data.id}`);
+    if (res.ok) {
+      if (res.data) {
+        router.push(`/projects/${projectId}/deployments/${res.data.id}`);
+      }
       router.refresh();
-    } else if (!res.ok) {
+    } else if (res.error) {
       setError(res.error);
     }
-  }
-
-  async function onStop() {
-    setBusy('stop');
-    setError(null);
-    const res = await stopProjectAction(projectId);
-    setBusy(null);
-    if (res.ok) router.refresh();
-    else setError(res.error);
   }
 
   return (
@@ -43,15 +48,25 @@ export function ProjectRuntimeActions({
       {error && <span className="text-xs text-red-400">{error}</span>}
       <Button
         variant="ghost"
-        onClick={onRedeploy}
+        onClick={() => run('redeploy', () => redeployProjectAction(projectId))}
         disabled={!canDeploy || busy !== null}
         className="px-2 py-1 text-xs"
       >
         {busy === 'redeploy' ? '…' : 'Redeploy'}
       </Button>
+      {canSleep && (
+        <Button
+          variant="ghost"
+          onClick={() => run('sleep', () => sleepProjectAction(projectId))}
+          disabled={busy !== null}
+          className="px-2 py-1 text-xs"
+        >
+          {busy === 'sleep' ? '…' : 'Ngủ'}
+        </Button>
+      )}
       <Button
         variant="ghost"
-        onClick={onStop}
+        onClick={() => run('stop', () => stopProjectAction(projectId))}
         disabled={busy !== null}
         className="px-2 py-1 text-xs"
       >

@@ -14,6 +14,7 @@ import { join, resolve } from 'path';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 import { DockerService } from '../../infra/docker/docker.service';
 import { CaddyService } from '../../infra/caddy/caddy.service';
+import { SleepService } from '../../infra/sleep/sleep.service';
 import { BUILD_QUEUE, type BuildJobData } from './queue.constants';
 
 @Injectable()
@@ -23,6 +24,7 @@ export class DeploymentsService {
     private readonly config: ConfigService,
     private readonly docker: DockerService,
     private readonly caddy: CaddyService,
+    private readonly sleepSvc: SleepService,
     @InjectQueue(BUILD_QUEUE) private readonly buildQueue: Queue<BuildJobData>,
   ) {}
 
@@ -154,6 +156,14 @@ export class DeploymentsService {
     });
     await this.caddy.sync().catch(() => undefined);
     return { ok: true };
+  }
+
+  async sleepProject(
+    userId: string,
+    projectId: string,
+  ): Promise<{ ok: boolean }> {
+    await this.loadOwnedProject(userId, projectId);
+    return { ok: await this.sleepSvc.sleep(projectId) };
   }
 
   async list(userId: string, projectId: string): Promise<DeploymentDetail[]> {

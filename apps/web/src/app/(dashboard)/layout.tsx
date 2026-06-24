@@ -23,17 +23,15 @@ export default async function DashboardLayout({
         <nav className="space-y-1 text-sm">
           <Link
             href="/dashboard"
-            className="block rounded-md px-3 py-2 hover:bg-white/5"
+            className="block rounded-md bg-white/5 px-3 py-2"
           >
             Projects
           </Link>
-          <span className="block rounded-md px-3 py-2 text-white/30">
-            Domains (M3)
-          </span>
-          <span className="block rounded-md px-3 py-2 text-white/30">
-            Settings (M4)
-          </span>
         </nav>
+        <p className="mt-4 px-3 text-xs leading-relaxed text-white/30">
+          Domains, Webhook, Env &amp; cấu hình nằm trong từng project — mở một
+          project để quản lý.
+        </p>
       </aside>
       <div className="flex flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-white/10 px-6 py-3">
