@@ -6,6 +6,8 @@ export const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   JWT_SECRET: z.string().min(8, 'JWT_SECRET phải >= 8 ký tự'),
   JWT_EXPIRES_IN: z.string().default('7d'),
+  // Nếu đặt: chỉ ai có mã này mới đăng ký được (cho instance nội bộ). Rỗng = mở.
+  SIGNUP_CODE: z.string().default(''),
   ENCRYPTION_KEY: z.string().min(32, 'ENCRYPTION_KEY phải >= 32 ký tự'),
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
   APP_DOMAIN: z.string().default('localhost'),

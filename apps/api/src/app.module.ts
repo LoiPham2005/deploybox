@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { validateEnv } from './config/config.schema';
 import { CryptoModule } from './common/crypto/crypto.module';
+import { MetricsModule } from './infra/metrics/metrics.module';
 import { PrismaModule } from './infra/prisma/prisma.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { HealthModule } from './modules/health/health.module';
@@ -33,6 +34,7 @@ import { WebhooksModule } from './modules/webhooks/webhooks.module';
     }),
     PrismaModule,
     CryptoModule,
+    MetricsModule,
     AuthModule,
     HealthModule,
     ProjectsModule,

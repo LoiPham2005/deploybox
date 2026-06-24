@@ -1,0 +1,36 @@
+# Stack giám sát — chạy riêng: docker compose -f monitoring/docker-compose.yml up -d
+# - Prometheus  : http://localhost:9090  (scrape /api/v1/metrics của API)
+# - Grafana     : http://localhost:3001  (admin/admin) — thêm datasource Prometheus
+# - Uptime Kuma : http://localhost:3002  (ping healthcheck / app)
+services:
+  prometheus:
+    image: prom/prometheus
+    restart: unless-stopped
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - '9090:9090'
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+
+  grafana:
+    image: grafana/grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    ports:
+      - '3001:3000'
+    volumes:
+      - grafana-data:/var/lib/grafana
+
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    restart: unless-stopped
+    ports:
+      - '3002:3001'
+    volumes:
+      - uptime-data:/app/data
+
+volumes:
+  grafana-data:
+  uptime-data:

@@ -1,5 +1,5 @@
 // DeployBox — schema dữ liệu. Xem giải thích ở
-// deploybox-plan/implementation/01-data-model-prisma.md
+// docs/implementation/01-data-model-prisma.md
 
 generator client {
   provider = "prisma-client-js"

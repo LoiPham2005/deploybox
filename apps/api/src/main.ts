@@ -5,6 +5,8 @@ import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { join, resolve } from 'path';
 import { AppModule } from './app.module';
+import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
@@ -17,6 +19,8 @@ async function bootstrap(): Promise<void> {
     origin: config.get<string>('CORS_ORIGIN', 'http://localhost:3000'),
     credentials: true,
   });
+  app.useGlobalFilters(new AllExceptionsFilter());
+  app.useGlobalInterceptors(new LoggingInterceptor());
 
   // Phục vụ web tĩnh đã build: <DATA_DIR>/sites/<slug>/ -> /sites/<slug>/
   const dataDir = resolve(

@@ -1,8 +1,10 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import type {
@@ -35,9 +37,16 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
+    private readonly config: ConfigService,
   ) {}
 
   async register(dto: RegisterDto): Promise<AuthResponse> {
+    const required = this.config.get<string>('SIGNUP_CODE', '');
+    if (required && dto.signupCode !== required) {
+      throw new ForbiddenException(
+        'Mã mời không đúng — liên hệ admin để được cấp',
+      );
+    }
     const existing = await this.prisma.user.findUnique({
       where: { email: dto.email },
     });

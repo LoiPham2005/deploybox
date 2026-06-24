@@ -1,4 +1,4 @@
-// Hợp đồng sự kiện WebSocket realtime (xem deploybox-plan/implementation/02-api-contract.md §4)
+// Hợp đồng sự kiện WebSocket realtime (xem docs/implementation/02-api-contract.md §4)
 import type { DeploymentStatus } from './enums';
 
 export const WS_EVENTS = {

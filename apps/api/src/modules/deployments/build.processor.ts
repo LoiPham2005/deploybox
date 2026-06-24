@@ -116,7 +116,6 @@ export class BuildProcessor extends WorkerHost {
           where: { id: deploymentId },
           data: { status: 'DEPLOYING' },
         });
-        log('Khởi chạy container…', 'stdout');
         await this.prisma.deployment.update({
           where: { id: deploymentId },
           data: {

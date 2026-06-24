@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build:shared
+      - run: pnpm db:generate # prisma generate (cần cho typecheck/build api)
+
+      - name: Tests
+        run: |
+          pnpm --filter @deploybox/shared test
+          pnpm --filter @deploybox/api test
+
+      - name: Typecheck
+        run: |
+          pnpm --filter @deploybox/api typecheck
+          pnpm --filter @deploybox/web typecheck
+
+      - name: Build
+        run: |
+          pnpm --filter @deploybox/api build
+          pnpm --filter @deploybox/web build
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:4000

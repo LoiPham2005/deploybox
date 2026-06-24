@@ -2,7 +2,7 @@
 
 PaaS tự host: kết nối Git → build → chạy app → tự gắn domain + SSL. Monorepo gồm dashboard (Next.js) + API (NestJS) + gói type dùng chung.
 
-> Kế hoạch chi tiết nằm ở `../deploybox-plan/`. File này chỉ hướng dẫn chạy code.
+> Kế hoạch chi tiết nằm ở `docs/`. File này chỉ hướng dẫn chạy code.
 
 ## Yêu cầu
 - Node >= 20 (đang dùng 24)
@@ -37,7 +37,7 @@ packages/
 
 ## Trạng thái: Phase 1 — Milestone M0 (khung nền)
 Đã có: monorepo, gói shared, **auth (đăng ký/đăng nhập/JWT)**, Prisma schema đầy đủ, vỏ dashboard.
-Tiếp theo (M1): tạo project + luồng deploy web tĩnh xuyên pipeline. Xem `../deploybox-plan/implementation/05-lo-trinh-trien-khai.md`.
+Tiếp theo (M1): tạo project + luồng deploy web tĩnh xuyên pipeline. Xem `docs/implementation/05-lo-trinh-trien-khai.md`.
 
 ## Lệnh hữu ích
 | Lệnh | Việc |

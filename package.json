@@ -13,6 +13,8 @@
     "dev:api": "pnpm --filter @deploybox/api start:dev",
     "dev:web": "pnpm --filter @deploybox/web dev",
     "typecheck": "pnpm build:shared && pnpm --filter @deploybox/api typecheck && pnpm --filter @deploybox/web typecheck",
+    "test": "pnpm build:shared && pnpm --filter @deploybox/shared test && pnpm --filter @deploybox/api test",
+    "format": "prettier --write \"{apps,packages}/**/src/**/*.{ts,tsx}\"",
     "db:generate": "pnpm --filter @deploybox/api prisma generate",
     "db:migrate": "pnpm --filter @deploybox/api prisma migrate dev",
     "db:seed": "pnpm --filter @deploybox/api db:seed",
@@ -22,7 +24,12 @@
     "caddy": "caddy run --config caddy/init.caddyfile --adapter caddyfile"
   },
   "devDependencies": {
+    "lint-staged": "^15.2.11",
+    "prettier": "^3.4.2",
     "typescript": "^5.6.3"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,json,md,yaml,yml}": "prettier --write"
   },
   "pnpm": {
     "onlyBuiltDependencies": ["@prisma/client", "prisma", "esbuild"]

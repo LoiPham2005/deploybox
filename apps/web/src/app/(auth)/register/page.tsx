@@ -13,6 +13,7 @@ export default function RegisterPage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [signupCode, setSignupCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -25,6 +26,7 @@ export default function RegisterPage() {
         name: name || undefined,
         email,
         password,
+        signupCode: signupCode || undefined,
       });
       await fetch('/api/session', {
         method: 'POST',
@@ -68,6 +70,15 @@ export default function RegisterPage() {
           onChange={(e) => setPassword(e.target.value)}
           minLength={8}
           required
+        />
+      </div>
+      <div>
+        <Label htmlFor="signupCode">Mã mời (nếu được cấp)</Label>
+        <Input
+          id="signupCode"
+          value={signupCode}
+          onChange={(e) => setSignupCode(e.target.value)}
+          placeholder="Để trống nếu instance không yêu cầu"
         />
       </div>
       {error && <p className="text-sm text-red-400">{error}</p>}
