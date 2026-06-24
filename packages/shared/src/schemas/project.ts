@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const createProjectSchema = z.object({
   name: z.string().min(1).max(60),
-  type: z.enum(['STATIC', 'BACKEND']),
+  type: z.enum(['STATIC', 'BACKEND', 'MOBILE']),
   gitRepoUrl: z.string().url().optional(),
   gitBranch: z.string().default('main'),
   rootDir: z.string().default('.'),
@@ -10,6 +10,8 @@ export const createProjectSchema = z.object({
   startCommand: z.string().optional(),
   outputDir: z.string().optional(),
   internalPort: z.number().int().positive().max(65535).optional(),
+  buildImage: z.string().optional(),
+  artifactPath: z.string().optional(),
 });
 export type CreateProjectDto = z.infer<typeof createProjectSchema>;
 
@@ -46,6 +48,8 @@ export const updateProjectSchema = z.object({
   startCommand: z.string().optional(),
   outputDir: z.string().optional(),
   internalPort: z.number().int().positive().max(65535).optional(),
+  buildImage: z.string().optional(),
+  artifactPath: z.string().optional(),
   sleepEnabled: z.boolean().optional(),
   autoDeploy: z.boolean().optional(),
 });

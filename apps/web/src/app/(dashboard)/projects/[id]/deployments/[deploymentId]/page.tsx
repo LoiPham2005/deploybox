@@ -22,7 +22,7 @@ export default async function DeploymentPage({
     notFound();
   }
 
-  const { deployment, project, url, logs } = view;
+  const { deployment, project, url, artifactUrl, logs } = view;
   const isActive = !TERMINAL.includes(deployment.status);
 
   return (
@@ -69,6 +69,22 @@ export default async function DeploymentPage({
             </div>
             <a href={url} target="_blank" rel="noreferrer">
               <Button>Mở site</Button>
+            </a>
+          </div>
+        </Card>
+      )}
+
+      {artifactUrl && (
+        <Card className="border-emerald-500/20">
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-sm text-white/50">Artifact build thành công</p>
+              <p className="truncate text-xs text-white/40">
+                {artifactUrl.split('/').pop()}
+              </p>
+            </div>
+            <a href={artifactUrl} download>
+              <Button>Tải xuống</Button>
             </a>
           </div>
         </Card>

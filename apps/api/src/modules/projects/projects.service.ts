@@ -145,6 +145,8 @@ export class ProjectsService {
         ...dto,
         // chuỗi rỗng từ form -> null
         gitRepoUrl: dto.gitRepoUrl === '' ? null : dto.gitRepoUrl,
+        buildImage: dto.buildImage === '' ? null : dto.buildImage,
+        artifactPath: dto.artifactPath === '' ? null : dto.artifactPath,
       },
     });
     return this.get(userId, projectId);

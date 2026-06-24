@@ -38,6 +38,8 @@ export function NewProjectForm({ teamId }: { teamId: string }) {
       startCommand: type === 'BACKEND' ? str('startCommand') : undefined,
       internalPort:
         type === 'BACKEND' && portRaw ? Number(portRaw) : undefined,
+      buildImage: type === 'MOBILE' ? str('buildImage') : undefined,
+      artifactPath: type === 'MOBILE' ? str('artifactPath') : undefined,
     };
 
     setLoading(true);
@@ -69,6 +71,7 @@ export function NewProjectForm({ teamId }: { teamId: string }) {
         >
           <option value="STATIC">Web tĩnh (React/Vue/Flutter Web…)</option>
           <option value="BACKEND">Web có backend (Node/Python…)</option>
+          <option value="MOBILE">App mobile (Flutter APK/AAB)</option>
         </Select>
       </div>
 
@@ -93,21 +96,25 @@ export function NewProjectForm({ teamId }: { teamId: string }) {
         </div>
       </div>
 
-      <div>
-        <Label htmlFor="buildCommand">Lệnh build (tùy chọn)</Label>
-        <Input
-          id="buildCommand"
-          name="buildCommand"
-          placeholder={type === 'STATIC' ? 'npm run build' : 'npm run build'}
-        />
-      </div>
+      {type !== 'MOBILE' && (
+        <div>
+          <Label htmlFor="buildCommand">Lệnh build (tùy chọn)</Label>
+          <Input
+            id="buildCommand"
+            name="buildCommand"
+            placeholder={type === 'STATIC' ? 'npm run build' : 'npm run build'}
+          />
+        </div>
+      )}
 
-      {type === 'STATIC' ? (
+      {type === 'STATIC' && (
         <div>
           <Label htmlFor="outputDir">Thư mục output</Label>
           <Input id="outputDir" name="outputDir" placeholder="dist" />
         </div>
-      ) : (
+      )}
+
+      {type === 'BACKEND' && (
         <div className="grid grid-cols-2 gap-3">
           <div>
             <Label htmlFor="startCommand">Lệnh chạy</Label>
@@ -125,6 +132,47 @@ export function NewProjectForm({ teamId }: { teamId: string }) {
               type="number"
               defaultValue={3000}
             />
+          </div>
+        </div>
+      )}
+
+      {type === 'MOBILE' && (
+        <div className="space-y-3">
+          <div>
+            <Label htmlFor="buildCommand">Lệnh build</Label>
+            <Input
+              id="buildCommand"
+              name="buildCommand"
+              placeholder="flutter build apk --release"
+              defaultValue="flutter build apk --release"
+            />
+            <p className="mt-1 text-xs text-white/40">
+              Dùng <code>flutter build appbundle --release</code> để tạo AAB lên Play Store
+            </p>
+          </div>
+          <div>
+            <Label htmlFor="buildImage">Docker image build</Label>
+            <Input
+              id="buildImage"
+              name="buildImage"
+              placeholder="cirrusci/flutter:stable"
+              defaultValue="cirrusci/flutter:stable"
+            />
+            <p className="mt-1 text-xs text-white/40">
+              Image chứa Flutter SDK — server sẽ tự pull lần đầu
+            </p>
+          </div>
+          <div>
+            <Label htmlFor="artifactPath">Đường dẫn file output</Label>
+            <Input
+              id="artifactPath"
+              name="artifactPath"
+              placeholder="build/app/outputs/flutter-apk/app-release.apk"
+              defaultValue="build/app/outputs/flutter-apk/app-release.apk"
+            />
+            <p className="mt-1 text-xs text-white/40">
+              AAB: <code>build/app/outputs/bundle/release/app-release.aab</code>
+            </p>
           </div>
         </div>
       )}

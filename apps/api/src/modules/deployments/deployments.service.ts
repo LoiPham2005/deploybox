@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { Deployment } from '@prisma/client';
+import { type Deployment, ProjectType } from '@prisma/client';
 import type { DeploymentDetail, DeploymentView } from '@deploybox/shared';
 import { Queue } from 'bullmq';
 import { readFile, rm } from 'fs/promises';
@@ -185,7 +185,11 @@ export class DeploymentsService {
     await this.assertMembership(userId, deployment.project.teamId);
 
     const logs = await this.readLogs(deploymentId);
-    const url = this.resolveUrl(deployment);
+    const isMobile = deployment.project.type === ProjectType.MOBILE;
+    const url = isMobile ? null : this.resolveUrl(deployment);
+    const artifactUrl = isMobile
+      ? this.resolveArtifactUrl(deployment)
+      : null;
 
     return {
       deployment: this.toDetail(deployment),
@@ -196,6 +200,7 @@ export class DeploymentsService {
         type: deployment.project.type,
       },
       url,
+      artifactUrl,
       logs,
     };
   }
@@ -206,6 +211,15 @@ export class DeploymentsService {
   }): string | null {
     if (deployment.status !== 'RUNNING') return null;
     return this.caddy.publicUrl(deployment.project.slug);
+  }
+
+  private resolveArtifactUrl(deployment: {
+    status: string;
+    staticPath?: string | null;
+  }): string | null {
+    if (deployment.status !== 'RUNNING' || !deployment.staticPath) return null;
+    const apiUrl = this.config.get<string>('PUBLIC_API_URL', `http://localhost:${this.config.get('PORT', 4000)}`);
+    return `${apiUrl}/${deployment.staticPath}`;
   }
 
   private async readLogs(deploymentId: string): Promise<string> {

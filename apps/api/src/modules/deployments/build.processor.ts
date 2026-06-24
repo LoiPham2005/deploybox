@@ -9,6 +9,7 @@ import {
   type BuildLogger,
 } from '../../infra/builder/host-static.builder';
 import { DockerBackendEngine } from '../../infra/builder/docker-backend.engine';
+import { MobileBuilder } from '../../infra/builder/mobile.builder';
 import { CaddyService } from '../../infra/caddy/caddy.service';
 import { CleanupService } from '../../infra/cleanup/cleanup.service';
 import { PrismaService } from '../../infra/prisma/prisma.service';
@@ -24,6 +25,7 @@ export class BuildProcessor extends WorkerHost {
     private readonly config: ConfigService,
     private readonly builder: HostStaticBuilder,
     private readonly dockerEngine: DockerBackendEngine,
+    private readonly mobileBuilder: MobileBuilder,
     private readonly caddy: CaddyService,
     private readonly cleanup: CleanupService,
     private readonly env: EnvService,
@@ -63,6 +65,37 @@ export class BuildProcessor extends WorkerHost {
 
       if (rollbackOf) {
         await this.doRollback(deploymentId, rollbackOf, project, dataDir, log);
+      } else if (project.type === 'MOBILE') {
+        if (!project.artifactPath) {
+          throw new Error(
+            'Project MOBILE cần artifactPath. Ví dụ: build/app/outputs/flutter-apk/app-dev-release.apk',
+          );
+        }
+        const buildEnv = await this.env.resolveForPhase(project.id, 'build');
+        const { fileName } = await this.mobileBuilder.build(
+          {
+            deploymentId,
+            slug: project.slug,
+            repoUrl: project.gitRepoUrl!,
+            branch: project.gitBranch,
+            rootDir: project.rootDir,
+            buildImage: project.buildImage ?? undefined,
+            buildCommand: project.buildCommand ?? 'flutter build apk --release',
+            artifactPath: project.artifactPath!,
+            dataDir,
+          },
+          buildEnv,
+          log,
+        );
+        log(`Artifact sẵn sàng: ${fileName}`, 'stdout');
+        await this.prisma.deployment.update({
+          where: { id: deploymentId },
+          data: {
+            status: 'RUNNING',
+            finishedAt: new Date(),
+            staticPath: `artifacts/${deploymentId}/${fileName}`,
+          },
+        });
       } else if (project.type === 'STATIC') {
         const buildEnv = await this.env.resolveForPhase(project.id, 'build');
         const { releaseDir } = await this.builder.build(

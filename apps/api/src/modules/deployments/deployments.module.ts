@@ -5,6 +5,7 @@ import { DeploymentsService } from './deployments.service';
 import { BuildProcessor } from './build.processor';
 import { HostStaticBuilder } from '../../infra/builder/host-static.builder';
 import { DockerBackendEngine } from '../../infra/builder/docker-backend.engine';
+import { MobileBuilder } from '../../infra/builder/mobile.builder';
 import { CleanupService } from '../../infra/cleanup/cleanup.service';
 import { SleepService } from '../../infra/sleep/sleep.service';
 import { WakeController } from './wake.controller';
@@ -26,6 +27,7 @@ import { BUILD_QUEUE } from './queue.constants';
     BuildProcessor,
     HostStaticBuilder,
     DockerBackendEngine,
+    MobileBuilder,
     CleanupService,
     SleepService,
   ],

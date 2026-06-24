@@ -21,6 +21,7 @@ enum TeamRole {
 enum ProjectType {
   STATIC
   BACKEND
+  MOBILE
 }
 
 enum GitProvider {
@@ -119,6 +120,8 @@ model Project {
   startCommand   String?
   outputDir      String?
   internalPort   Int          @default(3000)
+  buildImage     String?
+  artifactPath   String?
 
   // Vận hành / quota
   sleepEnabled   Boolean      @default(false)

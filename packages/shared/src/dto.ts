@@ -96,6 +96,8 @@ export interface ProjectDetailDto {
   startCommand?: string | null;
   outputDir?: string | null;
   internalPort: number;
+  buildImage?: string | null;
+  artifactPath?: string | null;
   autoDeploy: boolean;
   sleepEnabled: boolean;
   memoryMb: number;
@@ -110,7 +112,8 @@ export interface ProjectDetailDto {
 export interface DeploymentView {
   deployment: DeploymentDetail;
   project: { id: string; name: string; slug: string; type: ProjectType };
-  url?: string | null; // URL phục vụ khi RUNNING (web tĩnh)
+  url?: string | null;         // URL phục vụ khi RUNNING (web tĩnh / backend)
+  artifactUrl?: string | null; // URL tải file khi RUNNING (mobile APK/AAB)
   logs: string;
 }
 

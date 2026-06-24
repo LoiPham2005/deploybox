@@ -63,12 +63,19 @@ export default async function ProjectDetailPage({
           <Row label="Branch" value={project.gitBranch} />
           <Row label="Thư mục gốc" value={project.rootDir} />
           <Row label="Lệnh build" value={project.buildCommand ?? '—'} />
-          {project.type === 'STATIC' ? (
+          {project.type === 'STATIC' && (
             <Row label="Output dir" value={project.outputDir ?? '—'} />
-          ) : (
+          )}
+          {project.type === 'BACKEND' && (
             <>
               <Row label="Lệnh chạy" value={project.startCommand ?? '—'} />
               <Row label="Cổng" value={String(project.internalPort)} />
+            </>
+          )}
+          {project.type === 'MOBILE' && (
+            <>
+              <Row label="Docker image" value={project.buildImage ?? '—'} />
+              <Row label="Artifact path" value={project.artifactPath ?? '—'} />
             </>
           )}
         </dl>

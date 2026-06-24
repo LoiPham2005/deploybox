@@ -28,12 +28,15 @@ async function bootstrap(): Promise<void> {
     config.get<string>('DATA_DIR', '.deploybox-data'),
   );
   app.useStaticAssets(join(dataDir, 'sites'), { prefix: '/sites' });
+  // Phục vụ artifact mobile (APK/AAB): <DATA_DIR>/artifacts/<deploymentId>/ -> /artifacts/<deploymentId>/
+  app.useStaticAssets(join(dataDir, 'artifacts'), { prefix: '/artifacts' });
 
   const port = config.get<number>('PORT', 4000);
   await app.listen(port);
   const log = new Logger('Bootstrap');
   log.log(`API: http://localhost:${port}/api/v1`);
   log.log(`Static sites: http://localhost:${port}/sites/<slug>/`);
+  log.log(`Artifacts:    http://localhost:${port}/artifacts/<deploymentId>/<file>`);
 }
 
 void bootstrap();

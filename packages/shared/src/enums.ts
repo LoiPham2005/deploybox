@@ -12,6 +12,7 @@ export type TeamRole = (typeof TeamRole)[keyof typeof TeamRole];
 export const ProjectType = {
   STATIC: 'STATIC',
   BACKEND: 'BACKEND',
+  MOBILE: 'MOBILE',
 } as const;
 export type ProjectType = (typeof ProjectType)[keyof typeof ProjectType];
 

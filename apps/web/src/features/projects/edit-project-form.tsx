@@ -33,6 +33,8 @@ export function EditProjectForm({ project }: { project: ProjectDetailDto }) {
         project.type === 'BACKEND' && s('internalPort')
           ? Number(s('internalPort'))
           : undefined,
+      buildImage: project.type === 'MOBILE' ? (s('buildImage') ?? '') : undefined,
+      artifactPath: project.type === 'MOBILE' ? (s('artifactPath') ?? '') : undefined,
       autoDeploy: f.get('autoDeploy') === 'on',
       sleepEnabled: f.get('sleepEnabled') === 'on',
     };
@@ -85,7 +87,7 @@ export function EditProjectForm({ project }: { project: ProjectDetailDto }) {
           defaultValue={project.buildCommand ?? ''}
         />
       </div>
-      {project.type === 'STATIC' ? (
+      {project.type === 'STATIC' && (
         <div>
           <Label htmlFor="outputDir">Output dir</Label>
           <Input
@@ -94,7 +96,9 @@ export function EditProjectForm({ project }: { project: ProjectDetailDto }) {
             defaultValue={project.outputDir ?? ''}
           />
         </div>
-      ) : (
+      )}
+
+      {project.type === 'BACKEND' && (
         <div className="grid grid-cols-2 gap-3">
           <div>
             <Label htmlFor="startCommand">Lệnh chạy</Label>
@@ -111,6 +115,29 @@ export function EditProjectForm({ project }: { project: ProjectDetailDto }) {
               name="internalPort"
               type="number"
               defaultValue={project.internalPort}
+            />
+          </div>
+        </div>
+      )}
+
+      {project.type === 'MOBILE' && (
+        <div className="space-y-3">
+          <div>
+            <Label htmlFor="buildImage">Docker image build</Label>
+            <Input
+              id="buildImage"
+              name="buildImage"
+              defaultValue={project.buildImage ?? 'cirrusci/flutter:3.41.9'}
+              placeholder="cirrusci/flutter:3.41.9"
+            />
+          </div>
+          <div>
+            <Label htmlFor="artifactPath">Đường dẫn file output</Label>
+            <Input
+              id="artifactPath"
+              name="artifactPath"
+              defaultValue={project.artifactPath ?? 'build/app/outputs/flutter-apk/app-dev-release.apk'}
+              placeholder="build/app/outputs/flutter-apk/app-dev-release.apk"
             />
           </div>
         </div>
