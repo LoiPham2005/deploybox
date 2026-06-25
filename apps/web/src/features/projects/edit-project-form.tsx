@@ -37,6 +37,7 @@ export function EditProjectForm({ project }: { project: ProjectDetailDto }) {
       artifactPath: project.type === 'MOBILE' ? (s('artifactPath') ?? '') : undefined,
       // gitToken: undefined = không đổi, '' = xóa, giá trị = cập nhật
       gitToken: f.has('gitToken') ? (s('gitToken') ?? '') : undefined,
+      notifyUrl: s('notifyUrl') ?? '',
       autoDeploy: f.get('autoDeploy') === 'on',
       sleepEnabled: f.get('sleepEnabled') === 'on',
     };
@@ -162,6 +163,19 @@ export function EditProjectForm({ project }: { project: ProjectDetailDto }) {
           </div>
         </div>
       )}
+      <div>
+        <Label htmlFor="notifyUrl">Webhook thông báo khi build thất bại (tùy chọn)</Label>
+        <Input
+          id="notifyUrl"
+          name="notifyUrl"
+          type="url"
+          defaultValue={project.notifyUrl ?? ''}
+          placeholder="https://hooks.slack.com/services/…"
+        />
+        <p className="mt-1 text-xs text-white/30">
+          POST JSON với trường <code>event</code>, <code>projectName</code>, <code>error</code> khi deploy lỗi.
+        </p>
+      </div>
       <div className="flex gap-4 text-sm text-white/70">
         <label className="flex items-center gap-2">
           <input

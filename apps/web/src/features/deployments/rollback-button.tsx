@@ -8,9 +8,11 @@ import { rollbackAction } from '@/features/projects/actions';
 export function RollbackButton({
   projectId,
   deploymentId,
+  canRollback = true,
 }: {
   projectId: string;
   deploymentId: string;
+  canRollback?: boolean;
 }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -28,6 +30,17 @@ export function RollbackButton({
     } else if (!res.ok) {
       setError(res.error);
     }
+  }
+
+  if (!canRollback) {
+    return (
+      <span
+        title="Cần quyền ADMIN để rollback"
+        className="cursor-not-allowed px-2 py-1 text-xs text-white/20"
+      >
+        Rollback về bản này
+      </span>
+    );
   }
 
   return (

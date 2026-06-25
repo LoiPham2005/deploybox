@@ -3,6 +3,7 @@ import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { join, resolve } from 'path';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
@@ -31,10 +32,21 @@ async function bootstrap(): Promise<void> {
   // Phục vụ artifact mobile (APK/AAB): <DATA_DIR>/artifacts/<deploymentId>/ -> /artifacts/<deploymentId>/
   app.useStaticAssets(join(dataDir, 'artifacts'), { prefix: '/artifacts' });
 
+  // Swagger UI (dev only — bỏ qua trong production nếu muốn)
+  const swaggerDoc = new DocumentBuilder()
+    .setTitle('DeployBox API')
+    .setDescription('Self-hosted deployment platform API')
+    .setVersion('1.0')
+    .addBearerAuth()
+    .build();
+  const document = SwaggerModule.createDocument(app, swaggerDoc);
+  SwaggerModule.setup('api/docs', app, document);
+
   const port = config.get<number>('PORT', 4000);
   await app.listen(port);
   const log = new Logger('Bootstrap');
   log.log(`API: http://localhost:${port}/api/v1`);
+  log.log(`Docs: http://localhost:${port}/api/docs`);
   log.log(`Static sites: http://localhost:${port}/sites/<slug>/`);
   log.log(`Artifacts:    http://localhost:${port}/artifacts/<deploymentId>/<file>`);
 }

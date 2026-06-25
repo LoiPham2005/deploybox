@@ -4,8 +4,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { EnvVarDto, UpsertEnvDto } from '@deploybox/shared';
+import type { TeamRole } from '@prisma/client';
 import { CryptoService } from '../../common/crypto/crypto.service';
 import { PrismaService } from '../../infra/prisma/prisma.service';
+
+const ROLE_ORDER: Record<TeamRole, number> = { MEMBER: 0, ADMIN: 1, OWNER: 2 };
 
 @Injectable()
 export class EnvService {
@@ -14,7 +17,7 @@ export class EnvService {
     private readonly crypto: CryptoService,
   ) {}
 
-  private async loadOwnedProject(userId: string, projectId: string) {
+  private async loadOwnedProject(userId: string, projectId: string, minRole: TeamRole = 'MEMBER') {
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
     });
@@ -23,6 +26,9 @@ export class EnvService {
       where: { teamId_userId: { teamId: project.teamId, userId } },
     });
     if (!member) throw new ForbiddenException('Bạn không thuộc team này');
+    if (ROLE_ORDER[member.role] < ROLE_ORDER[minRole]) {
+      throw new ForbiddenException('Bạn không có quyền thực hiện thao tác này');
+    }
     return project;
   }
 
@@ -45,7 +51,7 @@ export class EnvService {
     projectId: string,
     dto: UpsertEnvDto,
   ): Promise<EnvVarDto[]> {
-    await this.loadOwnedProject(userId, projectId);
+    await this.loadOwnedProject(userId, projectId, 'ADMIN');
     for (const v of dto.vars) {
       const value = v.isSecret ? this.crypto.encrypt(v.value) : v.value;
       await this.prisma.envVar.upsert({
@@ -58,7 +64,7 @@ export class EnvService {
   }
 
   async remove(userId: string, projectId: string, key: string): Promise<void> {
-    await this.loadOwnedProject(userId, projectId);
+    await this.loadOwnedProject(userId, projectId, 'ADMIN');
     await this.prisma.envVar.deleteMany({ where: { projectId, key } });
   }
 

@@ -3,6 +3,7 @@ import {
   Get,
   Param,
   Post,
+  Query,
   Req,
   Res,
   UseGuards,
@@ -72,8 +73,18 @@ export class DeploymentsController {
   }
 
   @Get('projects/:projectId/deployments')
-  list(@CurrentUser() user: JwtPayload, @Param('projectId') projectId: string) {
-    return this.deployments.list(user.sub, projectId);
+  list(
+    @CurrentUser() user: JwtPayload,
+    @Param('projectId') projectId: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.deployments.list(
+      user.sub,
+      projectId,
+      page ? parseInt(page, 10) : 1,
+      limit ? parseInt(limit, 10) : 20,
+    );
   }
 
   @Get('deployments/:deploymentId')

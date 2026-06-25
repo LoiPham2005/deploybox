@@ -12,6 +12,7 @@ import { EnvModule } from './modules/env/env.module';
 import { DeploymentsModule } from './modules/deployments/deployments.module';
 import { DomainsModule } from './modules/domains/domains.module';
 import { WebhooksModule } from './modules/webhooks/webhooks.module';
+import { TeamsModule } from './modules/teams/teams.module';
 
 // Đọc sớm để quyết định có import BullModule không (trước khi NestJS bootstrap)
 const REDIS_URL = process.env.REDIS_URL ?? '';
@@ -47,6 +48,7 @@ const REDIS_URL = process.env.REDIS_URL ?? '';
     DeploymentsModule,
     DomainsModule,
     WebhooksModule,
+    TeamsModule,
   ],
 })
 export class AppModule {}

@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { Deployment, Domain, Project } from '@prisma/client';
+import type { Deployment, Domain, Project, TeamRole } from '@prisma/client';
 import type {
   CreateProjectDto,
   Paginated,
@@ -43,18 +43,30 @@ export class ProjectsService {
 
   // ----- truy cập theo team (nền tảng cô lập tenant) -----
 
-  private async assertMembership(userId: string, teamId: string): Promise<void> {
+  private static readonly ROLE_ORDER: Record<TeamRole, number> = {
+    MEMBER: 0,
+    ADMIN: 1,
+    OWNER: 2,
+  };
+
+  async assertRole(userId: string, teamId: string, min: TeamRole): Promise<void> {
     const member = await this.prisma.teamMember.findUnique({
       where: { teamId_userId: { teamId, userId } },
     });
-    if (!member) {
-      throw new ForbiddenException('Bạn không thuộc team này');
+    if (!member) throw new ForbiddenException('Bạn không thuộc team này');
+    if (ProjectsService.ROLE_ORDER[member.role] < ProjectsService.ROLE_ORDER[min]) {
+      throw new ForbiddenException('Bạn không có quyền thực hiện thao tác này');
     }
+  }
+
+  private async assertMembership(userId: string, teamId: string): Promise<void> {
+    await this.assertRole(userId, teamId, 'MEMBER');
   }
 
   private async loadOwnedProject(
     userId: string,
     projectId: string,
+    minRole: TeamRole = 'MEMBER',
   ): Promise<Project> {
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
@@ -62,7 +74,7 @@ export class ProjectsService {
     if (!project) {
       throw new NotFoundException('Không tìm thấy project');
     }
-    await this.assertMembership(userId, project.teamId);
+    await this.assertRole(userId, project.teamId, minRole);
     return project;
   }
 
@@ -90,7 +102,7 @@ export class ProjectsService {
     teamId: string,
     dto: CreateProjectDto,
   ): Promise<ProjectSummary> {
-    await this.assertMembership(userId, teamId);
+    await this.assertRole(userId, teamId, 'ADMIN');
     const slug = await this.uniqueSlug(teamId, dto.name);
     const appDomain = this.config.get<string>('APP_DOMAIN', 'deploybox.local');
 
@@ -108,6 +120,7 @@ export class ProjectsService {
         startCommand: dto.startCommand,
         outputDir: dto.outputDir,
         internalPort: dto.internalPort ?? 3000,
+        notifyUrl: dto.notifyUrl || null,
         webhookSecret: randomBytes(16).toString('hex'),
         // mỗi project có sẵn một subdomain managed mặc định
         domains: {
@@ -133,7 +146,7 @@ export class ProjectsService {
       where: { id: projectId },
       include: {
         domains: { orderBy: { isPrimary: 'desc' } },
-        deployments: { orderBy: { queuedAt: 'desc' }, take: 10 },
+        deployments: { orderBy: { queuedAt: 'desc' }, take: 30 },
       },
     });
     return this.toDetail(project);
@@ -144,7 +157,7 @@ export class ProjectsService {
     projectId: string,
     dto: UpdateProjectDto,
   ): Promise<ProjectDetailDto> {
-    await this.loadOwnedProject(userId, projectId);
+    await this.loadOwnedProject(userId, projectId, 'ADMIN');
     await this.prisma.project.update({
       where: { id: projectId },
       data: {
@@ -159,6 +172,9 @@ export class ProjectsService {
           : dto.gitToken === ''
             ? null                                         // xóa
             : this.crypto.encrypt(dto.gitToken),           // cập nhật
+        notifyUrl: dto.notifyUrl === undefined
+          ? undefined
+          : dto.notifyUrl === '' ? null : dto.notifyUrl,
       },
     });
     return this.get(userId, projectId);
@@ -168,7 +184,7 @@ export class ProjectsService {
     userId: string,
     projectId: string,
   ): Promise<{ ok: true }> {
-    const project = await this.loadOwnedProject(userId, projectId);
+    const project = await this.loadOwnedProject(userId, projectId, 'OWNER');
 
     // Lấy tất cả deployment IDs để xóa artifact + log files
     const deployments = await this.prisma.deployment.findMany({
@@ -248,6 +264,7 @@ export class ProjectsService {
       sleepEnabled: p.sleepEnabled,
       memoryMb: p.memoryMb,
       cpuLimit: p.cpuLimit,
+      notifyUrl: p.notifyUrl,
       domains: (p.domains ?? []).map((d) => ({
         id: d.id,
         hostname: d.hostname,

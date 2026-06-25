@@ -11,6 +11,8 @@ import { EditProjectForm } from '@/features/projects/edit-project-form';
 import { ProjectRuntimeActions } from '@/features/projects/project-runtime-actions';
 import { DomainManager } from '@/features/projects/domain-manager';
 import { MetricsCard } from '@/features/projects/metrics-card';
+import { RollbackButton } from '@/features/deployments/rollback-button';
+import { WebhookHistory } from '@/features/projects/webhook-history';
 
 export default async function ProjectDetailPage({
   params,
@@ -24,9 +26,17 @@ export default async function ProjectDetailPage({
     notFound();
   }
 
+  const [me, env, webhookEvents] = await Promise.all([
+    serverGet.me().catch(() => null),
+    serverGet.env(project.id).catch(() => []),
+    serverGet.webhookEvents(project.id).catch(() => []),
+  ]);
+
+  const userRole = me?.teams.find((t) => t.id === project.teamId)?.role ?? 'MEMBER';
+  const canRollback = userRole === 'ADMIN' || userRole === 'OWNER';
+
   const primary =
     project.domains.find((d) => d.isPrimary) ?? project.domains[0];
-  const env = await serverGet.env(project.id).catch(() => []);
   const latestRunning =
     project.type === 'BACKEND' &&
     project.deployments[0]?.status === 'RUNNING';
@@ -34,6 +44,7 @@ export default async function ProjectDetailPage({
   const deployHint = deployable
     ? undefined
     : 'Thêm Git repo URL trước khi deploy';
+  const isSleeping = project.deployments[0]?.status === 'SLEEPING';
 
   return (
     <div className="space-y-6">
@@ -58,6 +69,13 @@ export default async function ProjectDetailPage({
           />
         </div>
       </div>
+
+      {isSleeping && (
+        <div className="rounded-md border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm text-blue-300">
+          <span className="font-medium">Project đang ngủ (SLEEPING).</span>{' '}
+          Gửi bất kỳ request HTTP nào tới URL của project để tự động wake up.
+        </div>
+      )}
 
       {latestRunning && <MetricsCard projectId={project.id} />}
 
@@ -120,7 +138,17 @@ export default async function ProjectDetailPage({
 
       <Card>
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-white/70">Lần deploy</h2>
+          <h2 className="text-sm font-semibold text-white/70">
+            Lần deploy
+            {project.deployments.length >= 30 && (
+              <Link
+                href={`/projects/${project.id}/deployments`}
+                className="ml-3 text-xs font-normal text-indigo-400 hover:underline"
+              >
+                Xem tất cả →
+              </Link>
+            )}
+          </h2>
           <ProjectRuntimeActions
             projectId={project.id}
             canDeploy={deployable}
@@ -134,22 +162,42 @@ export default async function ProjectDetailPage({
           </p>
         ) : (
           <ul className="space-y-1 text-sm">
-            {project.deployments.map((d) => (
-              <li key={d.id}>
+            {project.deployments.map((d, i) => (
+              <li key={d.id} className="flex items-center gap-2 rounded px-2 py-1.5 hover:bg-white/5">
                 <Link
                   href={`/projects/${project.id}/deployments/${d.id}`}
-                  className="flex items-center justify-between rounded px-2 py-1.5 hover:bg-white/5"
+                  className="flex flex-1 items-center justify-between"
                 >
                   <span className="text-white/60">
-                    {d.id.slice(0, 8)} ·{' '}
-                    {new Date(d.queuedAt).toLocaleString('vi-VN')}
+                    {d.id.slice(0, 8)}
+                    {d.commitSha && (
+                      <code className="ml-2 text-xs text-white/30">{d.commitSha.slice(0, 7)}</code>
+                    )}
+                    {d.commitMsg && (
+                      <span className="ml-2 max-w-[200px] truncate text-xs text-white/40">{d.commitMsg}</span>
+                    )}
+                    <span className="ml-2 text-white/30">
+                      {new Date(d.queuedAt).toLocaleString('vi-VN')}
+                    </span>
                   </span>
                   <StatusBadge status={d.status} />
                 </Link>
+                {i > 0 && (
+                  <RollbackButton
+                    projectId={project.id}
+                    deploymentId={d.id}
+                    canRollback={canRollback}
+                  />
+                )}
               </li>
             ))}
           </ul>
         )}
+      </Card>
+
+      <Card>
+        <h2 className="mb-3 text-sm font-semibold text-white/70">Webhook history</h2>
+        <WebhookHistory events={webhookEvents} />
       </Card>
 
       <Card>

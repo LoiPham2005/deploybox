@@ -21,17 +21,19 @@ export default async function DashboardLayout({
       <aside className="w-60 shrink-0 border-r border-white/10 p-4">
         <div className="mb-6 text-lg font-semibold">DeployBox</div>
         <nav className="space-y-1 text-sm">
-          <Link
-            href="/dashboard"
-            className="block rounded-md bg-white/5 px-3 py-2"
-          >
+          <Link href="/dashboard" className="block rounded-md px-3 py-2 hover:bg-white/5">
             Projects
           </Link>
+          <Link href="/team" className="block rounded-md px-3 py-2 hover:bg-white/5">
+            Team
+          </Link>
+          <Link href="/settings/tokens" className="block rounded-md px-3 py-2 hover:bg-white/5">
+            API Tokens
+          </Link>
+          <Link href="/account" className="block rounded-md px-3 py-2 hover:bg-white/5">
+            Tài khoản
+          </Link>
         </nav>
-        <p className="mt-4 px-3 text-xs leading-relaxed text-white/30">
-          Domains, Webhook, Env &amp; cấu hình nằm trong từng project — mở một
-          project để quản lý.
-        </p>
       </aside>
       <div className="flex flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-white/10 px-6 py-3">

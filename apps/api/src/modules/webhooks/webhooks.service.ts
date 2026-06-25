@@ -42,6 +42,11 @@ export class WebhooksService {
       throw new UnauthorizedException('Project chưa có webhook secret');
     }
 
+    // Xác định nguồn
+    const source = headers['x-github-event'] ? 'github'
+      : headers['x-gitlab-event'] ? 'gitlab'
+      : 'bitbucket';
+
     // Xác thực: GitHub gửi HMAC-SHA256, GitLab gửi token thẳng.
     const sig = headers['x-hub-signature-256'];
     const glToken = headers['x-gitlab-token'];
@@ -56,21 +61,68 @@ export class WebhooksService {
     } else if (typeof glToken === 'string') {
       ok = safeEqual(glToken, project.webhookSecret);
     }
-    if (!ok) throw new UnauthorizedException('Chữ ký webhook không hợp lệ');
+    if (!ok) {
+      await this.logEvent(projectId, source, undefined, undefined, 'rejected', 'Chữ ký không hợp lệ');
+      throw new UnauthorizedException('Chữ ký webhook không hợp lệ');
+    }
 
     const data = (payload ?? {}) as PushPayload;
     const branch = (data.ref ?? '').replace('refs/heads/', '');
     if (branch && branch !== project.gitBranch) {
-      return { deployed: false, reason: `Bỏ qua: push lên branch ${branch}` };
+      const reason = `Bỏ qua: push lên branch ${branch}`;
+      await this.logEvent(projectId, source, branch, data.after, 'skipped', reason);
+      return { deployed: false, reason };
     }
     if (!project.autoDeploy) {
-      return { deployed: false, reason: 'autoDeploy đang tắt' };
+      const reason = 'autoDeploy đang tắt';
+      await this.logEvent(projectId, source, branch, data.after, 'skipped', reason);
+      return { deployed: false, reason };
     }
 
     const commitMsg =
       data.head_commit?.message ??
       data.commits?.[data.commits.length - 1]?.message;
     await this.deployments.deployFromPush(projectId, data.after, commitMsg);
+    await this.logEvent(projectId, source, branch, data.after, 'deployed');
     return { deployed: true };
+  }
+
+  async listEvents(
+    userId: string,
+    projectId: string,
+  ): Promise<{ id: string; source: string; branch?: string | null; commitSha?: string | null; status: string; reason?: string | null; createdAt: string }[]> {
+    const project = await this.prisma.project.findUnique({ where: { id: projectId } });
+    if (!project) return [];
+    const member = await this.prisma.teamMember.findUnique({
+      where: { teamId_userId: { teamId: project.teamId, userId } },
+    });
+    if (!member) return [];
+    const events = await this.prisma.webhookEvent.findMany({
+      where: { projectId },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+    return events.map((e) => ({
+      id: e.id,
+      source: e.source,
+      branch: e.branch,
+      commitSha: e.commitSha,
+      status: e.status,
+      reason: e.reason,
+      createdAt: e.createdAt.toISOString(),
+    }));
+  }
+
+  private async logEvent(
+    projectId: string,
+    source: string,
+    branch: string | undefined,
+    commitSha: string | undefined,
+    status: string,
+    reason?: string,
+  ): Promise<void> {
+    await this.prisma.webhookEvent.create({
+      data: { projectId, source, branch, commitSha, status, reason },
+    }).catch(() => undefined);
   }
 }

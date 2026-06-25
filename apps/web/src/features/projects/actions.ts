@@ -237,3 +237,19 @@ export async function deleteDomainAction(
     };
   }
 }
+
+export async function setPrimaryDomainAction(
+  projectId: string,
+  domainId: string,
+): Promise<ActionResult> {
+  try {
+    await serverApi(`/domains/${domainId}/set-primary`, { method: 'POST' });
+    revalidatePath(`/projects/${projectId}`);
+    return { ok: true };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : 'Đặt domain chính thất bại',
+    };
+  }
+}

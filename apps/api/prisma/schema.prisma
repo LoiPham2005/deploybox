@@ -128,13 +128,15 @@ model Project {
   sleepEnabled   Boolean      @default(false)
   memoryMb       Int          @default(512)
   cpuLimit       Float        @default(0.5)
+  notifyUrl      String?      // Webhook URL nhận POST khi build thất bại
 
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  deployments Deployment[]
-  domains     Domain[]
-  envVars     EnvVar[]
+  deployments    Deployment[]
+  domains        Domain[]
+  envVars        EnvVar[]
+  webhookEvents  WebhookEvent[]
 
   @@unique([teamId, slug])
   @@index([teamId])
@@ -188,6 +190,20 @@ model EnvVar {
   target    EnvTarget @default(RUNTIME)
 
   @@unique([projectId, key])
+}
+
+model WebhookEvent {
+  id        String   @id @default(cuid())
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId String
+  source    String   // "github" | "gitlab" | "bitbucket"
+  branch    String?
+  commitSha String?
+  status    String   // "deployed" | "skipped" | "rejected"
+  reason    String?
+  createdAt DateTime @default(now())
+
+  @@index([projectId, createdAt(sort: Desc)])
 }
 
 model ApiToken {

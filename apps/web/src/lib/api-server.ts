@@ -1,12 +1,15 @@
 // Client API phía SERVER — đọc JWT từ cookie httpOnly rồi gọi NestJS.
 // CHỈ import trong Server Component / Server Action / Route Handler.
 import type {
+  ApiTokenDto,
   DeploymentView,
   EnvVarDto,
   MeResponse,
   Paginated,
   ProjectDetailDto,
   ProjectSummary,
+  TeamMemberDto,
+  WebhookEventDto,
 } from '@deploybox/shared';
 import { getToken } from './auth';
 
@@ -43,4 +46,9 @@ export const serverGet = {
   deployment: (id: string) => serverApi<DeploymentView>(`/deployments/${id}`),
   env: (projectId: string) =>
     serverApi<EnvVarDto[]>(`/projects/${projectId}/env`),
+  members: (teamId: string) =>
+    serverApi<TeamMemberDto[]>(`/teams/${teamId}/members`),
+  tokens: () => serverApi<ApiTokenDto[]>('/auth/tokens'),
+  webhookEvents: (projectId: string) =>
+    serverApi<WebhookEventDto[]>(`/projects/${projectId}/webhook-events`),
 };

@@ -2,14 +2,22 @@
 
 import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import type { AddDomainResponse, ProjectDomainDto } from '@deploybox/shared';
+import type { AddDomainResponse, DomainStatus, ProjectDomainDto } from '@deploybox/shared';
 import {
   addDomainAction,
   deleteDomainAction,
+  setPrimaryDomainAction,
   verifyDomainAction,
 } from './actions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+
+const STATUS_CONFIG: Record<DomainStatus, { label: string; cls: string; hint: string }> = {
+  ACTIVE:      { label: '✓ Active',      cls: 'text-emerald-400', hint: 'DNS đã xác minh, HTTPS đang hoạt động' },
+  PENDING_DNS: { label: '⏳ Chờ DNS',    cls: 'text-yellow-400',  hint: 'Trỏ CNAME/A record về server rồi bấm verify' },
+  VERIFYING:   { label: '🔍 Verifying',  cls: 'text-indigo-400',  hint: 'Đang kiểm tra TXT record...' },
+  FAILED:      { label: '✗ Thất bại',    cls: 'text-red-400',     hint: 'Xác minh DNS thất bại — kiểm tra lại record rồi thử lại' },
+};
 
 export function DomainManager({
   projectId,
@@ -57,6 +65,14 @@ export function DomainManager({
     router.refresh();
   }
 
+  async function onSetPrimary(id: string) {
+    setBusy(true);
+    const res = await setPrimaryDomainAction(projectId, id);
+    setBusy(false);
+    if (!res.ok) setError(res.error);
+    router.refresh();
+  }
+
   return (
     <div className="space-y-3">
       <ul className="space-y-1 text-sm">
@@ -71,18 +87,35 @@ export function DomainManager({
                 <span className="ml-2 text-xs text-white/40">(chính)</span>
               )}
             </span>
-            <span className="flex items-center gap-2 text-xs text-white/40">
-              <span>{d.status}</span>
+            <span className="flex items-center gap-2 text-xs">
+              {(() => {
+                const s = STATUS_CONFIG[d.status] ?? { label: d.status, cls: 'text-white/40', hint: '' };
+                return (
+                  <span title={s.hint} className={`cursor-help ${s.cls}`}>{s.label}</span>
+                );
+              })()}
               {!d.isPrimary && (
                 <>
-                  <button
-                    type="button"
-                    onClick={() => onVerify(d.id)}
-                    disabled={busy}
-                    className="text-indigo-400 hover:underline"
-                  >
-                    verify
-                  </button>
+                  {d.status === 'ACTIVE' && (
+                    <button
+                      type="button"
+                      onClick={() => onSetPrimary(d.id)}
+                      disabled={busy}
+                      className="text-indigo-400 hover:underline"
+                    >
+                      đặt làm chính
+                    </button>
+                  )}
+                  {d.status !== 'ACTIVE' && (
+                    <button
+                      type="button"
+                      onClick={() => onVerify(d.id)}
+                      disabled={busy}
+                      className="text-indigo-400 hover:underline"
+                    >
+                      verify
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => onDelete(d.id)}

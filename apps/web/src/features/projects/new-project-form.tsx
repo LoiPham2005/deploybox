@@ -8,11 +8,32 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 
+const TEMPLATES: Array<{
+  label: string;
+  type: ProjectType;
+  buildCommand?: string;
+  outputDir?: string;
+  startCommand?: string;
+  internalPort?: number;
+  buildImage?: string;
+  artifactPath?: string;
+}> = [
+  { label: 'React / Vite',      type: 'STATIC',  buildCommand: 'npm run build',           outputDir: 'dist' },
+  { label: 'Next.js',           type: 'STATIC',  buildCommand: 'npm run build && npm run export', outputDir: 'out' },
+  { label: 'Vue / Nuxt static', type: 'STATIC',  buildCommand: 'npm run generate',         outputDir: '.output/public' },
+  { label: 'Node / Express',    type: 'BACKEND', buildCommand: 'npm run build',           startCommand: 'node dist/index.js', internalPort: 3000 },
+  { label: 'Python / FastAPI',  type: 'BACKEND', startCommand: 'uvicorn main:app --host 0.0.0.0 --port 8000', internalPort: 8000 },
+  { label: 'Flutter APK',       type: 'MOBILE',  buildCommand: 'flutter build apk --release', buildImage: 'cirrusci/flutter:stable', artifactPath: 'build/app/outputs/flutter-apk/app-release.apk' },
+  { label: 'Flutter AAB',       type: 'MOBILE',  buildCommand: 'flutter build appbundle --release', buildImage: 'cirrusci/flutter:stable', artifactPath: 'build/app/outputs/bundle/release/app-release.aab' },
+];
+
 export function NewProjectForm({ teamId }: { teamId: string }) {
   const router = useRouter();
   const [type, setType] = useState<ProjectType>('STATIC');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [templateApplied, setTemplateApplied] = useState<string | null>(null);
+  const [fields, setFields] = useState<Record<string, string>>({});
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -55,8 +76,41 @@ export function NewProjectForm({ teamId }: { teamId: string }) {
     }
   }
 
+  function applyTemplate(tpl: typeof TEMPLATES[0]) {
+    setType(tpl.type);
+    setTemplateApplied(tpl.label);
+    setFields({
+      buildCommand: tpl.buildCommand ?? '',
+      outputDir: tpl.outputDir ?? '',
+      startCommand: tpl.startCommand ?? '',
+      internalPort: String(tpl.internalPort ?? 3000),
+      buildImage: tpl.buildImage ?? '',
+      artifactPath: tpl.artifactPath ?? '',
+    });
+  }
+
   return (
     <form onSubmit={onSubmit} className="space-y-4">
+      <div>
+        <p className="mb-2 text-xs text-white/50">Bắt đầu nhanh từ template</p>
+        <div className="flex flex-wrap gap-2">
+          {TEMPLATES.map((t) => (
+            <button
+              key={t.label}
+              type="button"
+              onClick={() => applyTemplate(t)}
+              className={`rounded-full border px-3 py-1 text-xs transition ${
+                templateApplied === t.label
+                  ? 'border-indigo-500 bg-indigo-500/20 text-indigo-300'
+                  : 'border-white/10 text-white/50 hover:border-white/30 hover:text-white/80'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div>
         <Label htmlFor="name">Tên project</Label>
         <Input id="name" name="name" placeholder="my-app" required />
@@ -118,6 +172,8 @@ export function NewProjectForm({ teamId }: { teamId: string }) {
             id="buildCommand"
             name="buildCommand"
             placeholder={type === 'STATIC' ? 'npm run build' : 'npm run build'}
+            value={fields.buildCommand ?? ''}
+            onChange={(e) => setFields((f) => ({ ...f, buildCommand: e.target.value }))}
           />
         </div>
       )}
@@ -125,7 +181,13 @@ export function NewProjectForm({ teamId }: { teamId: string }) {
       {type === 'STATIC' && (
         <div>
           <Label htmlFor="outputDir">Thư mục output</Label>
-          <Input id="outputDir" name="outputDir" placeholder="dist" />
+          <Input
+            id="outputDir"
+            name="outputDir"
+            placeholder="dist"
+            value={fields.outputDir ?? ''}
+            onChange={(e) => setFields((f) => ({ ...f, outputDir: e.target.value }))}
+          />
         </div>
       )}
 
@@ -137,6 +199,8 @@ export function NewProjectForm({ teamId }: { teamId: string }) {
               id="startCommand"
               name="startCommand"
               placeholder="node dist/main.js"
+              value={fields.startCommand ?? ''}
+              onChange={(e) => setFields((f) => ({ ...f, startCommand: e.target.value }))}
             />
           </div>
           <div>
@@ -145,7 +209,8 @@ export function NewProjectForm({ teamId }: { teamId: string }) {
               id="internalPort"
               name="internalPort"
               type="number"
-              defaultValue={3000}
+              value={fields.internalPort ?? '3000'}
+              onChange={(e) => setFields((f) => ({ ...f, internalPort: e.target.value }))}
             />
           </div>
         </div>
@@ -159,7 +224,8 @@ export function NewProjectForm({ teamId }: { teamId: string }) {
               id="buildCommand"
               name="buildCommand"
               placeholder="flutter build apk --release"
-              defaultValue="flutter build apk --release"
+              value={fields.buildCommand ?? 'flutter build apk --release'}
+              onChange={(e) => setFields((f) => ({ ...f, buildCommand: e.target.value }))}
             />
             <p className="mt-1 text-xs text-white/40">
               Dùng <code>flutter build appbundle --release</code> để tạo AAB lên Play Store
@@ -171,7 +237,8 @@ export function NewProjectForm({ teamId }: { teamId: string }) {
               id="buildImage"
               name="buildImage"
               placeholder="cirrusci/flutter:stable"
-              defaultValue="cirrusci/flutter:stable"
+              value={fields.buildImage ?? 'cirrusci/flutter:stable'}
+              onChange={(e) => setFields((f) => ({ ...f, buildImage: e.target.value }))}
             />
             <p className="mt-1 text-xs text-white/40">
               Image chứa Flutter SDK — server sẽ tự pull lần đầu
@@ -183,7 +250,8 @@ export function NewProjectForm({ teamId }: { teamId: string }) {
               id="artifactPath"
               name="artifactPath"
               placeholder="build/app/outputs/flutter-apk/app-release.apk"
-              defaultValue="build/app/outputs/flutter-apk/app-release.apk"
+              value={fields.artifactPath ?? 'build/app/outputs/flutter-apk/app-release.apk'}
+              onChange={(e) => setFields((f) => ({ ...f, artifactPath: e.target.value }))}
             />
             <p className="mt-1 text-xs text-white/40">
               AAB: <code>build/app/outputs/bundle/release/app-release.aab</code>

@@ -13,6 +13,7 @@ export const createProjectSchema = z.object({
   internalPort: z.number().int().positive().max(65535).optional(),
   buildImage: z.string().optional(),
   artifactPath: z.string().optional(),
+  notifyUrl: z.string().url().optional(),
 });
 export type CreateProjectDto = z.infer<typeof createProjectSchema>;
 
@@ -54,5 +55,6 @@ export const updateProjectSchema = z.object({
   artifactPath: z.string().optional(),
   sleepEnabled: z.boolean().optional(),
   autoDeploy: z.boolean().optional(),
+  notifyUrl: z.string().url().optional().or(z.literal('')),
 });
 export type UpdateProjectDto = z.infer<typeof updateProjectSchema>;

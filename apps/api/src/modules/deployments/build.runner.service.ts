@@ -200,6 +200,20 @@ export class BuildRunnerService {
         where: { id: deploymentId },
         data: { status: 'FAILED', finishedAt: new Date(), errorMessage: msg },
       });
+      if (project.notifyUrl) {
+        fetch(project.notifyUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            event: 'deployment.failed',
+            deploymentId,
+            projectId: project.id,
+            projectName: project.name,
+            error: msg,
+          }),
+          signal: AbortSignal.timeout(10_000),
+        }).catch((e) => this.logger.warn(`Gửi notify thất bại: ${e}`));
+      }
     } finally {
       clearTimeout(tid);
       this.broadcast.end(deploymentId);

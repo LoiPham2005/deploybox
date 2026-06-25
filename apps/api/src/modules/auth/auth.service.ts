@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -7,11 +8,14 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
+import { randomBytes, createHash } from 'crypto';
 import type {
+  ApiTokenDto,
   AuthResponse,
   LoginDto,
   MeResponse,
   RegisterDto,
+  UpdateMeDto,
   UserDto,
 } from '@deploybox/shared';
 import { PrismaService } from '../../infra/prisma/prisma.service';
@@ -111,6 +115,65 @@ export class AuthService {
         role: m.role,
       })),
     };
+  }
+
+  async updateMe(userId: string, dto: UpdateMeDto): Promise<UserDto> {
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: { name: dto.name },
+    });
+    return this.toUserDto(user);
+  }
+
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<{ ok: true }> {
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    if (!user.passwordHash || !(await bcrypt.compare(currentPassword, user.passwordHash))) {
+      throw new BadRequestException('Mật khẩu hiện tại không đúng');
+    }
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await this.prisma.user.update({ where: { id: userId }, data: { passwordHash } });
+    return { ok: true };
+  }
+
+  async listTokens(userId: string): Promise<ApiTokenDto[]> {
+    const tokens = await this.prisma.apiToken.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+    });
+    return tokens.map((t) => ({
+      id: t.id,
+      name: t.name,
+      createdAt: t.createdAt.toISOString(),
+      lastUsedAt: t.lastUsedAt?.toISOString() ?? null,
+    }));
+  }
+
+  async createToken(userId: string, name: string): Promise<{ token: string } & ApiTokenDto> {
+    const raw = `deploybox_${randomBytes(24).toString('hex')}`;
+    const tokenHash = createHash('sha256').update(raw).digest('hex');
+    const record = await this.prisma.apiToken.create({
+      data: { userId, name, tokenHash },
+    });
+    return {
+      token: raw,
+      id: record.id,
+      name: record.name,
+      createdAt: record.createdAt.toISOString(),
+      lastUsedAt: null,
+    };
+  }
+
+  async revokeToken(userId: string, tokenId: string): Promise<{ ok: true }> {
+    const token = await this.prisma.apiToken.findUnique({ where: { id: tokenId } });
+    if (!token || token.userId !== userId) {
+      throw new BadRequestException('Không tìm thấy token');
+    }
+    await this.prisma.apiToken.delete({ where: { id: tokenId } });
+    return { ok: true };
   }
 
   private sign(sub: string, email: string): string {

@@ -103,6 +103,7 @@ export interface ProjectDetailDto {
   sleepEnabled: boolean;
   memoryMb: number;
   cpuLimit: number;
+  notifyUrl?: string | null;
   domains: ProjectDomainDto[];
   deployments: DeploymentDetail[];
   webhookUrl: string;
@@ -123,4 +124,30 @@ export interface EnvVarDto {
   value: string; // rỗng nếu là secret (không lộ giá trị)
   isSecret: boolean;
   target: EnvTarget;
+}
+
+export interface WebhookEventDto {
+  id: string;
+  source: string;
+  branch?: string | null;
+  commitSha?: string | null;
+  status: string;
+  reason?: string | null;
+  createdAt: string;
+}
+
+export interface TeamMemberDto {
+  id: string;
+  userId: string;
+  email: string;
+  name?: string | null;
+  role: TeamRole;
+  joinedAt: string;
+}
+
+export interface ApiTokenDto {
+  id: string;
+  name: string;
+  createdAt: string;
+  lastUsedAt?: string | null;
 }

@@ -50,4 +50,12 @@ export class DomainsController {
   ) {
     return this.domains.remove(user.sub, domainId);
   }
+
+  @Post('domains/:domainId/set-primary')
+  setPrimary(
+    @CurrentUser() user: JwtPayload,
+    @Param('domainId') domainId: string,
+  ) {
+    return this.domains.setPrimary(user.sub, domainId);
+  }
 }

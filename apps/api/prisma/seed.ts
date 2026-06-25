@@ -3,30 +3,37 @@ import * as bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
-async function main() {
-  const email = 'admin@deploybox.local';
-  const passwordHash = await bcrypt.hash('changeme', 10);
+const TEST_ACCOUNTS = [
+  { email: 'owner@deploybox.local',  name: 'Owner Test',  role: 'OWNER'  },
+  { email: 'admin@deploybox.local',  name: 'Admin Test',  role: 'ADMIN'  },
+  { email: 'member@deploybox.local', name: 'Member Test', role: 'MEMBER' },
+] as const;
 
-  const user = await prisma.user.upsert({
-    where: { email },
-    update: {},
-    create: { email, name: 'Admin', passwordHash },
-  });
+async function main() {
+  const passwordHash = await bcrypt.hash('changeme', 10);
 
   let team = await prisma.team.findUnique({ where: { slug: 'internal' } });
   if (!team) {
     team = await prisma.team.create({ data: { name: 'Internal', slug: 'internal' } });
   }
 
-  await prisma.teamMember.upsert({
-    where: { teamId_userId: { teamId: team.id, userId: user.id } },
-    update: {},
-    create: { teamId: team.id, userId: user.id, role: 'OWNER' },
-  });
+  for (const account of TEST_ACCOUNTS) {
+    const user = await prisma.user.upsert({
+      where: { email: account.email },
+      update: { name: account.name, passwordHash },
+      create: { email: account.email, name: account.name, passwordHash },
+    });
 
-  console.log(
-    'Seed xong → đăng nhập: admin@deploybox.local / changeme (team "internal")',
-  );
+    await prisma.teamMember.upsert({
+      where: { teamId_userId: { teamId: team.id, userId: user.id } },
+      update: { role: account.role },
+      create: { teamId: team.id, userId: user.id, role: account.role },
+    });
+
+    console.log(`✓ ${account.role.padEnd(6)} → ${account.email} / changeme`);
+  }
+
+  console.log('\nSeed xong! Team "internal" có 3 tài khoản test.');
 }
 
 main()

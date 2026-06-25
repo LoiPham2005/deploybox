@@ -11,7 +11,7 @@ import type {
   AddDomainResponse,
   ProjectDomainDto,
 } from '@deploybox/shared';
-import type { Domain } from '@prisma/client';
+import type { Domain, TeamRole } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import { resolveTxt } from 'dns/promises';
 import { PrismaService } from '../../infra/prisma/prisma.service';
@@ -25,29 +25,34 @@ export class DomainsService {
     private readonly config: ConfigService,
   ) {}
 
-  private async assertMembership(userId: string, teamId: string): Promise<void> {
+  private static readonly ROLE_ORDER: Record<TeamRole, number> = { MEMBER: 0, ADMIN: 1, OWNER: 2 };
+
+  private async assertRole(userId: string, teamId: string, min: TeamRole): Promise<void> {
     const member = await this.prisma.teamMember.findUnique({
       where: { teamId_userId: { teamId, userId } },
     });
     if (!member) throw new ForbiddenException('Bạn không thuộc team này');
+    if (DomainsService.ROLE_ORDER[member.role] < DomainsService.ROLE_ORDER[min]) {
+      throw new ForbiddenException('Bạn không có quyền thực hiện thao tác này');
+    }
   }
 
-  private async loadOwnedProject(userId: string, projectId: string) {
+  private async loadOwnedProject(userId: string, projectId: string, min: TeamRole = 'MEMBER') {
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
     });
     if (!project) throw new NotFoundException('Không tìm thấy project');
-    await this.assertMembership(userId, project.teamId);
+    await this.assertRole(userId, project.teamId, min);
     return project;
   }
 
-  private async loadOwnedDomain(userId: string, domainId: string) {
+  private async loadOwnedDomain(userId: string, domainId: string, min: TeamRole = 'MEMBER') {
     const domain = await this.prisma.domain.findUnique({
       where: { id: domainId },
       include: { project: true },
     });
     if (!domain) throw new NotFoundException('Không tìm thấy domain');
-    await this.assertMembership(userId, domain.project.teamId);
+    await this.assertRole(userId, domain.project.teamId, min);
     return domain;
   }
 
@@ -65,7 +70,7 @@ export class DomainsService {
     projectId: string,
     dto: AddDomainDto,
   ): Promise<AddDomainResponse> {
-    const project = await this.loadOwnedProject(userId, projectId);
+    const project = await this.loadOwnedProject(userId, projectId, 'ADMIN');
     const existing = await this.prisma.domain.findUnique({
       where: { hostname: dto.hostname },
     });
@@ -105,7 +110,7 @@ export class DomainsService {
   }
 
   async verify(userId: string, domainId: string): Promise<ProjectDomainDto> {
-    const domain = await this.loadOwnedDomain(userId, domainId);
+    const domain = await this.loadOwnedDomain(userId, domainId, 'ADMIN');
     let status: 'ACTIVE' | 'FAILED' = 'FAILED';
     try {
       const records = await resolveTxt(`_deploybox.${domain.hostname}`);
@@ -124,13 +129,28 @@ export class DomainsService {
   }
 
   async remove(userId: string, domainId: string): Promise<{ ok: true }> {
-    const domain = await this.loadOwnedDomain(userId, domainId);
+    const domain = await this.loadOwnedDomain(userId, domainId, 'ADMIN');
     if (domain.isPrimary) {
       throw new BadRequestException('Không thể xóa domain chính');
     }
     await this.prisma.domain.delete({ where: { id: domainId } });
     await this.caddy.sync().catch(() => undefined);
     return { ok: true };
+  }
+
+  async setPrimary(userId: string, domainId: string): Promise<ProjectDomainDto> {
+    const domain = await this.loadOwnedDomain(userId, domainId, 'ADMIN');
+    // unset current primary
+    await this.prisma.domain.updateMany({
+      where: { projectId: domain.projectId, isPrimary: true },
+      data: { isPrimary: false },
+    });
+    const updated = await this.prisma.domain.update({
+      where: { id: domainId },
+      data: { isPrimary: true },
+    });
+    await this.caddy.sync().catch(() => undefined);
+    return this.toDto(updated);
   }
 
   private toDto(d: Domain): ProjectDomainDto {
