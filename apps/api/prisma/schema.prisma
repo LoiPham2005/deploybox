@@ -3,6 +3,7 @@
 
 generator client {
   provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
 }
 
 datasource db {
@@ -60,6 +61,17 @@ enum EnvTarget {
   BOTH
 }
 
+enum ServerType {
+  LOCAL
+  REMOTE
+}
+
+enum ServerStatus {
+  UNKNOWN
+  ONLINE
+  OFFLINE
+}
+
 // ---------- MODELS ----------
 
 model User {
@@ -83,6 +95,24 @@ model Team {
 
   members  TeamMember[]
   projects Project[]
+  servers  Server[]
+}
+
+model Server {
+  id            String       @id @default(cuid())
+  team          Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  teamId        String
+  name          String
+  host          String       @default("localhost")
+  port          Int          @default(22)
+  username      String       @default("root")
+  sshPrivateKey String?      // AES-256-GCM encrypted; null = local
+  type          ServerType   @default(LOCAL)
+  status        ServerStatus @default(UNKNOWN)
+  projects      Project[]
+  createdAt     DateTime     @default(now())
+
+  @@index([teamId])
 }
 
 model TeamMember {
@@ -105,6 +135,10 @@ model Project {
   name           String
   slug           String
   type           ProjectType  @default(BACKEND)
+
+  // Server để deploy lên (null = dùng server local mặc định của team)
+  server         Server?      @relation(fields: [serverId], references: [id])
+  serverId       String?
 
   // Nguồn code
   gitProvider    GitProvider?

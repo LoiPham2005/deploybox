@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { Deployment, Domain, Project, TeamRole } from '@prisma/client';
+import type { Deployment, Domain, Project, TeamRole } from '../../generated/prisma';
 import type {
   CreateProjectDto,
   Paginated,
@@ -121,6 +121,7 @@ export class ProjectsService {
         outputDir: dto.outputDir,
         internalPort: dto.internalPort ?? 3000,
         notifyUrl: dto.notifyUrl || null,
+        serverId: dto.serverId || null,
         webhookSecret: randomBytes(16).toString('hex'),
         // mỗi project có sẵn một subdomain managed mặc định
         domains: {
@@ -265,6 +266,7 @@ export class ProjectsService {
       memoryMb: p.memoryMb,
       cpuLimit: p.cpuLimit,
       notifyUrl: p.notifyUrl,
+      serverId: (p as any).serverId ?? null,
       domains: (p.domains ?? []).map((d) => ({
         id: d.id,
         hostname: d.hostname,

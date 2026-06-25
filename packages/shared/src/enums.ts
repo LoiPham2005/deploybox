@@ -58,3 +58,16 @@ export const EnvTarget = {
   BOTH: 'BOTH',
 } as const;
 export type EnvTarget = (typeof EnvTarget)[keyof typeof EnvTarget];
+
+export const ServerType = {
+  LOCAL: 'LOCAL',
+  REMOTE: 'REMOTE',
+} as const;
+export type ServerType = (typeof ServerType)[keyof typeof ServerType];
+
+export const ServerStatus = {
+  UNKNOWN: 'UNKNOWN',
+  ONLINE: 'ONLINE',
+  OFFLINE: 'OFFLINE',
+} as const;
+export type ServerStatus = (typeof ServerStatus)[keyof typeof ServerStatus];

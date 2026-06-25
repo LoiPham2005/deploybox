@@ -6,6 +6,8 @@ export default async function NewProjectPage() {
   const me = await serverGet.me();
   const teamId = me.teams[0]?.id ?? '';
 
+  const servers = teamId ? await serverGet.servers(teamId).catch(() => []) : [];
+
   return (
     <div className="mx-auto max-w-xl space-y-6">
       <div>
@@ -21,7 +23,7 @@ export default async function NewProjectPage() {
           sự sẽ có khi build engine sẵn sàng.
         </p>
       </div>
-      <NewProjectForm teamId={teamId} />
+      <NewProjectForm teamId={teamId} servers={servers} />
     </div>
   );
 }

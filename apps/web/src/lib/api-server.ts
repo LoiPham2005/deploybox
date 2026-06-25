@@ -8,6 +8,7 @@ import type {
   Paginated,
   ProjectDetailDto,
   ProjectSummary,
+  ServerDto,
   TeamMemberDto,
   WebhookEventDto,
 } from '@deploybox/shared';
@@ -51,4 +52,6 @@ export const serverGet = {
   tokens: () => serverApi<ApiTokenDto[]>('/auth/tokens'),
   webhookEvents: (projectId: string) =>
     serverApi<WebhookEventDto[]>(`/projects/${projectId}/webhook-events`),
+  servers: (teamId: string) =>
+    serverApi<ServerDto[]>(`/teams/${teamId}/servers`),
 };

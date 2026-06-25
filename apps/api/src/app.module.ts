@@ -13,6 +13,8 @@ import { DeploymentsModule } from './modules/deployments/deployments.module';
 import { DomainsModule } from './modules/domains/domains.module';
 import { WebhooksModule } from './modules/webhooks/webhooks.module';
 import { TeamsModule } from './modules/teams/teams.module';
+import { ServersModule } from './modules/servers/servers.module';
+import { SshModule } from './infra/ssh/ssh.module';
 
 // Đọc sớm để quyết định có import BullModule không (trước khi NestJS bootstrap)
 const REDIS_URL = process.env.REDIS_URL ?? '';
@@ -49,6 +51,8 @@ const REDIS_URL = process.env.REDIS_URL ?? '';
     DomainsModule,
     WebhooksModule,
     TeamsModule,
+    SshModule,
+    ServersModule,
   ],
 })
 export class AppModule {}

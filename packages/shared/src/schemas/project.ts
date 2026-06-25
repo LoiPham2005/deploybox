@@ -14,6 +14,7 @@ export const createProjectSchema = z.object({
   buildImage: z.string().optional(),
   artifactPath: z.string().optional(),
   notifyUrl: z.string().url().optional(),
+  serverId: z.string().optional(),
 });
 export type CreateProjectDto = z.infer<typeof createProjectSchema>;
 

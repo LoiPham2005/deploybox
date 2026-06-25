@@ -1,0 +1,128 @@
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import type { Server, TeamRole } from '../../generated/prisma';
+import { PrismaService } from '../../infra/prisma/prisma.service';
+import { CryptoService } from '../../common/crypto/crypto.service';
+import { SshService } from '../../infra/ssh/ssh.service';
+import type { ServerDto, CreateServerDto } from '@deploybox/shared';
+
+const ROLE_ORDER: Record<TeamRole, number> = { MEMBER: 0, ADMIN: 1, OWNER: 2 };
+
+@Injectable()
+export class ServersService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly crypto: CryptoService,
+    private readonly ssh: SshService,
+  ) {}
+
+  private async assertRole(userId: string, teamId: string, min: TeamRole) {
+    const m = await this.prisma.teamMember.findUnique({
+      where: { teamId_userId: { teamId, userId } },
+    });
+    if (!m) throw new ForbiddenException('Bạn không thuộc team này');
+    if (ROLE_ORDER[m.role] < ROLE_ORDER[min])
+      throw new ForbiddenException('Bạn không có quyền thực hiện thao tác này');
+  }
+
+  async list(userId: string, teamId: string): Promise<ServerDto[]> {
+    await this.assertRole(userId, teamId, 'MEMBER');
+    const servers = await this.prisma.server.findMany({
+      where: { teamId },
+      orderBy: { createdAt: 'asc' },
+    });
+    return servers.map((s) => this.toDto(s));
+  }
+
+  async add(userId: string, teamId: string, dto: CreateServerDto): Promise<ServerDto> {
+    await this.assertRole(userId, teamId, 'ADMIN');
+    const encryptedKey = dto.sshPrivateKey
+      ? this.crypto.encrypt(dto.sshPrivateKey)
+      : null;
+    const server = await this.prisma.server.create({
+      data: {
+        teamId,
+        name: dto.name,
+        host: dto.host ?? 'localhost',
+        port: dto.port ?? 22,
+        username: dto.username ?? 'root',
+        sshPrivateKey: encryptedKey,
+        type: dto.type ?? 'LOCAL',
+      },
+    });
+    return this.toDto(server);
+  }
+
+  async remove(userId: string, serverId: string): Promise<{ ok: true }> {
+    const server = await this.prisma.server.findUnique({ where: { id: serverId } });
+    if (!server) throw new NotFoundException('Không tìm thấy server');
+    await this.assertRole(userId, server.teamId, 'ADMIN');
+    if (server.type === 'LOCAL')
+      throw new ForbiddenException('Không thể xóa server local mặc định');
+    await this.prisma.server.delete({ where: { id: serverId } });
+    return { ok: true };
+  }
+
+  async testConnection(userId: string, serverId: string): Promise<{ ok: boolean; message: string }> {
+    const server = await this.prisma.server.findUnique({ where: { id: serverId } });
+    if (!server) throw new NotFoundException('Không tìm thấy server');
+    await this.assertRole(userId, server.teamId, 'MEMBER');
+
+    if (server.type === 'LOCAL') {
+      await this.prisma.server.update({ where: { id: serverId }, data: { status: 'ONLINE' } });
+      return { ok: true, message: 'Server local luôn online' };
+    }
+
+    const privateKey = server.sshPrivateKey
+      ? this.crypto.decrypt(server.sshPrivateKey)
+      : '';
+    const ok = await this.ssh.testConnection({
+      host: server.host,
+      port: server.port,
+      username: server.username,
+      privateKey,
+    });
+    await this.prisma.server.update({
+      where: { id: serverId },
+      data: { status: ok ? 'ONLINE' : 'OFFLINE' },
+    });
+    return { ok, message: ok ? 'Kết nối SSH thành công' : 'Không kết nối được' };
+  }
+
+  /** Nội bộ: lấy server kèm private key đã decrypt (dùng bởi BuildRunnerService). */
+  async getForBuild(serverId: string): Promise<Server & { decryptedKey: string | null }> {
+    const server = await this.prisma.server.findUniqueOrThrow({ where: { id: serverId } });
+    const decryptedKey = server.sshPrivateKey
+      ? this.crypto.decrypt(server.sshPrivateKey)
+      : null;
+    return { ...server, decryptedKey };
+  }
+
+  /** Lấy server LOCAL mặc định của team (tạo nếu chưa có). */
+  async getOrCreateLocalServer(teamId: string): Promise<Server> {
+    const existing = await this.prisma.server.findFirst({
+      where: { teamId, type: 'LOCAL' },
+    });
+    if (existing) return existing;
+    return this.prisma.server.create({
+      data: { teamId, name: 'Local (mặc định)', type: 'LOCAL' },
+    });
+  }
+
+  private toDto(s: Server): ServerDto {
+    return {
+      id: s.id,
+      teamId: s.teamId,
+      name: s.name,
+      host: s.host,
+      port: s.port,
+      username: s.username,
+      type: s.type as 'LOCAL' | 'REMOTE',
+      status: s.status as 'UNKNOWN' | 'ONLINE' | 'OFFLINE',
+      createdAt: s.createdAt.toISOString(),
+    };
+  }
+}

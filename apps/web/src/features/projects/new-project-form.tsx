@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import type { CreateProjectDto, ProjectType } from '@deploybox/shared';
+import type { CreateProjectDto, ProjectType, ServerDto } from '@deploybox/shared';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -27,9 +27,16 @@ const TEMPLATES: Array<{
   { label: 'Flutter AAB',       type: 'MOBILE',  buildCommand: 'flutter build appbundle --release', buildImage: 'cirrusci/flutter:stable', artifactPath: 'build/app/outputs/bundle/release/app-release.aab' },
 ];
 
-export function NewProjectForm({ teamId }: { teamId: string }) {
+export function NewProjectForm({
+  teamId,
+  servers = [],
+}: {
+  teamId: string;
+  servers?: ServerDto[];
+}) {
   const router = useRouter();
   const [type, setType] = useState<ProjectType>('STATIC');
+  const [serverId, setServerId] = useState<string>(() => servers[0]?.id ?? '');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [templateApplied, setTemplateApplied] = useState<string | null>(null);
@@ -62,6 +69,7 @@ export function NewProjectForm({ teamId }: { teamId: string }) {
         type === 'BACKEND' && portRaw ? Number(portRaw) : undefined,
       buildImage: type === 'MOBILE' ? str('buildImage') : undefined,
       artifactPath: type === 'MOBILE' ? str('artifactPath') : undefined,
+      serverId: serverId || undefined,
     };
 
     setLoading(true);
@@ -129,6 +137,26 @@ export function NewProjectForm({ teamId }: { teamId: string }) {
           <option value="MOBILE">App mobile (Flutter APK/AAB)</option>
         </Select>
       </div>
+
+      {servers.length > 0 && (
+        <div>
+          <Label htmlFor="serverId">Server deploy</Label>
+          <Select
+            id="serverId"
+            value={serverId}
+            onChange={(e) => setServerId(e.target.value)}
+          >
+            {servers.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name} ({s.type}{s.type === 'REMOTE' ? ` — ${s.host}` : ''})
+              </option>
+            ))}
+          </Select>
+          <p className="mt-1 text-xs text-white/30">
+            Chọn server sẽ chạy quá trình build và deploy.
+          </p>
+        </div>
+      )}
 
       <div>
         <Label htmlFor="gitRepoUrl">Git repo URL (tùy chọn)</Label>

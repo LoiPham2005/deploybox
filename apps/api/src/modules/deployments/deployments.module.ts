@@ -14,6 +14,7 @@ import { WakeController } from './wake.controller';
 import { AuthModule } from '../auth/auth.module';
 import { EnvModule } from '../env/env.module';
 import { CaddyModule } from '../../infra/caddy/caddy.module';
+import { ServersModule } from '../servers/servers.module';
 import { BUILD_QUEUE } from './queue.constants';
 
 const USE_REDIS = !!(process.env.REDIS_URL ?? '');
@@ -23,6 +24,7 @@ const USE_REDIS = !!(process.env.REDIS_URL ?? '');
     AuthModule,
     EnvModule,
     CaddyModule,
+    ServersModule,
     // Đăng ký queue chỉ khi có Redis
     ...(USE_REDIS ? [BullModule.registerQueue({ name: BUILD_QUEUE })] : []),
   ],

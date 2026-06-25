@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '../src/generated/prisma';
 import * as bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
@@ -31,6 +31,23 @@ async function main() {
     });
 
     console.log(`✓ ${account.role.padEnd(6)} → ${account.email} / changeme`);
+  }
+
+  // Tạo LOCAL server mặc định cho team "internal" nếu chưa có
+  const existing = await prisma.server.findFirst({
+    where: { teamId: team.id, type: 'LOCAL' },
+  });
+  if (!existing) {
+    await prisma.server.create({
+      data: {
+        teamId: team.id,
+        name: 'Local Machine',
+        host: 'localhost',
+        type: 'LOCAL',
+        status: 'ONLINE',
+      },
+    });
+    console.log('✓ LOCAL server "Local Machine" tạo cho team internal');
   }
 
   console.log('\nSeed xong! Team "internal" có 3 tài khoản test.');

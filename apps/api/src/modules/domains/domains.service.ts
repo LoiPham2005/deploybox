@@ -11,7 +11,7 @@ import type {
   AddDomainResponse,
   ProjectDomainDto,
 } from '@deploybox/shared';
-import type { Domain, TeamRole } from '@prisma/client';
+import type { Domain, TeamRole } from '../../generated/prisma';
 import { randomBytes } from 'crypto';
 import { resolveTxt } from 'dns/promises';
 import { PrismaService } from '../../infra/prisma/prisma.service';

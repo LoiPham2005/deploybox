@@ -5,6 +5,8 @@ import type {
   DomainStatus,
   EnvTarget,
   ProjectType,
+  ServerStatus,
+  ServerType,
   TeamRole,
 } from './enums';
 
@@ -104,6 +106,7 @@ export interface ProjectDetailDto {
   memoryMb: number;
   cpuLimit: number;
   notifyUrl?: string | null;
+  serverId?: string | null;
   domains: ProjectDomainDto[];
   deployments: DeploymentDetail[];
   webhookUrl: string;
@@ -150,4 +153,16 @@ export interface ApiTokenDto {
   name: string;
   createdAt: string;
   lastUsedAt?: string | null;
+}
+
+export interface ServerDto {
+  id: string;
+  teamId: string;
+  name: string;
+  host: string;
+  port: number;
+  username: string;
+  type: ServerType;
+  status: ServerStatus;
+  createdAt: string;
 }

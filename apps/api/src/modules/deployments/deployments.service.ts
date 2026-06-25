@@ -8,7 +8,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { type Deployment, ProjectType } from '@prisma/client';
+import { type Deployment, ProjectType } from '../../generated/prisma';
 import type { DeploymentDetail, DeploymentView } from '@deploybox/shared';
 import { Queue } from 'bullmq';
 import { readFile, rm } from 'fs/promises';

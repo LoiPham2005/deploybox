@@ -10,6 +10,7 @@ import { CleanupService } from '../../infra/cleanup/cleanup.service';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 import { LogBroadcastService } from '../../infra/log-broadcast/log-broadcast.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
+import { SshService } from '../../infra/ssh/ssh.service';
 import { EnvService } from '../env/env.service';
 import type { BuildJobData } from './queue.constants';
 
@@ -32,6 +33,7 @@ export class BuildRunnerService {
     private readonly env: EnvService,
     private readonly broadcast: LogBroadcastService,
     private readonly crypto: CryptoService,
+    private readonly ssh: SshService,
   ) {}
 
   /** Inject PAT vào HTTPS clone URL: https://host/... → https://oauth2:{token}@host/... */
@@ -90,6 +92,12 @@ export class BuildRunnerService {
         data: { status: 'BUILDING', startedAt: new Date() },
       });
       log('=== BẮT ĐẦU BUILD ===', 'stdout');
+
+      // Project gắn server REMOTE → chạy qua SSH, không dùng local builders
+      if ((project as any).serverId) {
+        await this.runRemote({ deploymentId, project: project as any, gitToken, log });
+        return;
+      }
 
       if (rollbackOf) {
         await this.doRollback(deploymentId, rollbackOf, project, dataDir, log);
@@ -218,6 +226,131 @@ export class BuildRunnerService {
       clearTimeout(tid);
       this.broadcast.end(deploymentId);
     }
+  }
+
+  // ─── REMOTE BUILD (SSH) ───────────────────────────────────────────────────
+
+  private async runRemote(params: {
+    deploymentId: string;
+    project: {
+      id: string; slug: string; teamId: string; type: string; name: string;
+      serverId: string; gitRepoUrl: string | null; gitBranch: string; rootDir: string;
+      installCommand?: string | null; buildCommand?: string | null;
+      startCommand?: string | null; outputDir?: string | null;
+      internalPort: number; buildImage?: string | null; artifactPath?: string | null;
+      notifyUrl?: string | null;
+    };
+    gitToken: string | null;
+    log: BuildLogger;
+  }): Promise<void> {
+    const { deploymentId, project, gitToken, log } = params;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const server = await (this.prisma as any).server.findUniqueOrThrow({
+      where: { id: project.serverId },
+    });
+    const privateKey = server.sshPrivateKey
+      ? this.crypto.decrypt(server.sshPrivateKey)
+      : '';
+    const sshOpts = {
+      host: server.host,
+      port: server.port,
+      username: server.username,
+      privateKey,
+    };
+
+    const phase = project.type === 'BACKEND' ? 'runtime' : 'build';
+    const envVars = await this.env.resolveForPhase(project.id, phase as 'build' | 'runtime');
+
+    const script = this.generateRemoteScript(project, deploymentId, gitToken, envVars);
+    log(`=== DEPLOY LÊN SERVER REMOTE: ${server.name} (${server.host}) ===`, 'stdout');
+
+    await this.ssh.exec(sshOpts, script, (line) => log(line, 'stdout'));
+
+    await this.prisma.deployment.update({
+      where: { id: deploymentId },
+      data: { status: 'RUNNING', finishedAt: new Date() },
+    });
+    log(`=== THÀNH CÔNG → http://${server.host}:${project.internalPort} ===`, 'stdout');
+  }
+
+  private generateRemoteScript(
+    project: {
+      slug: string; type: string; gitRepoUrl: string | null; gitBranch: string;
+      rootDir: string; installCommand?: string | null; buildCommand?: string | null;
+      startCommand?: string | null; outputDir?: string | null; internalPort: number;
+      buildImage?: string | null; artifactPath?: string | null;
+    },
+    deploymentId: string,
+    gitToken: string | null,
+    envVars: Record<string, string>,
+  ): string {
+    const { slug, type, gitBranch, rootDir, internalPort } = project;
+    const cloneUrl = this.cloneUrl(project.gitRepoUrl ?? '', gitToken);
+    const workDir = `/opt/deploybox/projects/${slug}`;
+    const cdRoot = rootDir !== '.' ? `cd "${rootDir}"` : '';
+    const install = project.installCommand ?? '';
+    const build = project.buildCommand ?? '';
+
+    const gitBlock = [
+      `mkdir -p "${workDir}" && cd "${workDir}"`,
+      `if [ -d ".git" ]; then`,
+      `  git remote set-url origin "${cloneUrl}" 2>/dev/null || true`,
+      `  git fetch --all --prune && git reset --hard "origin/${gitBranch}"`,
+      `else`,
+      `  GIT_TERMINAL_PROMPT=0 git clone --depth 1 --branch "${gitBranch}" "${cloneUrl}" .`,
+      `fi`,
+    ].join('\n');
+
+    if (type === 'STATIC') {
+      const out = project.outputDir ?? 'dist';
+      return `#!/bin/bash\nset -euo pipefail\n${gitBlock}\n${cdRoot}\n${install}\n${build}\n` +
+        `docker stop "deploybox-${slug}" 2>/dev/null || true\n` +
+        `docker rm "deploybox-${slug}" 2>/dev/null || true\n` +
+        `docker run -d --name "deploybox-${slug}" --restart unless-stopped \\\n` +
+        `  -p ${internalPort}:80 \\\n` +
+        `  -v "$(pwd)/${out}:/usr/share/nginx/html:ro" \\\n` +
+        `  nginx:alpine\n` +
+        `echo "Static site chạy tại port ${internalPort}"\n`;
+    }
+
+    if (type === 'MOBILE') {
+      const artifact = project.artifactPath ?? 'build/app/outputs/flutter-apk/app-release.apk';
+      const image = project.buildImage ?? 'cirrusci/flutter:stable';
+      const buildCmd = project.buildCommand ?? 'flutter build apk --release';
+      const artifactDir = `/opt/deploybox/artifacts/${deploymentId}`;
+      return `#!/bin/bash\nset -euo pipefail\n${gitBlock}\n${cdRoot}\n` +
+        `docker run --rm -v "$(pwd):/app" -w /app "${image}" sh -c "${buildCmd}"\n` +
+        `mkdir -p "${artifactDir}"\ncp "${artifact}" "${artifactDir}/"\n` +
+        `FNAME=$(basename "${artifact}")\n` +
+        `docker stop "deploybox-${slug}-art" 2>/dev/null || true\n` +
+        `docker rm "deploybox-${slug}-art" 2>/dev/null || true\n` +
+        `docker run -d --name "deploybox-${slug}-art" --restart unless-stopped \\\n` +
+        `  -p ${internalPort}:80 \\\n` +
+        `  -v "${artifactDir}:/usr/share/nginx/html:ro" nginx:alpine\n` +
+        `echo "Artifact tại port ${internalPort}/$FNAME"\n`;
+    }
+
+    // BACKEND
+    const envFile = `/tmp/deploybox-${slug}.env`;
+    const envContent = Object.entries(envVars)
+      .map(([k, v]) => `${k}=${v}`)
+      .join('\n');
+    const startCmd = project.startCommand ?? 'node dist/index.js';
+    return `#!/bin/bash\nset -euo pipefail\n${gitBlock}\n${cdRoot}\n${install}\n${build}\n` +
+      `printf '%s' ${JSON.stringify(envContent)} > "${envFile}"\n` +
+      `docker stop "deploybox-${slug}" 2>/dev/null || true\n` +
+      `docker rm "deploybox-${slug}" 2>/dev/null || true\n` +
+      `if [ -f "Dockerfile" ]; then\n` +
+      `  docker build -t "deploybox-${slug}" .\n` +
+      `  docker run -d --name "deploybox-${slug}" --restart unless-stopped \\\n` +
+      `    -p ${internalPort}:${internalPort} --env-file "${envFile}" "deploybox-${slug}"\n` +
+      `else\n` +
+      `  docker run -d --name "deploybox-${slug}" --restart unless-stopped \\\n` +
+      `    -p ${internalPort}:${internalPort} --env-file "${envFile}" \\\n` +
+      `    -v "$(pwd):/app" -w /app node:lts-alpine sh -c "${startCmd}"\n` +
+      `fi\n` +
+      `echo "Backend chạy tại port ${internalPort}"\n`;
   }
 
   private async doRollback(

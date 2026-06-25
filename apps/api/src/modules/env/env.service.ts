@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { EnvVarDto, UpsertEnvDto } from '@deploybox/shared';
-import type { TeamRole } from '@prisma/client';
+import type { TeamRole } from '../../generated/prisma';
 import { CryptoService } from '../../common/crypto/crypto.service';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 

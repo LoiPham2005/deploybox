@@ -27,6 +27,9 @@ export default async function DashboardLayout({
           <Link href="/team" className="block rounded-md px-3 py-2 hover:bg-white/5">
             Team
           </Link>
+          <Link href="/servers" className="block rounded-md px-3 py-2 hover:bg-white/5">
+            Servers
+          </Link>
           <Link href="/settings/tokens" className="block rounded-md px-3 py-2 hover:bg-white/5">
             API Tokens
           </Link>
