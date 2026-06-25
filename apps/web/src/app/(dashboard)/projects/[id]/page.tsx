@@ -33,7 +33,7 @@ export default async function ProjectDetailPage({
   ]);
 
   const userRole = me?.teams.find((t) => t.id === project.teamId)?.role ?? 'MEMBER';
-  const canRollback = userRole === 'ADMIN' || userRole === 'OWNER';
+  const canRollback = userRole === 'OWNER';
 
   const primary =
     project.domains.find((d) => d.isPrimary) ?? project.domains[0];

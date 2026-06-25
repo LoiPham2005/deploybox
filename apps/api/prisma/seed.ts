@@ -4,9 +4,8 @@ import * as bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 const TEST_ACCOUNTS = [
-  { email: 'owner@deploybox.local',  name: 'Owner Test',  role: 'OWNER'  },
-  { email: 'admin@deploybox.local',  name: 'Admin Test',  role: 'ADMIN'  },
-  { email: 'member@deploybox.local', name: 'Member Test', role: 'MEMBER' },
+  { email: 'owner@deploybox.local', name: 'Owner Test', role: 'OWNER' as const, isAdmin: true },
+  { email: 'member@deploybox.local', name: 'Member Test', role: 'MEMBER' as const, isAdmin: false },
 ] as const;
 
 async function main() {
@@ -14,14 +13,22 @@ async function main() {
 
   let team = await prisma.team.findUnique({ where: { slug: 'internal' } });
   if (!team) {
-    team = await prisma.team.create({ data: { name: 'Internal', slug: 'internal' } });
+    team = await prisma.team.create({
+      data: { name: 'Internal', slug: 'internal', isPersonal: true },
+    });
+  } else {
+    // Ensure isPersonal is set
+    team = await prisma.team.update({
+      where: { id: team.id },
+      data: { isPersonal: true },
+    });
   }
 
   for (const account of TEST_ACCOUNTS) {
     const user = await prisma.user.upsert({
       where: { email: account.email },
-      update: { name: account.name, passwordHash },
-      create: { email: account.email, name: account.name, passwordHash },
+      update: { name: account.name, passwordHash, isAdmin: account.isAdmin },
+      create: { email: account.email, name: account.name, passwordHash, isAdmin: account.isAdmin },
     });
 
     await prisma.teamMember.upsert({
@@ -30,7 +37,7 @@ async function main() {
       create: { teamId: team.id, userId: user.id, role: account.role },
     });
 
-    console.log(`✓ ${account.role.padEnd(6)} → ${account.email} / changeme`);
+    console.log(`✓ ${account.role.padEnd(6)} ${account.isAdmin ? '[isAdmin]' : '        '} → ${account.email} / changeme`);
   }
 
   // Tạo LOCAL server mặc định cho team "internal" nếu chưa có
@@ -50,7 +57,7 @@ async function main() {
     console.log('✓ LOCAL server "Local Machine" tạo cho team internal');
   }
 
-  console.log('\nSeed xong! Team "internal" có 3 tài khoản test.');
+  console.log('\nSeed xong! Team "internal" có 2 tài khoản test (owner + member).');
 }
 
 main()

@@ -32,11 +32,11 @@ export type CreateTokenDto = z.infer<typeof createTokenSchema>;
 
 export const inviteMemberSchema = z.object({
   email: z.string().email(),
-  role: z.enum(['ADMIN', 'MEMBER']).default('MEMBER'),
+  role: z.enum(['MEMBER']).default('MEMBER'),
 });
 export type InviteMemberDto = z.infer<typeof inviteMemberSchema>;
 
 export const updateMemberRoleSchema = z.object({
-  role: z.enum(['ADMIN', 'MEMBER']),
+  role: z.enum(['MEMBER']),
 });
 export type UpdateMemberRoleDto = z.infer<typeof updateMemberRoleSchema>;

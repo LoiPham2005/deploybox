@@ -1,13 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import type { TeamMemberDto, TeamRole } from '@deploybox/shared';
+import type { TeamMemberDto, TeamDto } from '@deploybox/shared';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
-const ROLE_LABEL: Record<TeamRole, string> = {
+const ROLE_LABEL: Record<'OWNER' | 'MEMBER', string> = {
   OWNER: 'Owner',
-  ADMIN: 'Admin',
   MEMBER: 'Member',
 };
 
@@ -37,20 +36,21 @@ export function TeamMembersManager({
   teamId,
   myRole,
   initialMembers,
+  plan,
 }: {
   teamId: string;
-  myRole: TeamRole;
+  myRole: 'OWNER' | 'MEMBER';
   initialMembers: TeamMemberDto[];
+  plan: TeamDto['plan'];
 }) {
   const [members, setMembers] = useState(initialMembers);
   const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<'ADMIN' | 'MEMBER'>('MEMBER');
   const [inviting, setInviting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
 
-  const canManage = myRole === 'OWNER' || myRole === 'ADMIN';
-  const canChangeRole = myRole === 'OWNER';
+  const isOwner = myRole === 'OWNER';
+  const canInvite = isOwner && plan === 'PRO';
 
   async function invite() {
     if (!inviteEmail.trim()) return;
@@ -59,7 +59,7 @@ export function TeamMembersManager({
     try {
       const m = await apiCall(`/teams/${teamId}/members/invite`, 'POST', {
         email: inviteEmail.trim(),
-        role: inviteRole,
+        role: 'MEMBER',
       }) as TeamMemberDto;
       setMembers((prev) => [...prev, m]);
       setInviteEmail('');
@@ -68,19 +68,6 @@ export function TeamMembersManager({
       setErr(e instanceof Error ? e.message : 'Lỗi không xác định');
     } finally {
       setInviting(false);
-    }
-  }
-
-  async function updateRole(memberId: string, role: 'ADMIN' | 'MEMBER') {
-    try {
-      const updated = await apiCall(
-        `/teams/${teamId}/members/${memberId}/role`,
-        'PATCH',
-        { role },
-      ) as TeamMemberDto;
-      setMembers((prev) => prev.map((m) => (m.id === memberId ? updated : m)));
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Lỗi');
     }
   }
 
@@ -104,22 +91,15 @@ export function TeamMembersManager({
               {m.name && <p className="text-xs text-white/40">{m.email}</p>}
             </div>
             <div className="flex items-center gap-2">
-              {canChangeRole && m.role !== 'OWNER' ? (
-                <select
-                  value={m.role}
-                  onChange={(e) => updateRole(m.id, e.target.value as 'ADMIN' | 'MEMBER')}
-                  className="rounded bg-white/10 px-2 py-1 text-xs"
+              <span className="rounded bg-white/10 px-2 py-0.5 text-xs text-white/60">
+                {ROLE_LABEL[m.role as 'OWNER' | 'MEMBER'] ?? m.role}
+              </span>
+              {isOwner && m.role !== 'OWNER' && (
+                <Button
+                  variant="ghost"
+                  onClick={() => remove(m.id)}
+                  className="h-7 px-2 text-red-400 hover:text-red-300"
                 >
-                  <option value="ADMIN">Admin</option>
-                  <option value="MEMBER">Member</option>
-                </select>
-              ) : (
-                <span className="rounded bg-white/10 px-2 py-0.5 text-xs text-white/60">
-                  {ROLE_LABEL[m.role]}
-                </span>
-              )}
-              {canManage && m.role !== 'OWNER' && (
-                <Button variant="ghost" onClick={() => remove(m.id)} className="h-7 px-2 text-red-400 hover:text-red-300">
                   Xoá
                 </Button>
               )}
@@ -128,29 +108,37 @@ export function TeamMembersManager({
         ))}
       </ul>
 
-      {canManage && (
+      {isOwner && (
         <div className="border-t border-white/10 pt-4">
-          <p className="mb-2 text-xs text-white/50">Mời thành viên (phải đăng ký trước)</p>
-          <div className="flex gap-2">
-            <Input
-              placeholder="email@example.com"
-              value={inviteEmail}
-              onChange={(e) => setInviteEmail(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && invite()}
-              className="flex-1"
-            />
-            <select
-              value={inviteRole}
-              onChange={(e) => setInviteRole(e.target.value as 'ADMIN' | 'MEMBER')}
-              className="rounded border border-white/10 bg-white/5 px-2 text-sm"
-            >
-              <option value="MEMBER">Member</option>
-              <option value="ADMIN">Admin</option>
-            </select>
-            <Button onClick={invite} disabled={inviting || !inviteEmail.trim()}>
-              {inviting ? 'Đang mời…' : 'Mời'}
-            </Button>
-          </div>
+          {canInvite ? (
+            <>
+              <p className="mb-2 text-xs text-white/50">Mời thành viên (phải đăng ký trước)</p>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="email@example.com"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && invite()}
+                  className="flex-1"
+                />
+                <Button onClick={invite} disabled={inviting || !inviteEmail.trim()}>
+                  {inviting ? 'Đang mời…' : 'Mời'}
+                </Button>
+              </div>
+            </>
+          ) : (
+            <div className="rounded-md border border-white/10 bg-white/5 px-4 py-3">
+              <p className="text-sm text-white/60">
+                Nâng cấp Pro để mời thêm thành viên vào team.
+              </p>
+              <a
+                href="/settings/billing"
+                className="mt-1 inline-block text-xs text-indigo-400 hover:underline"
+              >
+                Nâng cấp ngay →
+              </a>
+            </div>
+          )}
           {err && <p className="mt-2 text-xs text-red-400">{err}</p>}
           {msg && <p className="mt-2 text-xs text-emerald-400">{msg}</p>}
         </div>

@@ -16,6 +16,7 @@ export interface UserDto {
   email: string;
   name?: string | null;
   avatarUrl?: string | null;
+  isAdmin?: boolean;
 }
 
 export interface TeamDto {
@@ -24,6 +25,7 @@ export interface TeamDto {
   slug: string;
   role: TeamRole;
   plan: Plan;
+  isPersonal: boolean;
 }
 
 export interface AuthResponse {

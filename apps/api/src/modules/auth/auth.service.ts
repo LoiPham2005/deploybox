@@ -34,6 +34,7 @@ type UserRow = {
   email: string;
   name: string | null;
   avatarUrl: string | null;
+  isAdmin: boolean;
 };
 
 @Injectable()
@@ -68,6 +69,7 @@ export class AuthService {
         data: {
           name: dto.name ? `${dto.name}'s Team` : 'My Team',
           slug: `${base}-${u.id.slice(-6)}`,
+          isPersonal: true,
         },
       });
       await tx.teamMember.create({
@@ -104,7 +106,7 @@ export class AuthService {
     });
     const memberships = await this.prisma.teamMember.findMany({
       where: { userId },
-      include: { team: { select: { id: true, name: true, slug: true, plan: true } } },
+      include: { team: { select: { id: true, name: true, slug: true, plan: true, isPersonal: true } } },
     });
     return {
       user: this.toUserDto(user),
@@ -114,6 +116,7 @@ export class AuthService {
         slug: m.team.slug,
         role: m.role,
         plan: m.team.plan as 'FREE' | 'PRO',
+        isPersonal: m.team.isPersonal,
       })),
     };
   }
@@ -182,6 +185,6 @@ export class AuthService {
   }
 
   private toUserDto(u: UserRow): UserDto {
-    return { id: u.id, email: u.email, name: u.name, avatarUrl: u.avatarUrl };
+    return { id: u.id, email: u.email, name: u.name, avatarUrl: u.avatarUrl, isAdmin: u.isAdmin };
   }
 }

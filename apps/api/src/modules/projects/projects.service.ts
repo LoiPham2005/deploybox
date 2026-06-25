@@ -46,8 +46,7 @@ export class ProjectsService {
 
   private static readonly ROLE_ORDER: Record<TeamRole, number> = {
     MEMBER: 0,
-    ADMIN: 1,
-    OWNER: 2,
+    OWNER: 1,
   };
 
   async assertRole(userId: string, teamId: string, min: TeamRole): Promise<void> {
@@ -103,7 +102,7 @@ export class ProjectsService {
     teamId: string,
     dto: CreateProjectDto,
   ): Promise<ProjectSummary> {
-    await this.assertRole(userId, teamId, 'ADMIN');
+    await this.assertRole(userId, teamId, 'OWNER');
 
     const team = await this.prisma.team.findUniqueOrThrow({ where: { id: teamId } });
     const limit = PLAN_LIMITS[team.plan as 'FREE' | 'PRO'].projects;
@@ -171,7 +170,7 @@ export class ProjectsService {
     projectId: string,
     dto: UpdateProjectDto,
   ): Promise<ProjectDetailDto> {
-    await this.loadOwnedProject(userId, projectId, 'ADMIN');
+    await this.loadOwnedProject(userId, projectId, 'OWNER');
     await this.prisma.project.update({
       where: { id: projectId },
       data: {

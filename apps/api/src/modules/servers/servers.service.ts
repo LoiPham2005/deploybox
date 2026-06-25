@@ -10,7 +10,7 @@ import { SshService } from '../../infra/ssh/ssh.service';
 import { PLAN_LIMITS } from '@deploybox/shared';
 import type { ServerDto, CreateServerDto } from '@deploybox/shared';
 
-const ROLE_ORDER: Record<TeamRole, number> = { MEMBER: 0, ADMIN: 1, OWNER: 2 };
+const ROLE_ORDER: Record<TeamRole, number> = { MEMBER: 0, OWNER: 1 };
 
 @Injectable()
 export class ServersService {
@@ -39,7 +39,7 @@ export class ServersService {
   }
 
   async add(userId: string, teamId: string, dto: CreateServerDto): Promise<ServerDto> {
-    await this.assertRole(userId, teamId, 'ADMIN');
+    await this.assertRole(userId, teamId, 'OWNER');
 
     const team = await this.prisma.team.findUniqueOrThrow({ where: { id: teamId } });
     const limit = PLAN_LIMITS[team.plan as 'FREE' | 'PRO'].servers;
@@ -72,7 +72,7 @@ export class ServersService {
   async remove(userId: string, serverId: string): Promise<{ ok: true }> {
     const server = await this.prisma.server.findUnique({ where: { id: serverId } });
     if (!server) throw new NotFoundException('Không tìm thấy server');
-    await this.assertRole(userId, server.teamId, 'ADMIN');
+    await this.assertRole(userId, server.teamId, 'OWNER');
     if (server.type === 'LOCAL')
       throw new ForbiddenException('Không thể xóa server local mặc định');
     await this.prisma.server.delete({ where: { id: serverId } });

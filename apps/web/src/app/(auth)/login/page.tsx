@@ -10,7 +10,6 @@ import { Label } from '@/components/ui/label';
 
 const QUICK_ACCOUNTS = [
   { label: 'OWNER',  email: 'owner@deploybox.local',  cls: 'border-yellow-500/50 text-yellow-400 hover:bg-yellow-500/10' },
-  { label: 'ADMIN',  email: 'admin@deploybox.local',   cls: 'border-indigo-500/50 text-indigo-400 hover:bg-indigo-500/10' },
   { label: 'MEMBER', email: 'member@deploybox.local',  cls: 'border-white/20 text-white/60 hover:bg-white/5' },
 ] as const;
 

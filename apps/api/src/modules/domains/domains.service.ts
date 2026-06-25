@@ -25,7 +25,7 @@ export class DomainsService {
     private readonly config: ConfigService,
   ) {}
 
-  private static readonly ROLE_ORDER: Record<TeamRole, number> = { MEMBER: 0, ADMIN: 1, OWNER: 2 };
+  private static readonly ROLE_ORDER: Record<TeamRole, number> = { MEMBER: 0, OWNER: 1 };
 
   private async assertRole(userId: string, teamId: string, min: TeamRole): Promise<void> {
     const member = await this.prisma.teamMember.findUnique({
@@ -70,7 +70,7 @@ export class DomainsService {
     projectId: string,
     dto: AddDomainDto,
   ): Promise<AddDomainResponse> {
-    const project = await this.loadOwnedProject(userId, projectId, 'ADMIN');
+    const project = await this.loadOwnedProject(userId, projectId, 'OWNER');
     const existing = await this.prisma.domain.findUnique({
       where: { hostname: dto.hostname },
     });
@@ -110,7 +110,7 @@ export class DomainsService {
   }
 
   async verify(userId: string, domainId: string): Promise<ProjectDomainDto> {
-    const domain = await this.loadOwnedDomain(userId, domainId, 'ADMIN');
+    const domain = await this.loadOwnedDomain(userId, domainId, 'OWNER');
     let status: 'ACTIVE' | 'FAILED' = 'FAILED';
     try {
       const records = await resolveTxt(`_deploybox.${domain.hostname}`);
@@ -129,7 +129,7 @@ export class DomainsService {
   }
 
   async remove(userId: string, domainId: string): Promise<{ ok: true }> {
-    const domain = await this.loadOwnedDomain(userId, domainId, 'ADMIN');
+    const domain = await this.loadOwnedDomain(userId, domainId, 'OWNER');
     if (domain.isPrimary) {
       throw new BadRequestException('Không thể xóa domain chính');
     }
@@ -139,7 +139,7 @@ export class DomainsService {
   }
 
   async setPrimary(userId: string, domainId: string): Promise<ProjectDomainDto> {
-    const domain = await this.loadOwnedDomain(userId, domainId, 'ADMIN');
+    const domain = await this.loadOwnedDomain(userId, domainId, 'OWNER');
     // unset current primary
     await this.prisma.domain.updateMany({
       where: { projectId: domain.projectId, isPrimary: true },

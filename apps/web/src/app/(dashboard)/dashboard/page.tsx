@@ -1,11 +1,13 @@
 import Link from 'next/link';
 import { serverGet } from '@/lib/api-server';
+import { getSelectedTeam } from '@/lib/team';
 import { Button } from '@/components/ui/button';
 import { ProjectsGrid } from '@/features/projects/projects-grid';
 
 export default async function DashboardPage() {
   const me = await serverGet.me();
-  const teamId = me.teams[0]?.id;
+  const team = getSelectedTeam(me.teams);
+  const teamId = team?.id;
   const projects = teamId ? (await serverGet.projects(teamId)).data : [];
 
   return (

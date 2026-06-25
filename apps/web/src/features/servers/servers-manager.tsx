@@ -41,7 +41,7 @@ export function ServersManager({
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
 
-  const canManage = myRole === 'OWNER' || myRole === 'ADMIN';
+  const canManage = myRole === 'OWNER';
 
   async function add() {
     if (!name.trim()) return;

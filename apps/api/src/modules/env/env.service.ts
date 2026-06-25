@@ -8,7 +8,7 @@ import type { TeamRole } from '../../generated/prisma';
 import { CryptoService } from '../../common/crypto/crypto.service';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 
-const ROLE_ORDER: Record<TeamRole, number> = { MEMBER: 0, ADMIN: 1, OWNER: 2 };
+const ROLE_ORDER: Record<TeamRole, number> = { MEMBER: 0, OWNER: 1 };
 
 @Injectable()
 export class EnvService {
@@ -51,7 +51,7 @@ export class EnvService {
     projectId: string,
     dto: UpsertEnvDto,
   ): Promise<EnvVarDto[]> {
-    await this.loadOwnedProject(userId, projectId, 'ADMIN');
+    await this.loadOwnedProject(userId, projectId, 'OWNER');
     for (const v of dto.vars) {
       const value = v.isSecret ? this.crypto.encrypt(v.value) : v.value;
       await this.prisma.envVar.upsert({
@@ -64,7 +64,7 @@ export class EnvService {
   }
 
   async remove(userId: string, projectId: string, key: string): Promise<void> {
-    await this.loadOwnedProject(userId, projectId, 'ADMIN');
+    await this.loadOwnedProject(userId, projectId, 'OWNER');
     await this.prisma.envVar.deleteMany({ where: { projectId, key } });
   }
 

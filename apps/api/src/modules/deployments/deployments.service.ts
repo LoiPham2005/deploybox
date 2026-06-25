@@ -41,9 +41,9 @@ export class DeploymentsService {
     }
   }
 
-  private static readonly ROLE_ORDER = { MEMBER: 0, ADMIN: 1, OWNER: 2 } as const;
+  private static readonly ROLE_ORDER = { MEMBER: 0, OWNER: 1 } as const;
 
-  private async assertRole(userId: string, teamId: string, min: 'MEMBER' | 'ADMIN' | 'OWNER'): Promise<void> {
+  private async assertRole(userId: string, teamId: string, min: 'MEMBER' | 'OWNER'): Promise<void> {
     const member = await this.prisma.teamMember.findUnique({
       where: { teamId_userId: { teamId, userId } },
     });
@@ -53,7 +53,7 @@ export class DeploymentsService {
     }
   }
 
-  private async loadOwnedProject(userId: string, projectId: string, min: 'MEMBER' | 'ADMIN' | 'OWNER' = 'MEMBER') {
+  private async loadOwnedProject(userId: string, projectId: string, min: 'MEMBER' | 'OWNER' = 'MEMBER') {
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
     });
@@ -79,7 +79,7 @@ export class DeploymentsService {
       include: { project: true },
     });
     if (!src) throw new NotFoundException('Không tìm thấy deployment');
-    await this.assertRole(userId, src.project.teamId, 'ADMIN');
+    await this.assertRole(userId, src.project.teamId, 'MEMBER');
     const deployment = await this.prisma.deployment.create({
       data: {
         projectId: src.projectId,
@@ -127,7 +127,7 @@ export class DeploymentsService {
     projectId: string,
     trigger: 'MANUAL' | 'REDEPLOY',
   ): Promise<DeploymentDetail> {
-    const project = await this.loadOwnedProject(userId, projectId, 'ADMIN');
+    const project = await this.loadOwnedProject(userId, projectId, 'MEMBER');
     if (!project.gitRepoUrl) {
       throw new BadRequestException('Project chưa có Git repo URL để deploy');
     }
@@ -139,7 +139,7 @@ export class DeploymentsService {
   }
 
   async stop(userId: string, projectId: string): Promise<{ ok: true }> {
-    const project = await this.loadOwnedProject(userId, projectId, 'ADMIN');
+    const project = await this.loadOwnedProject(userId, projectId, 'MEMBER');
     if (project.type === 'STATIC') {
       const dataDir = resolve(
         process.cwd(),
@@ -176,7 +176,7 @@ export class DeploymentsService {
     userId: string,
     projectId: string,
   ): Promise<{ ok: boolean }> {
-    await this.loadOwnedProject(userId, projectId, 'ADMIN');
+    await this.loadOwnedProject(userId, projectId, 'MEMBER');
     return { ok: await this.sleepSvc.sleep(projectId) };
   }
 

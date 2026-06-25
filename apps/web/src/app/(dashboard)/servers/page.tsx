@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { getToken } from '@/lib/auth';
 import { authApi } from '@/lib/api';
 import { serverGet } from '@/lib/api-server';
+import { getSelectedTeam } from '@/lib/team';
 import { Card } from '@/components/ui/card';
 import { ServersManager } from '@/features/servers/servers-manager';
 
@@ -10,7 +11,7 @@ export default async function ServersPage() {
   if (!token) redirect('/login');
 
   const me = await authApi.me(token).catch(() => redirect('/login'));
-  const team = me.teams[0];
+  const team = getSelectedTeam(me.teams);
   if (!team) redirect('/dashboard');
 
   const servers = await serverGet.servers(team.id).catch(() => []);

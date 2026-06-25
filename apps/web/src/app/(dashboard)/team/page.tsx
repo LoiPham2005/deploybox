@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { getToken } from '@/lib/auth';
 import { authApi } from '@/lib/api';
 import { serverGet } from '@/lib/api-server';
+import { getSelectedTeam } from '@/lib/team';
 import { Card } from '@/components/ui/card';
 import { TeamMembersManager } from '@/features/teams/team-members-manager';
 
@@ -10,7 +11,7 @@ export default async function TeamPage() {
   if (!token) redirect('/login');
 
   const me = await authApi.me(token).catch(() => redirect('/login'));
-  const team = me.teams[0];
+  const team = getSelectedTeam(me.teams);
   if (!team) redirect('/dashboard');
 
   const members = await serverGet.members(team.id).catch(() => []);
@@ -28,6 +29,7 @@ export default async function TeamPage() {
           teamId={team.id}
           myRole={team.role}
           initialMembers={members}
+          plan={team.plan}
         />
       </Card>
     </div>

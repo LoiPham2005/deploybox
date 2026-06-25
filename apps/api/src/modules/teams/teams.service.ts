@@ -9,7 +9,7 @@ import type { TeamMemberDto } from '@deploybox/shared';
 import type { TeamRole } from '../../generated/prisma';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 
-const ROLE_ORDER: Record<TeamRole, number> = { MEMBER: 0, ADMIN: 1, OWNER: 2 };
+const ROLE_ORDER: Record<TeamRole, number> = { MEMBER: 0, OWNER: 1 };
 
 @Injectable()
 export class TeamsService {
@@ -50,17 +50,21 @@ export class TeamsService {
     actorId: string,
     teamId: string,
     email: string,
-    role: 'ADMIN' | 'MEMBER',
+    role: 'MEMBER',
   ): Promise<TeamMemberDto> {
-    await this.assertRole(actorId, teamId, 'ADMIN');
+    await this.assertRole(actorId, teamId, 'OWNER');
 
     const team = await this.prisma.team.findUniqueOrThrow({ where: { id: teamId } });
-    const limit = PLAN_LIMITS[team.plan as 'FREE' | 'PRO'].members;
+    if (team.plan !== 'PRO') {
+      throw new ForbiddenException('Chỉ gói PRO mới được mời thành viên. Nâng cấp để mời.');
+    }
+
+    const limit = PLAN_LIMITS['PRO'].members;
     if (limit !== -1) {
       const count = await this.prisma.teamMember.count({ where: { teamId } });
       if (count >= limit) {
         throw new ForbiddenException(
-          `Gói ${team.plan} chỉ cho tối đa ${limit} thành viên. Nâng cấp lên Pro để mời thêm.`,
+          `Gói PRO chỉ cho tối đa ${limit} thành viên.`,
         );
       }
     }
@@ -91,7 +95,7 @@ export class TeamsService {
     actorId: string,
     teamId: string,
     memberId: string,
-    role: 'ADMIN' | 'MEMBER',
+    role: 'MEMBER',
   ): Promise<TeamMemberDto> {
     await this.assertRole(actorId, teamId, 'OWNER');
 
@@ -126,7 +130,7 @@ export class TeamsService {
     teamId: string,
     memberId: string,
   ): Promise<{ ok: true }> {
-    await this.assertRole(actorId, teamId, 'ADMIN');
+    await this.assertRole(actorId, teamId, 'OWNER');
 
     const member = await this.prisma.teamMember.findUnique({
       where: { id: memberId },
