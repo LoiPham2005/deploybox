@@ -1,5 +1,12 @@
 import { Injectable } from '@nestjs/common';
+import { spawn } from 'child_process';
 import { capture, runStreaming, type LogFn } from '../process.util';
+
+export interface ContainerStats {
+  cpu: string;
+  mem: string;
+  memPerc: string;
+}
 
 export interface RunContainerOptions {
   name: string;
@@ -20,9 +27,10 @@ export class DockerService {
     tag: string,
     contextDir: string,
     log: LogFn,
+    signal?: AbortSignal,
   ): Promise<void> {
     log(`$ docker build -t ${tag} .`, 'stdout');
-    await runStreaming('docker', ['build', '-t', tag, contextDir], { log });
+    await runStreaming('docker', ['build', '-t', tag, contextDir], { log, signal });
   }
 
   /** Chạy container nền, publish cổng app ra một host port ngẫu nhiên. */
@@ -82,5 +90,32 @@ export class DockerService {
   /** Khởi động lại container đã stop (giữ nguyên port mapping). */
   async start(name: string): Promise<void> {
     await capture('docker', ['start', name]);
+  }
+
+  /** Stream docker logs -f; trả về hàm cleanup để kill process khi client ngắt. */
+  streamLogs(name: string, onLine: (line: string) => void): () => void {
+    const child = spawn('docker', ['logs', '-f', '--tail', '300', name]);
+    const onData = (buf: Buffer) => {
+      buf.toString().split('\n').forEach((l) => { if (l.trim()) onLine(l); });
+    };
+    child.stdout.on('data', onData);
+    child.stderr.on('data', onData);
+    return () => { try { child.kill(); } catch { /* ignore */ } };
+  }
+
+  /** Lấy CPU/RAM của container (một lần, không stream). */
+  async stats(name: string): Promise<ContainerStats | null> {
+    const { stdout, code } = await capture('docker', [
+      'stats', '--no-stream', '--format', '{{json .}}', name,
+    ]);
+    if (code !== 0 || !stdout.trim()) return null;
+    try {
+      const row = JSON.parse(stdout.trim().split('\n')[0]) as {
+        CPUPerc: string; MemUsage: string; MemPerc: string;
+      };
+      return { cpu: row.CPUPerc, mem: row.MemUsage, memPerc: row.MemPerc };
+    } catch {
+      return null;
+    }
   }
 }

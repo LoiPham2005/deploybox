@@ -8,12 +8,14 @@ export interface BackendBuildInput {
   deploymentId: string;
   slug: string;
   repoUrl: string;
+  repoUrlDisplay?: string;
   branch: string;
   rootDir: string;
   internalPort: number;
   memoryMb: number;
   cpuLimit: number;
   dataDir: string;
+  signal?: AbortSignal;
 }
 
 /**
@@ -34,13 +36,13 @@ export class DockerBackendEngine {
     await mkdir(workDir, { recursive: true });
 
     log(
-      `$ git clone --depth 1 --branch ${input.branch} ${input.repoUrl}`,
+      `$ git clone --depth 1 --branch ${input.branch} ${input.repoUrlDisplay ?? input.repoUrl}`,
       'stdout',
     );
     await runStreaming(
       'git',
       ['clone', '--depth', '1', '--branch', input.branch, input.repoUrl, workDir],
-      { cwd: input.dataDir, log },
+      { cwd: input.dataDir, log, signal: input.signal },
     );
 
     const appDir = join(workDir, input.rootDir || '.');
@@ -51,7 +53,7 @@ export class DockerBackendEngine {
     }
 
     const image = `deploybox-${input.slug}:${input.deploymentId.slice(-8)}`;
-    await this.docker.buildImage(image, appDir, log);
+    await this.docker.buildImage(image, appDir, log, input.signal);
 
     const name = `deploybox-${input.slug}`;
     log('Dừng container cũ (nếu có)…', 'stdout');

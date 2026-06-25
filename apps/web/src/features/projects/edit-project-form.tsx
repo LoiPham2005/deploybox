@@ -35,6 +35,8 @@ export function EditProjectForm({ project }: { project: ProjectDetailDto }) {
           : undefined,
       buildImage: project.type === 'MOBILE' ? (s('buildImage') ?? '') : undefined,
       artifactPath: project.type === 'MOBILE' ? (s('artifactPath') ?? '') : undefined,
+      // gitToken: undefined = không đổi, '' = xóa, giá trị = cập nhật
+      gitToken: f.has('gitToken') ? (s('gitToken') ?? '') : undefined,
       autoDeploy: f.get('autoDeploy') === 'on',
       sleepEnabled: f.get('sleepEnabled') === 'on',
     };
@@ -64,6 +66,24 @@ export function EditProjectForm({ project }: { project: ProjectDetailDto }) {
           name="gitRepoUrl"
           defaultValue={project.gitRepoUrl ?? ''}
         />
+      </div>
+      <div>
+        <Label htmlFor="gitToken">
+          Git Access Token{' '}
+          {project.hasGitToken && (
+            <span className="ml-1 text-xs text-emerald-400">(đã thiết lập)</span>
+          )}
+        </Label>
+        <Input
+          id="gitToken"
+          name="gitToken"
+          type="password"
+          placeholder={project.hasGitToken ? '••••••••  (để trống = giữ nguyên, nhập mới = cập nhật)' : 'ghp_xxxx hoặc gitlab-token…'}
+          autoComplete="off"
+        />
+        {project.hasGitToken && (
+          <p className="mt-1 text-xs text-white/30">Nhập khoảng trắng rồi xóa để clear token.</p>
+        )}
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>

@@ -6,13 +6,15 @@ import { runStreaming, type LogFn } from '../process.util';
 export interface MobileBuildInput {
   deploymentId: string;
   slug: string;
-  repoUrl: string;
+  repoUrl: string;          // URL thực để clone (có thể chứa token)
+  repoUrlDisplay?: string;  // URL hiển thị trong log (không có token)
   branch: string;
   rootDir: string;
-  buildImage?: string;  // Docker image toolchain — để TRỐNG để build trên host (dùng fvm/flutter cài sẵn)
-  buildCommand: string; // Lệnh build (fvm flutter build apk… hoặc flutter build apk…)
-  artifactPath: string; // Đường dẫn file output trong repo
+  buildImage?: string;      // Docker image toolchain — để TRỐNG để build trên host
+  buildCommand: string;
+  artifactPath: string;
   dataDir: string;
+  signal?: AbortSignal;
 }
 
 export interface MobileBuildOutput {
@@ -44,12 +46,12 @@ export class MobileBuilder {
     await mkdir(workDir, { recursive: true });
     await mkdir(artifactsDir, { recursive: true });
 
-    // 1. Clone repo
-    log(`$ git clone --depth 1 --branch ${input.branch} ${input.repoUrl}`, 'stdout');
+    // 1. Clone repo (log URL không có token)
+    log(`$ git clone --depth 1 --branch ${input.branch} ${input.repoUrlDisplay ?? input.repoUrl}`, 'stdout');
     await runStreaming(
       'git',
       ['clone', '--depth', '1', '--branch', input.branch, input.repoUrl, workDir],
-      { cwd: input.dataDir, log },
+      { cwd: input.dataDir, log, signal: input.signal },
     );
 
     const appDir = join(workDir, input.rootDir || '.');
@@ -65,7 +67,7 @@ export class MobileBuilder {
       await runStreaming(
         'docker',
         ['run', '--rm', '-v', `${appDir}:/workspace`, '-w', '/workspace', ...envFlags, input.buildImage, 'sh', '-c', input.buildCommand],
-        { cwd: appDir, log },
+        { cwd: appDir, log, signal: input.signal },
       );
     } else {
       // Chế độ A: Host build — dùng fvm/flutter cài sẵn trên máy
@@ -77,7 +79,7 @@ export class MobileBuilder {
       await runStreaming(
         'sh',
         ['-c', input.buildCommand],
-        { cwd: appDir, log, env: envWithBuild },
+        { cwd: appDir, log, env: envWithBuild, signal: input.signal },
       );
     }
 

@@ -1,6 +1,7 @@
 import {
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -13,7 +14,10 @@ import type {
   UpdateProjectDto,
 } from '@deploybox/shared';
 import { randomBytes } from 'crypto';
+import { rm } from 'fs/promises';
+import { join, resolve } from 'path';
 import { PrismaService } from '../../infra/prisma/prisma.service';
+import { CryptoService } from '../../common/crypto/crypto.service';
 
 function slugify(input: string): string {
   return (
@@ -34,6 +38,7 @@ export class ProjectsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly crypto: CryptoService,
   ) {}
 
   // ----- truy cập theo team (nền tảng cô lập tenant) -----
@@ -98,6 +103,7 @@ export class ProjectsService {
         gitRepoUrl: dto.gitRepoUrl,
         gitBranch: dto.gitBranch ?? 'main',
         rootDir: dto.rootDir ?? '.',
+        gitToken: dto.gitToken ? this.crypto.encrypt(dto.gitToken) : null,
         buildCommand: dto.buildCommand,
         startCommand: dto.startCommand,
         outputDir: dto.outputDir,
@@ -147,6 +153,12 @@ export class ProjectsService {
         gitRepoUrl: dto.gitRepoUrl === '' ? null : dto.gitRepoUrl,
         buildImage: dto.buildImage === '' ? null : dto.buildImage,
         artifactPath: dto.artifactPath === '' ? null : dto.artifactPath,
+        // gitToken: rỗng = xóa token; có giá trị = encrypt lại
+        gitToken: dto.gitToken === undefined
+          ? undefined                                       // không thay đổi
+          : dto.gitToken === ''
+            ? null                                         // xóa
+            : this.crypto.encrypt(dto.gitToken),           // cập nhật
       },
     });
     return this.get(userId, projectId);
@@ -156,9 +168,30 @@ export class ProjectsService {
     userId: string,
     projectId: string,
   ): Promise<{ ok: true }> {
-    await this.loadOwnedProject(userId, projectId);
-    // M1: chỉ xóa bản ghi. Khi có build engine sẽ kèm dừng container + gỡ route Caddy.
+    const project = await this.loadOwnedProject(userId, projectId);
+
+    // Lấy tất cả deployment IDs để xóa artifact + log files
+    const deployments = await this.prisma.deployment.findMany({
+      where: { projectId },
+      select: { id: true },
+    });
+
     await this.prisma.project.delete({ where: { id: projectId } });
+
+    // Xóa file artifacts và logs sau khi xóa DB (không chặn nếu lỗi)
+    const dataDir = resolve(
+      process.cwd(),
+      this.config.get<string>('DATA_DIR', '.deploybox-data'),
+    );
+    for (const { id } of deployments) {
+      await rm(join(dataDir, 'artifacts', id), { recursive: true, force: true }).catch(() => undefined);
+      await rm(join(dataDir, 'logs', `${id}.log`), { force: true }).catch(() => undefined);
+    }
+    // Xóa thư mục site (STATIC project)
+    if (project.type === 'STATIC') {
+      await rm(join(dataDir, 'sites', project.slug), { recursive: true, force: true }).catch(() => undefined);
+    }
+
     return { ok: true };
   }
 
@@ -205,6 +238,7 @@ export class ProjectsService {
       gitRepoUrl: p.gitRepoUrl,
       gitBranch: p.gitBranch,
       rootDir: p.rootDir,
+      hasGitToken: !!p.gitToken,
       installCommand: p.installCommand,
       buildCommand: p.buildCommand,
       startCommand: p.startCommand,

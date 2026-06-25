@@ -13,25 +13,30 @@ import { DeploymentsModule } from './modules/deployments/deployments.module';
 import { DomainsModule } from './modules/domains/domains.module';
 import { WebhooksModule } from './modules/webhooks/webhooks.module';
 
+// Đọc sớm để quyết định có import BullModule không (trước khi NestJS bootstrap)
+const REDIS_URL = process.env.REDIS_URL ?? '';
+
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      // Đọc .env ở gốc monorepo trước, rồi .env cục bộ của api (nếu có)
       envFilePath: ['../../.env', '.env'],
       validate: validateEnv,
     }),
-    BullModule.forRootAsync({
-      inject: [ConfigService],
-      useFactory: (config: ConfigService) => {
-        const url = new URL(
-          config.get<string>('REDIS_URL', 'redis://localhost:6379'),
-        );
-        return {
-          connection: { host: url.hostname, port: Number(url.port) || 6379 },
-        };
-      },
-    }),
+    // BullMQ chỉ khởi tạo khi có Redis
+    ...(REDIS_URL
+      ? [
+          BullModule.forRootAsync({
+            inject: [ConfigService],
+            useFactory: (config: ConfigService) => {
+              const url = new URL(config.get<string>('REDIS_URL', ''));
+              return {
+                connection: { host: url.hostname, port: Number(url.port) || 6379 },
+              };
+            },
+          }),
+        ]
+      : []),
     PrismaModule,
     CryptoModule,
     MetricsModule,

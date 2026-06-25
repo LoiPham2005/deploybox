@@ -3,7 +3,9 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { type Deployment, ProjectType } from '@prisma/client';
@@ -13,20 +15,31 @@ import { readFile, rm } from 'fs/promises';
 import { join, resolve } from 'path';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 import { DockerService } from '../../infra/docker/docker.service';
+import { type ContainerStats } from '../../infra/docker/docker.service';
 import { CaddyService } from '../../infra/caddy/caddy.service';
 import { SleepService } from '../../infra/sleep/sleep.service';
+import { BuildRunnerService } from './build.runner.service';
 import { BUILD_QUEUE, type BuildJobData } from './queue.constants';
 
 @Injectable()
 export class DeploymentsService {
+  private readonly logger = new Logger(DeploymentsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly docker: DockerService,
     private readonly caddy: CaddyService,
     private readonly sleepSvc: SleepService,
-    @InjectQueue(BUILD_QUEUE) private readonly buildQueue: Queue<BuildJobData>,
-  ) {}
+    private readonly runner: BuildRunnerService,
+    @Optional() @InjectQueue(BUILD_QUEUE) private readonly buildQueue: Queue<BuildJobData> | null,
+  ) {
+    if (buildQueue) {
+      this.logger.log('Chế độ Queue (Redis) — build chạy nền qua BullMQ');
+    } else {
+      this.logger.log('Chế độ Direct — build chạy thẳng (không cần Redis)');
+    }
+  }
 
   private async assertMembership(userId: string, teamId: string): Promise<void> {
     const member = await this.prisma.teamMember.findUnique({
@@ -70,11 +83,7 @@ export class DeploymentsService {
         createdBy: userId,
       },
     });
-    await this.buildQueue.add(
-      'build',
-      { deploymentId: deployment.id, rollbackOf: deploymentId },
-      { removeOnComplete: 50, removeOnFail: 50 },
-    );
+    this.dispatch({ deploymentId: deployment.id, rollbackOf: deploymentId });
     return this.toDetail(deployment);
   }
 
@@ -97,11 +106,15 @@ export class DeploymentsService {
         commitMsg,
       },
     });
-    await this.buildQueue.add(
-      'build',
-      { deploymentId: deployment.id },
-      { removeOnComplete: 50, removeOnFail: 50 },
-    );
+    this.dispatch({ deploymentId: deployment.id });
+  }
+
+  private dispatch(data: BuildJobData): void {
+    if (this.buildQueue) {
+      void this.buildQueue.add('build', data, { removeOnComplete: 50, removeOnFail: 50 });
+    } else {
+      setImmediate(() => this.runner.run(data).catch((e) => this.logger.error(e)));
+    }
   }
 
   private async enqueue(
@@ -116,11 +129,7 @@ export class DeploymentsService {
     const deployment = await this.prisma.deployment.create({
       data: { projectId, status: 'QUEUED', trigger, createdBy: userId },
     });
-    await this.buildQueue.add(
-      'build',
-      { deploymentId: deployment.id },
-      { removeOnComplete: 50, removeOnFail: 50 },
-    );
+    this.dispatch({ deploymentId: deployment.id });
     return this.toDetail(deployment);
   }
 
@@ -235,6 +244,35 @@ export class DeploymentsService {
     } catch {
       return '';
     }
+  }
+
+  /** Dùng bởi controller SSE — trả về nội dung log file. */
+  async getLogs(deploymentId: string): Promise<string> {
+    return this.readLogs(deploymentId);
+  }
+
+  /** Dùng bởi controller SSE — xác minh quyền truy cập và trả về status. */
+  async getDeploymentForStream(
+    userId: string,
+    deploymentId: string,
+  ): Promise<{ status: string; projectSlug: string; projectType: string }> {
+    const d = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      include: { project: true },
+    });
+    if (!d) throw new NotFoundException('Không tìm thấy deployment');
+    await this.assertMembership(userId, d.project.teamId);
+    return { status: d.status, projectSlug: d.project.slug, projectType: d.project.type };
+  }
+
+  /** Container metrics cho BACKEND project đang chạy. */
+  async getContainerMetrics(
+    userId: string,
+    projectId: string,
+  ): Promise<ContainerStats | null> {
+    const project = await this.loadOwnedProject(userId, projectId);
+    if (project.type !== 'BACKEND') return null;
+    return this.docker.stats(`deploybox-${project.slug}`);
   }
 
   private toDetail(d: Deployment): DeploymentDetail {

@@ -3,33 +3,41 @@ import { Module } from '@nestjs/common';
 import { DeploymentsController } from './deployments.controller';
 import { DeploymentsService } from './deployments.service';
 import { BuildProcessor } from './build.processor';
+import { BuildRunnerService } from './build.runner.service';
 import { HostStaticBuilder } from '../../infra/builder/host-static.builder';
 import { DockerBackendEngine } from '../../infra/builder/docker-backend.engine';
 import { MobileBuilder } from '../../infra/builder/mobile.builder';
 import { CleanupService } from '../../infra/cleanup/cleanup.service';
 import { SleepService } from '../../infra/sleep/sleep.service';
+import { LogBroadcastService } from '../../infra/log-broadcast/log-broadcast.service';
 import { WakeController } from './wake.controller';
 import { AuthModule } from '../auth/auth.module';
 import { EnvModule } from '../env/env.module';
 import { CaddyModule } from '../../infra/caddy/caddy.module';
 import { BUILD_QUEUE } from './queue.constants';
 
+const USE_REDIS = !!(process.env.REDIS_URL ?? '');
+
 @Module({
   imports: [
     AuthModule,
     EnvModule,
     CaddyModule,
-    BullModule.registerQueue({ name: BUILD_QUEUE }),
+    // Đăng ký queue chỉ khi có Redis
+    ...(USE_REDIS ? [BullModule.registerQueue({ name: BUILD_QUEUE })] : []),
   ],
   controllers: [DeploymentsController, WakeController],
   providers: [
     DeploymentsService,
-    BuildProcessor,
+    BuildRunnerService,
+    LogBroadcastService,
     HostStaticBuilder,
     DockerBackendEngine,
     MobileBuilder,
     CleanupService,
     SleepService,
+    // Worker processor chỉ khởi tạo khi có Redis
+    ...(USE_REDIS ? [BuildProcessor] : []),
   ],
   exports: [DeploymentsService],
 })

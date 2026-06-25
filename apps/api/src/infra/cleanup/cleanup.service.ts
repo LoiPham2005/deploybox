@@ -1,6 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { readdir, rm, stat } from 'fs/promises';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { PrismaService } from '../prisma/prisma.service';
 import { capture } from '../process.util';
 
@@ -8,11 +9,39 @@ type ProjectRef = { id: string; type: string; slug: string };
 
 /** Dọn artifact cũ sau mỗi deploy: giữ N release (STATIC) / N image (BACKEND) mới nhất. */
 @Injectable()
-export class CleanupService {
+export class CleanupService implements OnModuleInit {
   private readonly logger = new Logger(CleanupService.name);
   private readonly KEEP = 5;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService,
+  ) {}
+
+  onModuleInit() {
+    const SIX_HOURS = 6 * 60 * 60_000;
+    setInterval(() => { void this.globalPrune(); }, SIX_HOURS);
+  }
+
+  private async globalPrune(): Promise<void> {
+    this.logger.log('Dọn dẹp định kỳ…');
+    await capture('docker', ['image', 'prune', '-f', '--filter', 'until=48h']).catch(() => undefined);
+    await capture('docker', ['container', 'prune', '-f']).catch(() => undefined);
+    await this.pruneOrphanLogs().catch(() => undefined);
+    this.logger.log('Dọn dẹp xong');
+  }
+
+  private async pruneOrphanLogs(): Promise<void> {
+    const dataDir = resolve(process.cwd(), this.config.get<string>('DATA_DIR', '.deploybox-data'));
+    const logsDir = join(dataDir, 'logs');
+    const files = await readdir(logsDir).catch(() => [] as string[]);
+    for (const f of files) {
+      if (!f.endsWith('.log')) continue;
+      const id = f.slice(0, -4);
+      const exists = await this.prisma.deployment.findUnique({ where: { id }, select: { id: true } });
+      if (!exists) await rm(join(logsDir, f), { force: true }).catch(() => undefined);
+    }
+  }
 
   async pruneProject(project: ProjectRef, dataDir: string): Promise<void> {
     if (project.type === 'STATIC') {

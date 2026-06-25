@@ -33,6 +33,7 @@ export function NewProjectForm({ teamId }: { teamId: string }) {
       gitRepoUrl: str('gitRepoUrl'),
       gitBranch: str('gitBranch') ?? 'main',
       rootDir: str('rootDir') ?? '.',
+      gitToken: str('gitToken') || undefined,
       buildCommand: str('buildCommand'),
       outputDir: type === 'STATIC' ? str('outputDir') : undefined,
       startCommand: type === 'BACKEND' ? str('startCommand') : undefined,
@@ -83,6 +84,20 @@ export function NewProjectForm({ teamId }: { teamId: string }) {
           type="url"
           placeholder="https://github.com/user/repo"
         />
+      </div>
+
+      <div>
+        <Label htmlFor="gitToken">Git Access Token (để trống nếu repo public)</Label>
+        <Input
+          id="gitToken"
+          name="gitToken"
+          type="password"
+          placeholder="ghp_xxxx hoặc gitlab-token…"
+          autoComplete="off"
+        />
+        <p className="mt-1 text-xs text-white/30">
+          GitHub: Settings → Developer settings → Personal access tokens (scope: repo)
+        </p>
       </div>
 
       <div className="grid grid-cols-2 gap-3">

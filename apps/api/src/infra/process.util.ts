@@ -6,29 +6,34 @@ export type LogFn = (line: string, stream: 'stdout' | 'stderr') => void;
 export function runStreaming(
   cmd: string,
   args: string[],
-  opts: { cwd?: string; env?: NodeJS.ProcessEnv; log: LogFn },
+  opts: { cwd?: string; env?: NodeJS.ProcessEnv; log: LogFn; signal?: AbortSignal },
 ): Promise<void> {
   return new Promise((resolve, reject) => {
-    const child = spawn(cmd, args, {
-      cwd: opts.cwd,
-      env: opts.env ?? process.env,
-    });
+    if (opts.signal?.aborted) return reject(new Error('Build đã bị hủy (timeout)'));
+
+    const child = spawn(cmd, args, { cwd: opts.cwd, env: opts.env ?? process.env });
+
+    const onAbort = () => {
+      child.kill('SIGTERM');
+      reject(new Error('Build đã bị hủy (timeout)'));
+    };
+    opts.signal?.addEventListener('abort', onAbort, { once: true });
+    const cleanup = () => opts.signal?.removeEventListener('abort', onAbort);
+
     const onData =
       (stream: 'stdout' | 'stderr') =>
       (buf: Buffer): void => {
-        buf
-          .toString()
-          .split('\n')
-          .forEach((line) => {
-            if (line.trim()) opts.log(line, stream);
-          });
+        buf.toString().split('\n').forEach((line) => {
+          if (line.trim()) opts.log(line, stream);
+        });
       };
     child.stdout.on('data', onData('stdout'));
     child.stderr.on('data', onData('stderr'));
-    child.on('error', reject);
-    child.on('close', (code) =>
-      code === 0 ? resolve() : reject(new Error(`"${cmd}" thoát với mã ${code}`)),
-    );
+    child.on('error', (e) => { cleanup(); reject(e); });
+    child.on('close', (code) => {
+      cleanup();
+      code === 0 ? resolve() : reject(new Error(`"${cmd}" thoát với mã ${code}`));
+    });
   });
 }
 

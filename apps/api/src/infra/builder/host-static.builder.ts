@@ -9,12 +9,14 @@ export interface StaticBuildInput {
   deploymentId: string;
   slug: string;
   repoUrl: string;
+  repoUrlDisplay?: string;
   branch: string;
   rootDir: string;
   buildCommand?: string | null;
   outputDir?: string | null;
   env?: Record<string, string>;
   dataDir: string;
+  signal?: AbortSignal;
 }
 
 /**
@@ -33,7 +35,7 @@ export class HostStaticBuilder {
     await mkdir(workDir, { recursive: true });
 
     log(
-      `$ git clone --depth 1 --branch ${input.branch} ${input.repoUrl}`,
+      `$ git clone --depth 1 --branch ${input.branch} ${input.repoUrlDisplay ?? input.repoUrl}`,
       'stdout',
     );
     await this.run(
@@ -41,6 +43,8 @@ export class HostStaticBuilder {
       ['clone', '--depth', '1', '--branch', input.branch, input.repoUrl, workDir],
       input.dataDir,
       log,
+      undefined,
+      input.signal,
     );
 
     const appDir = join(workDir, input.rootDir || '.');
@@ -52,10 +56,10 @@ export class HostStaticBuilder {
           ? 'npm ci'
           : 'npm install';
         log(`$ ${installCmd}`, 'stdout');
-        await this.run('sh', ['-c', installCmd], appDir, log, buildEnv);
+        await this.run('sh', ['-c', installCmd], appDir, log, buildEnv, input.signal);
       }
       log(`$ ${input.buildCommand}`, 'stdout');
-      await this.run('sh', ['-c', input.buildCommand], appDir, log, buildEnv);
+      await this.run('sh', ['-c', input.buildCommand], appDir, log, buildEnv, input.signal);
     } else {
       log('Không có lệnh build — phục vụ trực tiếp file tĩnh.', 'stdout');
     }
@@ -108,9 +112,14 @@ export class HostStaticBuilder {
     cwd: string,
     log: BuildLogger,
     env?: NodeJS.ProcessEnv,
+    signal?: AbortSignal,
   ): Promise<void> {
     return new Promise((resolve, reject) => {
+      if (signal?.aborted) return reject(new Error('Build đã bị hủy (timeout)'));
       const child = spawn(cmd, args, { cwd, env: env ?? process.env });
+      const onAbort = () => { child.kill('SIGTERM'); reject(new Error('Build đã bị hủy (timeout)')); };
+      signal?.addEventListener('abort', onAbort, { once: true });
+      const cleanup = () => signal?.removeEventListener('abort', onAbort);
       const onData =
         (stream: 'stdout' | 'stderr') =>
         (buf: Buffer): void => {
@@ -123,12 +132,13 @@ export class HostStaticBuilder {
         };
       child.stdout.on('data', onData('stdout'));
       child.stderr.on('data', onData('stderr'));
-      child.on('error', (err) => reject(err));
-      child.on('close', (code) =>
+      child.on('error', (err) => { cleanup(); reject(err); });
+      child.on('close', (code) => {
+        cleanup();
         code === 0
           ? resolve()
-          : reject(new Error(`Lệnh "${cmd}" thoát với mã ${code}`)),
-      );
+          : reject(new Error(`Lệnh "${cmd}" thoát với mã ${code}`));
+      });
     });
   }
 }

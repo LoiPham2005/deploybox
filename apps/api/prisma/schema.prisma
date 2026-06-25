@@ -111,6 +111,7 @@ model Project {
   gitRepoUrl     String?
   gitBranch      String       @default("main")
   rootDir        String       @default(".")
+  gitToken       String?      // PAT/access token cho private repo (mã hoá at-rest)
   autoDeploy     Boolean      @default(true)
   webhookSecret  String? // secret HMAC xác thực webhook git (mã hoá at-rest)
 

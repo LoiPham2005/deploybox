@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { AutoRefresh } from '@/features/deployments/auto-refresh';
 import { RollbackButton } from '@/features/deployments/rollback-button';
+import { LogStream } from '@/features/deployments/log-stream';
+import { RuntimeLog } from '@/features/deployments/runtime-log';
 
 const TERMINAL = ['RUNNING', 'FAILED', 'STOPPED', 'CANCELLED'];
 
@@ -24,6 +26,7 @@ export default async function DeploymentPage({
 
   const { deployment, project, url, artifactUrl, logs } = view;
   const isActive = !TERMINAL.includes(deployment.status);
+  const isRunningBackend = deployment.status === 'RUNNING' && project.type === 'BACKEND';
 
   return (
     <div className="space-y-6">
@@ -98,10 +101,18 @@ export default async function DeploymentPage({
 
       <Card>
         <h2 className="mb-3 text-sm font-semibold text-white/70">Build log</h2>
-        <pre className="max-h-[28rem] overflow-auto whitespace-pre-wrap rounded bg-black/40 p-3 text-xs leading-relaxed text-white/80">
-          {logs || 'Chưa có log…'}
-        </pre>
+        <LogStream
+          deploymentId={deployment.id}
+          initialLogs={logs}
+          isActive={isActive}
+        />
       </Card>
+
+      {isRunningBackend && (
+        <Card>
+          <RuntimeLog deploymentId={deployment.id} />
+        </Card>
+      )}
     </div>
   );
 }

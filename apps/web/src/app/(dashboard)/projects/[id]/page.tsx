@@ -10,6 +10,7 @@ import { EnvManager } from '@/features/projects/env-manager';
 import { EditProjectForm } from '@/features/projects/edit-project-form';
 import { ProjectRuntimeActions } from '@/features/projects/project-runtime-actions';
 import { DomainManager } from '@/features/projects/domain-manager';
+import { MetricsCard } from '@/features/projects/metrics-card';
 
 export default async function ProjectDetailPage({
   params,
@@ -26,6 +27,9 @@ export default async function ProjectDetailPage({
   const primary =
     project.domains.find((d) => d.isPrimary) ?? project.domains[0];
   const env = await serverGet.env(project.id).catch(() => []);
+  const latestRunning =
+    project.type === 'BACKEND' &&
+    project.deployments[0]?.status === 'RUNNING';
   const deployable = !!project.gitRepoUrl;
   const deployHint = deployable
     ? undefined
@@ -54,6 +58,8 @@ export default async function ProjectDetailPage({
           />
         </div>
       </div>
+
+      {latestRunning && <MetricsCard projectId={project.id} />}
 
       <Card>
         <h2 className="mb-3 text-sm font-semibold text-white/70">Cấu hình</h2>

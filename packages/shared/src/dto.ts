@@ -91,6 +91,7 @@ export interface ProjectDetailDto {
   gitRepoUrl?: string | null;
   gitBranch: string;
   rootDir: string;
+  hasGitToken: boolean;
   installCommand?: string | null;
   buildCommand?: string | null;
   startCommand?: string | null;
