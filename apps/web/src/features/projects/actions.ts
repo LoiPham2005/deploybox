@@ -238,6 +238,21 @@ export async function deleteDomainAction(
   }
 }
 
+export async function fetchBranchesAction(
+  repoUrl: string,
+  gitToken?: string,
+): Promise<ActionResult<string[]>> {
+  try {
+    const res = await serverApi<{ branches: string[] }>('/git/branches', {
+      method: 'POST',
+      body: JSON.stringify({ repoUrl, gitToken: gitToken || undefined }),
+    });
+    return { ok: true, data: res.branches };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Không lấy được branches' };
+  }
+}
+
 export async function setPrimaryDomainAction(
   projectId: string,
   domainId: string,

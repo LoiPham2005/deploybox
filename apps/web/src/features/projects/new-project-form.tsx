@@ -41,6 +41,30 @@ export function NewProjectForm({
   const [loading, setLoading] = useState(false);
   const [templateApplied, setTemplateApplied] = useState<string | null>(null);
   const [fields, setFields] = useState<Record<string, string>>({});
+  const [gitRepoUrl, setGitRepoUrl] = useState('');
+  const [gitToken, setGitToken] = useState('');
+  const [branches, setBranches] = useState<string[] | null>(null);
+  const [selectedBranch, setSelectedBranch] = useState('main');
+  const [fetchingBranches, setFetchingBranches] = useState(false);
+  const [branchError, setBranchError] = useState<string | null>(null);
+
+  async function fetchBranches() {
+    if (!gitRepoUrl.trim()) return;
+    setFetchingBranches(true);
+    setBranchError(null);
+    setBranches(null);
+    const { fetchBranchesAction } = await import('./actions');
+    const res = await fetchBranchesAction(gitRepoUrl.trim(), gitToken.trim() || undefined);
+    setFetchingBranches(false);
+    if (res.ok && res.data) {
+      setBranches(res.data);
+      if (res.data.includes('main')) setSelectedBranch('main');
+      else if (res.data.includes('master')) setSelectedBranch('master');
+      else if (res.data[0]) setSelectedBranch(res.data[0]);
+    } else if (!res.ok) {
+      setBranchError(res.error);
+    }
+  }
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -58,10 +82,10 @@ export function NewProjectForm({
     const dto: CreateProjectDto = {
       name: str('name') ?? '',
       type,
-      gitRepoUrl: str('gitRepoUrl'),
-      gitBranch: str('gitBranch') ?? 'main',
+      gitRepoUrl: gitRepoUrl.trim() || undefined,
+      gitBranch: selectedBranch || str('gitBranch') || 'main',
       rootDir: str('rootDir') ?? '.',
-      gitToken: str('gitToken') || undefined,
+      gitToken: gitToken.trim() || undefined,
       buildCommand: str('buildCommand'),
       outputDir: type === 'STATIC' ? str('outputDir') : undefined,
       startCommand: type === 'BACKEND' ? str('startCommand') : undefined,
@@ -165,6 +189,8 @@ export function NewProjectForm({
           name="gitRepoUrl"
           type="url"
           placeholder="https://github.com/user/repo"
+          value={gitRepoUrl}
+          onChange={(e) => { setGitRepoUrl(e.target.value); setBranches(null); setBranchError(null); }}
         />
       </div>
 
@@ -176,6 +202,8 @@ export function NewProjectForm({
           type="password"
           placeholder="ghp_xxxx hoặc gitlab-token…"
           autoComplete="off"
+          value={gitToken}
+          onChange={(e) => { setGitToken(e.target.value); setBranches(null); setBranchError(null); }}
         />
         <p className="mt-1 text-xs text-white/30">
           GitHub: Settings → Developer settings → Personal access tokens (scope: repo)
@@ -185,7 +213,50 @@ export function NewProjectForm({
       <div className="grid grid-cols-2 gap-3">
         <div>
           <Label htmlFor="gitBranch">Branch</Label>
-          <Input id="gitBranch" name="gitBranch" defaultValue="main" />
+          {branches && branches.length > 0 ? (
+            <div className="flex gap-2">
+              <Select
+                id="gitBranch"
+                value={selectedBranch}
+                onChange={(e) => setSelectedBranch(e.target.value)}
+                className="flex-1"
+              >
+                {branches.map((b) => (
+                  <option key={b} value={b}>{b}</option>
+                ))}
+              </Select>
+              <button
+                type="button"
+                onClick={() => { setBranches(null); setBranchError(null); }}
+                className="text-xs text-white/30 hover:text-white/60"
+                title="Nhập tay"
+              >
+                ✕
+              </button>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <Input
+                id="gitBranch"
+                name="gitBranch"
+                value={selectedBranch}
+                onChange={(e) => setSelectedBranch(e.target.value)}
+                className="flex-1"
+              />
+              {gitRepoUrl.trim() && (
+                <button
+                  type="button"
+                  onClick={fetchBranches}
+                  disabled={fetchingBranches}
+                  className="shrink-0 rounded-md border border-white/10 px-2.5 py-1.5 text-xs text-white/60 hover:border-white/30 hover:text-white disabled:opacity-40"
+                >
+                  {fetchingBranches ? '…' : 'Lấy branches'}
+                </button>
+              )}
+            </div>
+          )}
+          {branchError && <p className="mt-1 text-xs text-red-400">{branchError}</p>}
+          {branches && <p className="mt-1 text-xs text-emerald-400">Tìm thấy {branches.length} branches</p>}
         </div>
         <div>
           <Label htmlFor="rootDir">Thư mục gốc</Label>

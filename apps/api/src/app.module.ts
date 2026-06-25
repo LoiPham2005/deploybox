@@ -15,6 +15,7 @@ import { WebhooksModule } from './modules/webhooks/webhooks.module';
 import { TeamsModule } from './modules/teams/teams.module';
 import { ServersModule } from './modules/servers/servers.module';
 import { SshModule } from './infra/ssh/ssh.module';
+import { GitModule } from './modules/git/git.module';
 
 // Đọc sớm để quyết định có import BullModule không (trước khi NestJS bootstrap)
 const REDIS_URL = process.env.REDIS_URL ?? '';
@@ -53,6 +54,7 @@ const REDIS_URL = process.env.REDIS_URL ?? '';
     TeamsModule,
     SshModule,
     ServersModule,
+    GitModule,
   ],
 })
 export class AppModule {}
