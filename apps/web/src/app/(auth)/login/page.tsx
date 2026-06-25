@@ -9,8 +9,24 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 const QUICK_ACCOUNTS = [
-  { label: 'OWNER',  email: 'owner@deploybox.local',  cls: 'border-yellow-500/50 text-yellow-400 hover:bg-yellow-500/10' },
-  { label: 'MEMBER', email: 'member@deploybox.local',  cls: 'border-white/20 text-white/60 hover:bg-white/5' },
+  {
+    label: '👑 Owner',
+    desc: 'Team OWNER',
+    email: 'owner@deploybox.local',
+    cls: 'border-yellow-500/40 text-yellow-400 hover:bg-yellow-500/10',
+  },
+  {
+    label: '👤 Member',
+    desc: 'MEMBER + personal',
+    email: 'member@deploybox.local',
+    cls: 'border-white/15 text-white/60 hover:bg-white/5',
+  },
+  {
+    label: '🛡️ Admin',
+    desc: 'Platform admin',
+    email: 'admin@deploybox.local',
+    cls: 'border-indigo-500/40 text-indigo-400 hover:bg-indigo-500/10',
+  },
 ] as const;
 
 export default function LoginPage() {
@@ -57,8 +73,10 @@ export default function LoginPage() {
       </div>
 
       {/* Quick login panel */}
-      <div className="rounded-md border border-white/10 bg-white/[0.03] p-3">
-        <p className="mb-2 text-xs text-white/40">Đăng nhập nhanh (dev)</p>
+      <div className="rounded-xl border border-white/8 bg-white/[0.02] p-3">
+        <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-widest text-white/25">
+          Đăng nhập nhanh (dev)
+        </p>
         <div className="flex gap-2">
           {QUICK_ACCOUNTS.map((a) => (
             <button
@@ -66,9 +84,10 @@ export default function LoginPage() {
               type="button"
               disabled={loading}
               onClick={() => onQuickLogin(a.email)}
-              className={`flex-1 rounded border px-3 py-1.5 text-xs font-medium transition disabled:opacity-40 ${a.cls}`}
+              className={`flex flex-1 flex-col items-center rounded-lg border px-2 py-2 text-center transition disabled:opacity-40 ${a.cls}`}
             >
-              {a.label}
+              <span className="text-xs font-semibold">{a.label}</span>
+              <span className="mt-0.5 text-[10px] opacity-60">{a.desc}</span>
             </button>
           ))}
         </div>

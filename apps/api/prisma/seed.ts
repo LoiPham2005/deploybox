@@ -3,61 +3,99 @@ import * as bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
-const TEST_ACCOUNTS = [
-  { email: 'owner@deploybox.local', name: 'Owner Test', role: 'OWNER' as const, isAdmin: true },
-  { email: 'member@deploybox.local', name: 'Member Test', role: 'MEMBER' as const, isAdmin: false },
-] as const;
-
 async function main() {
   const passwordHash = await bcrypt.hash('changeme', 10);
 
-  let team = await prisma.team.findUnique({ where: { slug: 'internal' } });
-  if (!team) {
-    team = await prisma.team.create({
-      data: { name: 'Internal', slug: 'internal', isPersonal: true },
-    });
-  } else {
-    // Ensure isPersonal is set
-    team = await prisma.team.update({
-      where: { id: team.id },
-      data: { isPersonal: true },
-    });
-  }
-
-  for (const account of TEST_ACCOUNTS) {
-    const user = await prisma.user.upsert({
-      where: { email: account.email },
-      update: { name: account.name, passwordHash, isAdmin: account.isAdmin },
-      create: { email: account.email, name: account.name, passwordHash, isAdmin: account.isAdmin },
-    });
-
-    await prisma.teamMember.upsert({
-      where: { teamId_userId: { teamId: team.id, userId: user.id } },
-      update: { role: account.role },
-      create: { teamId: team.id, userId: user.id, role: account.role },
-    });
-
-    console.log(`✓ ${account.role.padEnd(6)} ${account.isAdmin ? '[isAdmin]' : '        '} → ${account.email} / changeme`);
-  }
-
-  // Tạo LOCAL server mặc định cho team "internal" nếu chưa có
-  const existing = await prisma.server.findFirst({
-    where: { teamId: team.id, type: 'LOCAL' },
+  // ─── 1. OWNER TEST ─────────────────────────────────────────────────────────
+  // Có personal team riêng, không phải admin hệ thống
+  const owner = await prisma.user.upsert({
+    where: { email: 'owner@deploybox.local' },
+    update: { name: 'Owner Test', passwordHash, isAdmin: false },
+    create: { email: 'owner@deploybox.local', name: 'Owner Test', passwordHash, isAdmin: false },
   });
-  if (!existing) {
+
+  const ownerTeam = await prisma.team.upsert({
+    where: { slug: 'owner-test-team' },
+    update: { name: "Owner Test's Team", isPersonal: true },
+    create: { name: "Owner Test's Team", slug: 'owner-test-team', isPersonal: true },
+  });
+
+  await prisma.teamMember.upsert({
+    where: { teamId_userId: { teamId: ownerTeam.id, userId: owner.id } },
+    update: { role: 'OWNER' },
+    create: { teamId: ownerTeam.id, userId: owner.id, role: 'OWNER' },
+  });
+
+  // LOCAL server cho team của owner
+  const existingServer = await prisma.server.findFirst({
+    where: { teamId: ownerTeam.id, type: 'LOCAL' },
+  });
+  if (!existingServer) {
     await prisma.server.create({
-      data: {
-        teamId: team.id,
-        name: 'Local Machine',
-        host: 'localhost',
-        type: 'LOCAL',
-        status: 'ONLINE',
-      },
+      data: { teamId: ownerTeam.id, name: 'Local Machine', host: 'localhost', type: 'LOCAL', status: 'ONLINE' },
     });
-    console.log('✓ LOCAL server "Local Machine" tạo cho team internal');
   }
 
-  console.log('\nSeed xong! Team "internal" có 2 tài khoản test (owner + member).');
+  console.log(`✓ OWNER  → owner@deploybox.local / changeme  (team: "${ownerTeam.name}")`);
+
+  // ─── 2. MEMBER TEST ────────────────────────────────────────────────────────
+  // Có personal team riêng + được mời vào team của Owner
+  const member = await prisma.user.upsert({
+    where: { email: 'member@deploybox.local' },
+    update: { name: 'Member Test', passwordHash, isAdmin: false },
+    create: { email: 'member@deploybox.local', name: 'Member Test', passwordHash, isAdmin: false },
+  });
+
+  // Personal team của member
+  const memberTeam = await prisma.team.upsert({
+    where: { slug: 'member-test-team' },
+    update: { name: "Member Test's Team", isPersonal: true },
+    create: { name: "Member Test's Team", slug: 'member-test-team', isPersonal: true },
+  });
+
+  await prisma.teamMember.upsert({
+    where: { teamId_userId: { teamId: memberTeam.id, userId: member.id } },
+    update: { role: 'OWNER' },
+    create: { teamId: memberTeam.id, userId: member.id, role: 'OWNER' },
+  });
+
+  // Member được mời vào team của Owner
+  await prisma.teamMember.upsert({
+    where: { teamId_userId: { teamId: ownerTeam.id, userId: member.id } },
+    update: { role: 'MEMBER' },
+    create: { teamId: ownerTeam.id, userId: member.id, role: 'MEMBER' },
+  });
+
+  console.log(`✓ MEMBER → member@deploybox.local / changeme  (personal + invited to "${ownerTeam.name}")`);
+
+  // ─── 3. ADMIN TEST ─────────────────────────────────────────────────────────
+  // Platform admin, có personal team riêng
+  const admin = await prisma.user.upsert({
+    where: { email: 'admin@deploybox.local' },
+    update: { name: 'Admin Test', passwordHash, isAdmin: true },
+    create: { email: 'admin@deploybox.local', name: 'Admin Test', passwordHash, isAdmin: true },
+  });
+
+  const adminTeam = await prisma.team.upsert({
+    where: { slug: 'admin-test-team' },
+    update: { name: "Admin Test's Team", isPersonal: true },
+    create: { name: "Admin Test's Team", slug: 'admin-test-team', isPersonal: true },
+  });
+
+  await prisma.teamMember.upsert({
+    where: { teamId_userId: { teamId: adminTeam.id, userId: admin.id } },
+    update: { role: 'OWNER' },
+    create: { teamId: adminTeam.id, userId: admin.id, role: 'OWNER' },
+  });
+
+  console.log(`✓ ADMIN  → admin@deploybox.local / changeme  [isAdmin=true, Admin Panel]`);
+
+  console.log('\n─── Cấu trúc test ──────────────────────────────────────────');
+  console.log(`  owner@deploybox.local   → OWNER của "${ownerTeam.name}"`);
+  console.log(`  member@deploybox.local  → OWNER của personal team`);
+  console.log(`                           + MEMBER của "${ownerTeam.name}"`);
+  console.log(`                           → có Team Switcher để chuyển`);
+  console.log(`  admin@deploybox.local   → isAdmin, thấy /admin panel`);
 }
 
 main()
