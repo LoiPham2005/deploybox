@@ -4,6 +4,7 @@ import type {
   DeploymentTrigger,
   DomainStatus,
   EnvTarget,
+  Plan,
   ProjectType,
   ServerStatus,
   ServerType,
@@ -22,6 +23,7 @@ export interface TeamDto {
   name: string;
   slug: string;
   role: TeamRole;
+  plan: Plan;
 }
 
 export interface AuthResponse {

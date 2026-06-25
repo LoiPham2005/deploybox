@@ -18,7 +18,7 @@ export default async function DashboardLayout({
 
   return (
     <div className="flex min-h-screen">
-      <aside className="w-60 shrink-0 border-r border-white/10 p-4">
+      <aside className="flex w-60 shrink-0 flex-col border-r border-white/10 p-4">
         <div className="mb-6 text-lg font-semibold">DeployBox</div>
         <nav className="space-y-1 text-sm">
           <Link href="/dashboard" className="block rounded-md px-3 py-2 hover:bg-white/5">
@@ -37,6 +37,24 @@ export default async function DashboardLayout({
             Tài khoản
           </Link>
         </nav>
+
+        {/* Plan badge ở dưới sidebar */}
+        <div className="mt-auto pt-4 border-t border-white/10">
+          {me.teams[0]?.plan === 'PRO' ? (
+            <div className="flex items-center gap-2 rounded-md bg-indigo-500/10 px-3 py-2">
+              <span className="text-xs font-semibold text-indigo-400">PRO</span>
+              <span className="text-xs text-white/40">Không giới hạn</span>
+            </div>
+          ) : (
+            <Link href="/settings/billing" className="block rounded-md bg-white/5 px-3 py-2 hover:bg-white/10">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-white/60">FREE</span>
+                <span className="text-xs text-indigo-400">Nâng cấp →</span>
+              </div>
+              <p className="mt-0.5 text-xs text-white/30">2 project · 1 server</p>
+            </Link>
+          )}
+        </div>
       </aside>
       <div className="flex flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-white/10 px-6 py-3">

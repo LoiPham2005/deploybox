@@ -4,6 +4,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { PLAN_LIMITS } from '@deploybox/shared';
 import { ConfigService } from '@nestjs/config';
 import type { Deployment, Domain, Project, TeamRole } from '../../generated/prisma';
 import type {
@@ -103,6 +104,18 @@ export class ProjectsService {
     dto: CreateProjectDto,
   ): Promise<ProjectSummary> {
     await this.assertRole(userId, teamId, 'ADMIN');
+
+    const team = await this.prisma.team.findUniqueOrThrow({ where: { id: teamId } });
+    const limit = PLAN_LIMITS[team.plan as 'FREE' | 'PRO'].projects;
+    if (limit !== -1) {
+      const count = await this.prisma.project.count({ where: { teamId } });
+      if (count >= limit) {
+        throw new ForbiddenException(
+          `Gói ${team.plan} chỉ cho tạo tối đa ${limit} project. Nâng cấp lên Pro để tạo thêm.`,
+        );
+      }
+    }
+
     const slug = await this.uniqueSlug(teamId, dto.name);
     const appDomain = this.config.get<string>('APP_DOMAIN', 'deploybox.local');
 

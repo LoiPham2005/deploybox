@@ -59,6 +59,12 @@ export const EnvTarget = {
 } as const;
 export type EnvTarget = (typeof EnvTarget)[keyof typeof EnvTarget];
 
+export const Plan = {
+  FREE: 'FREE',
+  PRO: 'PRO',
+} as const;
+export type Plan = (typeof Plan)[keyof typeof Plan];
+
 export const ServerType = {
   LOCAL: 'LOCAL',
   REMOTE: 'REMOTE',

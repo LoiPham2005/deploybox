@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { PLAN_LIMITS } from '@deploybox/shared';
 import type { TeamMemberDto } from '@deploybox/shared';
 import type { TeamRole } from '../../generated/prisma';
 import { PrismaService } from '../../infra/prisma/prisma.service';
@@ -52,6 +53,17 @@ export class TeamsService {
     role: 'ADMIN' | 'MEMBER',
   ): Promise<TeamMemberDto> {
     await this.assertRole(actorId, teamId, 'ADMIN');
+
+    const team = await this.prisma.team.findUniqueOrThrow({ where: { id: teamId } });
+    const limit = PLAN_LIMITS[team.plan as 'FREE' | 'PRO'].members;
+    if (limit !== -1) {
+      const count = await this.prisma.teamMember.count({ where: { teamId } });
+      if (count >= limit) {
+        throw new ForbiddenException(
+          `Gói ${team.plan} chỉ cho tối đa ${limit} thành viên. Nâng cấp lên Pro để mời thêm.`,
+        );
+      }
+    }
 
     const target = await this.prisma.user.findUnique({ where: { email } });
     if (!target) throw new NotFoundException('Không tìm thấy người dùng với email này');

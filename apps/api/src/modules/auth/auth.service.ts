@@ -104,7 +104,7 @@ export class AuthService {
     });
     const memberships = await this.prisma.teamMember.findMany({
       where: { userId },
-      include: { team: true },
+      include: { team: { select: { id: true, name: true, slug: true, plan: true } } },
     });
     return {
       user: this.toUserDto(user),
@@ -113,6 +113,7 @@ export class AuthService {
         name: m.team.name,
         slug: m.team.slug,
         role: m.role,
+        plan: m.team.plan as 'FREE' | 'PRO',
       })),
     };
   }

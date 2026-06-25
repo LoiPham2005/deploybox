@@ -61,6 +61,11 @@ enum EnvTarget {
   BOTH
 }
 
+enum Plan {
+  FREE
+  PRO
+}
+
 enum ServerType {
   LOCAL
   REMOTE
@@ -91,6 +96,7 @@ model Team {
   id        String   @id @default(cuid())
   name      String
   slug      String   @unique
+  plan      Plan     @default(FREE)
   createdAt DateTime @default(now())
 
   members  TeamMember[]

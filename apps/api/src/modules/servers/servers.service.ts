@@ -7,6 +7,7 @@ import type { Server, TeamRole } from '../../generated/prisma';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
 import { SshService } from '../../infra/ssh/ssh.service';
+import { PLAN_LIMITS } from '@deploybox/shared';
 import type { ServerDto, CreateServerDto } from '@deploybox/shared';
 
 const ROLE_ORDER: Record<TeamRole, number> = { MEMBER: 0, ADMIN: 1, OWNER: 2 };
@@ -39,6 +40,18 @@ export class ServersService {
 
   async add(userId: string, teamId: string, dto: CreateServerDto): Promise<ServerDto> {
     await this.assertRole(userId, teamId, 'ADMIN');
+
+    const team = await this.prisma.team.findUniqueOrThrow({ where: { id: teamId } });
+    const limit = PLAN_LIMITS[team.plan as 'FREE' | 'PRO'].servers;
+    if (limit !== -1) {
+      const count = await this.prisma.server.count({ where: { teamId } });
+      if (count >= limit) {
+        throw new ForbiddenException(
+          `Gói ${team.plan} chỉ cho thêm tối đa ${limit} server. Nâng cấp lên Pro để thêm.`,
+        );
+      }
+    }
+
     const encryptedKey = dto.sshPrivateKey
       ? this.crypto.encrypt(dto.sshPrivateKey)
       : null;
