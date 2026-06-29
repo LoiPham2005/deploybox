@@ -46,7 +46,13 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 
         {/* Bottom */}
         <div className="border-t border-white/[0.07] px-3 py-3 space-y-2.5">
-          {currentTeam && <PlanBadge plan={currentTeam.plan} teamName={currentTeam.name} />}
+          {currentTeam && (
+            <PlanBadge
+              plan={currentTeam.plan}
+              teamName={currentTeam.name}
+              isAdmin={me.user.isAdmin}
+            />
+          )}
           <div className="flex items-center gap-2 px-1">
             <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-[10px] font-bold text-white">
               {initials}

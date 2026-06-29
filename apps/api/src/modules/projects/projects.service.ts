@@ -63,6 +63,15 @@ export class ProjectsService {
     await this.assertRole(userId, teamId, 'MEMBER');
   }
 
+  /** Admin hệ thống — bỏ qua mọi giới hạn gói. */
+  private async isPlatformAdmin(userId: string): Promise<boolean> {
+    const u = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { isAdmin: true },
+    });
+    return u?.isAdmin === true;
+  }
+
   private async loadOwnedProject(
     userId: string,
     projectId: string,
@@ -105,7 +114,9 @@ export class ProjectsService {
     await this.assertRole(userId, teamId, 'OWNER');
 
     const team = await this.prisma.team.findUniqueOrThrow({ where: { id: teamId } });
-    const limit = PLAN_LIMITS[team.plan as 'FREE' | 'PRO'].projects;
+    // Admin hệ thống: không giới hạn
+    const isAdmin = await this.isPlatformAdmin(userId);
+    const limit = isAdmin ? -1 : PLAN_LIMITS[team.plan as 'FREE' | 'PRO'].projects;
     if (limit !== -1) {
       const count = await this.prisma.project.count({ where: { teamId } });
       if (count >= limit) {

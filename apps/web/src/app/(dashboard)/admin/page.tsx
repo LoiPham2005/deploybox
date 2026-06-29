@@ -3,6 +3,7 @@ import { getToken } from '@/lib/auth';
 import { authApi } from '@/lib/api';
 import { serverApi } from '@/lib/api-server';
 import { Card } from '@/components/ui/card';
+import { PlanToggle } from './plan-toggle';
 
 interface AdminStats {
   users: number;
@@ -76,19 +77,26 @@ export default async function AdminPage() {
                   {u.name && <p className="text-xs text-white/40">{u.email}</p>}
                   <p className="text-xs text-white/30">
                     {new Date(u.createdAt).toLocaleDateString('vi-VN')}
-                    {personalTeam && ` · ${personalTeam.plan}`}
+                    {personalTeam && (
+                      <span
+                        className={`ml-2 rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                          personalTeam.plan === 'PRO'
+                            ? 'bg-indigo-500/20 text-indigo-300'
+                            : 'bg-white/10 text-white/40'
+                        }`}
+                      >
+                        {personalTeam.plan}
+                      </span>
+                    )}
                   </p>
                 </div>
-                {personalTeam && (
-                  <form action={async () => {
-                    'use server';
-                    // Plan upgrade handled via API call below
-                  }}>
-                    <UpgradePlanButton
-                      teamId={personalTeam.id}
-                      currentPlan={personalTeam.plan as 'FREE' | 'PRO'}
-                    />
-                  </form>
+                {personalTeam ? (
+                  <PlanToggle
+                    teamId={personalTeam.id}
+                    currentPlan={personalTeam.plan as 'FREE' | 'PRO'}
+                  />
+                ) : (
+                  <span className="text-xs text-white/20">Chưa có team cá nhân</span>
                 )}
               </div>
             );
@@ -96,24 +104,5 @@ export default async function AdminPage() {
         </div>
       </Card>
     </div>
-  );
-}
-
-function UpgradePlanButton({ teamId, currentPlan }: { teamId: string; currentPlan: 'FREE' | 'PRO' }) {
-  const newPlan = currentPlan === 'PRO' ? 'FREE' : 'PRO';
-  return (
-    <form action={`/api/admin/teams/${teamId}/plan`} method="POST">
-      <input type="hidden" name="plan" value={newPlan} />
-      <button
-        type="submit"
-        className={`rounded px-3 py-1 text-xs font-medium transition-colors ${
-          currentPlan === 'PRO'
-            ? 'bg-white/10 text-white/60 hover:bg-white/20'
-            : 'bg-indigo-500/20 text-indigo-400 hover:bg-indigo-500/30'
-        }`}
-      >
-        {currentPlan === 'PRO' ? 'Hạ về FREE' : 'Nâng lên PRO'}
-      </button>
-    </form>
   );
 }

@@ -29,6 +29,15 @@ export class ServersService {
       throw new ForbiddenException('Bạn không có quyền thực hiện thao tác này');
   }
 
+  /** Admin hệ thống — bỏ qua mọi giới hạn gói. */
+  private async isPlatformAdmin(userId: string): Promise<boolean> {
+    const u = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { isAdmin: true },
+    });
+    return u?.isAdmin === true;
+  }
+
   async list(userId: string, teamId: string): Promise<ServerDto[]> {
     await this.assertRole(userId, teamId, 'MEMBER');
     const servers = await this.prisma.server.findMany({
@@ -42,7 +51,9 @@ export class ServersService {
     await this.assertRole(userId, teamId, 'OWNER');
 
     const team = await this.prisma.team.findUniqueOrThrow({ where: { id: teamId } });
-    const limit = PLAN_LIMITS[team.plan as 'FREE' | 'PRO'].servers;
+    // Admin hệ thống: không giới hạn
+    const isAdmin = await this.isPlatformAdmin(userId);
+    const limit = isAdmin ? -1 : PLAN_LIMITS[team.plan as 'FREE' | 'PRO'].servers;
     if (limit !== -1) {
       const count = await this.prisma.server.count({ where: { teamId } });
       if (count >= limit) {

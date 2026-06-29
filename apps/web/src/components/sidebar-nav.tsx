@@ -95,7 +95,30 @@ export function SidebarNav({ user, currentTeam }: { user: UserDto; currentTeam: 
   );
 }
 
-export function PlanBadge({ plan, teamName }: { plan: 'FREE' | 'PRO'; teamName: string }) {
+export function PlanBadge({
+  plan,
+  teamName,
+  isAdmin,
+}: {
+  plan: 'FREE' | 'PRO';
+  teamName: string;
+  isAdmin?: boolean;
+}) {
+  // Admin hệ thống: toàn quyền, không giới hạn, không cần nâng cấp
+  if (isAdmin) {
+    return (
+      <div className="flex items-center gap-2.5 rounded-xl border border-amber-500/30 bg-gradient-to-r from-amber-500/10 to-orange-500/10 px-3 py-2.5">
+        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-gradient-to-br from-amber-500 to-orange-600">
+          <ShieldCheck size={12} className="text-white" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-xs font-semibold text-amber-300">Admin · Toàn quyền</p>
+          <p className="truncate text-[10px] text-white/30">Không giới hạn</p>
+        </div>
+      </div>
+    );
+  }
+
   if (plan === 'PRO') {
     return (
       <div className="flex items-center gap-2.5 rounded-xl border border-indigo-500/25 bg-gradient-to-r from-indigo-500/10 to-purple-500/10 px-3 py-2.5">

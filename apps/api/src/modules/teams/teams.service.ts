@@ -29,6 +29,15 @@ export class TeamsService {
     }
   }
 
+  /** Admin hệ thống — bỏ qua mọi giới hạn gói. */
+  private async isPlatformAdmin(userId: string): Promise<boolean> {
+    const u = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { isAdmin: true },
+    });
+    return u?.isAdmin === true;
+  }
+
   async listMembers(userId: string, teamId: string): Promise<TeamMemberDto[]> {
     await this.assertRole(userId, teamId, 'MEMBER');
     const members = await this.prisma.teamMember.findMany({
@@ -55,11 +64,13 @@ export class TeamsService {
     await this.assertRole(actorId, teamId, 'OWNER');
 
     const team = await this.prisma.team.findUniqueOrThrow({ where: { id: teamId } });
-    if (team.plan !== 'PRO') {
+    // Admin hệ thống: mời thoải mái, không cần PRO, không giới hạn
+    const isAdmin = await this.isPlatformAdmin(actorId);
+    if (!isAdmin && team.plan !== 'PRO') {
       throw new ForbiddenException('Chỉ gói PRO mới được mời thành viên. Nâng cấp để mời.');
     }
 
-    const limit = PLAN_LIMITS['PRO'].members;
+    const limit = isAdmin ? -1 : PLAN_LIMITS['PRO'].members;
     if (limit !== -1) {
       const count = await this.prisma.teamMember.count({ where: { teamId } });
       if (count >= limit) {
