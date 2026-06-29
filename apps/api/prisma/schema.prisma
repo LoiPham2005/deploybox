@@ -166,6 +166,9 @@ model Project {
   buildImage     String?
   artifactPath   String?
 
+  // Cách chạy BACKEND: true = build Docker (cần Dockerfile); false = chạy node thẳng trên máy
+  useDocker      Boolean      @default(true)
+
   // Vận hành / quota
   sleepEnabled   Boolean      @default(false)
   memoryMb       Int          @default(512)

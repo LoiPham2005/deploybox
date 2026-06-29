@@ -180,6 +180,7 @@ export class ProjectsService {
         internalPort: dto.internalPort ?? 3000,
         notifyUrl: dto.notifyUrl || null,
         serverId: dto.serverId || null,
+        useDocker: dto.useDocker ?? true,
         webhookSecret: randomBytes(16).toString('hex'),
         // mỗi project có sẵn một subdomain managed mặc định
         domains: {
@@ -321,6 +322,7 @@ export class ProjectsService {
       internalPort: p.internalPort,
       autoDeploy: p.autoDeploy,
       sleepEnabled: p.sleepEnabled,
+      useDocker: (p as { useDocker?: boolean }).useDocker ?? true,
       memoryMb: p.memoryMb,
       cpuLimit: p.cpuLimit,
       notifyUrl: p.notifyUrl,

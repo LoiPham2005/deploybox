@@ -94,6 +94,11 @@ export class CaddyService implements OnModuleInit {
         blocks.push(
           `${addr} {\n${logBlock}\n\trewrite * /api/v1/internal/wake/${p.slug}\n\treverse_proxy ${apiUp}\n}`,
         );
+      } else if ((p as { useDocker?: boolean }).useDocker === false) {
+        // BACKEND chạy thẳng host → proxy đúng internalPort (không map qua Docker)
+        blocks.push(
+          `${addr} {\n${logBlock}\n\treverse_proxy localhost:${p.internalPort}\n}`,
+        );
       } else {
         const hostPort = await this.docker.getHostPort(
           `deploybox-${p.slug}`,

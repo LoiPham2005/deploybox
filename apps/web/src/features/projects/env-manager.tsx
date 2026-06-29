@@ -2,7 +2,7 @@
 
 import { useMemo, useState, type DragEvent, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { Upload, FileText, X, Pencil, EyeOff } from 'lucide-react';
+import { Upload, FileText, X, Pencil, EyeOff, ChevronDown, ChevronRight } from 'lucide-react';
 import type { EnvTarget, EnvVarDto } from '@deploybox/shared';
 import { deleteEnvAction, upsertEnvAction } from './actions';
 import { Button } from '@/components/ui/button';
@@ -53,6 +53,9 @@ export function EnvManager({
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Thu gọn/mở danh sách (mặc định gọn vì có thể rất nhiều biến)
+  const [listOpen, setListOpen] = useState(false);
 
   // Sửa từng biến (mở rộng để xem/sửa value)
   const [editKey, setEditKey] = useState<string | null>(null);
@@ -123,6 +126,19 @@ export function EnvManager({
     }
   }
 
+  /** Đổ TẤT CẢ biến hiện tại về dạng .env trong textarea để sửa hàng loạt.
+   * Secret không lộ giá trị → để dạng comment, giữ nguyên khi lưu (upsert là merge). */
+  function editAll() {
+    const lines = vars.map((v) =>
+      v.isSecret
+        ? `# ${v.key}=  (secret — giữ nguyên; bỏ # và điền giá trị nếu muốn đổi)`
+        : `${v.key}=${v.value}`,
+    );
+    setBulkText(lines.join('\n'));
+    setBulkOpen(true);
+    setError(null);
+  }
+
   async function readFiles(files: FileList | File[]) {
     const texts: string[] = [];
     for (const f of Array.from(files)) {
@@ -165,7 +181,30 @@ export function EnvManager({
       {vars.length === 0 ? (
         <p className="text-sm text-white/40">Chưa có biến môi trường.</p>
       ) : (
-        <ul className="space-y-1 text-sm">
+        <div className="rounded-lg border border-white/8">
+          {/* Header: số lượng + thu gọn + Sửa tất cả */}
+          <div className="flex items-center justify-between gap-2 px-3 py-2">
+            <button
+              type="button"
+              onClick={() => setListOpen((o) => !o)}
+              className="flex items-center gap-1.5 text-sm font-medium text-white/70 hover:text-white"
+            >
+              {listOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+              {vars.length} biến môi trường
+            </button>
+            <button
+              type="button"
+              onClick={editAll}
+              className="flex items-center gap-1 rounded-md border border-white/10 px-2 py-1 text-xs text-indigo-400 hover:border-indigo-500/40 hover:text-indigo-300"
+              title="Đổ tất cả về dạng .env để sửa hàng loạt"
+            >
+              <Pencil size={12} /> Sửa tất cả (.env)
+            </button>
+          </div>
+
+          {/* Danh sách — cuộn được, chỉ hiện khi mở */}
+          {listOpen && (
+          <ul className="max-h-72 space-y-1 overflow-y-auto border-t border-white/8 p-2 text-sm">
           {vars.map((v) => {
             const isEditing = editKey === v.key;
             return (
@@ -234,7 +273,9 @@ export function EnvManager({
               </li>
             );
           })}
-        </ul>
+          </ul>
+          )}
+        </div>
       )}
 
       {/* Thêm 1 biến thủ công */}

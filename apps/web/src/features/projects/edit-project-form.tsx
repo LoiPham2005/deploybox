@@ -82,6 +82,7 @@ export function EditProjectForm({ project }: { project: ProjectDetailDto }) {
       notifyUrl: s('notifyUrl') ?? '',
       autoDeploy: f.get('autoDeploy') === 'on',
       sleepEnabled: f.get('sleepEnabled') === 'on',
+      useDocker: project.type === 'BACKEND' ? f.get('useDocker') === 'on' : undefined,
     };
     setSaving(true);
     setErr(null);
@@ -228,6 +229,25 @@ export function EditProjectForm({ project }: { project: ProjectDetailDto }) {
               type="number"
               defaultValue={project.internalPort}
             />
+          </div>
+          {/* Toggle: dùng Docker hay chạy thẳng node trên máy */}
+          <div className="sm:col-span-2 rounded-lg border border-white/10 bg-white/[0.02] p-3">
+            <label className="flex items-start gap-2.5 text-sm">
+              <input
+                type="checkbox"
+                name="useDocker"
+                defaultChecked={project.useDocker}
+                className="mt-0.5 h-4 w-4 accent-indigo-500"
+              />
+              <span>
+                <span className="font-medium text-white/80">Dùng Docker (build từ Dockerfile)</span>
+                <span className="mt-0.5 block text-xs text-white/40">
+                  Bật: cần Dockerfile ở repo + Docker đang chạy. Tắt: DeployBox chạy thẳng{' '}
+                  <code className="text-white/60">node</code> trên máy bằng Lệnh build + Lệnh chạy
+                  (không cần Docker, nhưng không cô lập RAM/CPU).
+                </span>
+              </span>
+            </label>
           </div>
         </div>
       )}

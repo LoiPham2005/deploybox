@@ -16,6 +16,7 @@ import { join, resolve } from 'path';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 import { DockerService } from '../../infra/docker/docker.service';
 import { type ContainerStats } from '../../infra/docker/docker.service';
+import { HostBackendBuilder } from '../../infra/builder/host-backend.builder';
 import { CaddyService } from '../../infra/caddy/caddy.service';
 import { SleepService } from '../../infra/sleep/sleep.service';
 import { BuildRunnerService } from './build.runner.service';
@@ -32,6 +33,7 @@ export class DeploymentsService {
     private readonly caddy: CaddyService,
     private readonly sleepSvc: SleepService,
     private readonly runner: BuildRunnerService,
+    private readonly hostBackend: HostBackendBuilder,
     @Optional() @InjectQueue(BUILD_QUEUE) private readonly buildQueue: Queue<BuildJobData> | null,
   ) {
     if (buildQueue) {
@@ -171,6 +173,13 @@ export class DeploymentsService {
         recursive: true,
         force: true,
       });
+    } else if ((project as { useDocker?: boolean }).useDocker === false) {
+      // BACKEND chạy host → kill process theo pidfile
+      const dataDir = resolve(
+        process.cwd(),
+        this.config.get<string>('DATA_DIR', '.deploybox-data'),
+      );
+      await this.hostBackend.stop(dataDir, project.slug).catch(() => undefined);
     } else {
       await this.docker
         .remove(`deploybox-${project.slug}`)

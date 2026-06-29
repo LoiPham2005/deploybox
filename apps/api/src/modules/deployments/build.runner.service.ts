@@ -4,6 +4,7 @@ import { appendFileSync, mkdirSync } from 'fs';
 import { join, resolve } from 'path';
 import { type BuildLogger, HostStaticBuilder } from '../../infra/builder/host-static.builder';
 import { DockerBackendEngine } from '../../infra/builder/docker-backend.engine';
+import { HostBackendBuilder } from '../../infra/builder/host-backend.builder';
 import { MobileBuilder } from '../../infra/builder/mobile.builder';
 import { CaddyService } from '../../infra/caddy/caddy.service';
 import { CleanupService } from '../../infra/cleanup/cleanup.service';
@@ -28,6 +29,7 @@ export class BuildRunnerService {
     private readonly config: ConfigService,
     private readonly builder: HostStaticBuilder,
     private readonly dockerEngine: DockerBackendEngine,
+    private readonly hostBackend: HostBackendBuilder,
     private readonly mobileBuilder: MobileBuilder,
     private readonly caddy: CaddyService,
     private readonly cleanup: CleanupService,
@@ -164,6 +166,31 @@ export class BuildRunnerService {
         await this.prisma.deployment.update({
           where: { id: deploymentId },
           data: { status: 'RUNNING', finishedAt: new Date(), staticPath: releaseDir },
+        });
+      } else if ((project as any).useDocker === false) {
+        // BACKEND chạy thẳng trên host (không Docker)
+        const runtimeEnv = await this.env.resolveForPhase(project.id, 'runtime');
+        const { pid } = await this.hostBackend.run(
+          {
+            deploymentId,
+            slug: project.slug,
+            repoUrl: this.cloneUrl(project.gitRepoUrl!, gitToken),
+            repoUrlDisplay: project.gitRepoUrl!,
+            branch: project.gitBranch,
+            rootDir: project.rootDir,
+            installCommand: project.installCommand,
+            buildCommand: project.buildCommand,
+            startCommand: project.startCommand,
+            internalPort: project.internalPort,
+            env: runtimeEnv,
+            dataDir,
+            signal: controller.signal,
+          },
+          log,
+        );
+        await this.prisma.deployment.update({
+          where: { id: deploymentId },
+          data: { status: 'RUNNING', finishedAt: new Date(), containerId: `host:${pid}` },
         });
       } else {
         const runtimeEnv = await this.env.resolveForPhase(project.id, 'runtime');

@@ -15,6 +15,7 @@ export const createProjectSchema = z.object({
   artifactPath: z.string().optional(),
   notifyUrl: z.string().url().optional(),
   serverId: z.string().optional(),
+  useDocker: z.boolean().optional(),
 });
 export type CreateProjectDto = z.infer<typeof createProjectSchema>;
 
@@ -56,6 +57,7 @@ export const updateProjectSchema = z.object({
   artifactPath: z.string().optional(),
   sleepEnabled: z.boolean().optional(),
   autoDeploy: z.boolean().optional(),
+  useDocker: z.boolean().optional(),
   notifyUrl: z.string().url().optional().or(z.literal('')),
 });
 export type UpdateProjectDto = z.infer<typeof updateProjectSchema>;

@@ -107,6 +107,7 @@ export interface ProjectDetailDto {
   artifactPath?: string | null;
   autoDeploy: boolean;
   sleepEnabled: boolean;
+  useDocker: boolean;
   memoryMb: number;
   cpuLimit: number;
   notifyUrl?: string | null;
