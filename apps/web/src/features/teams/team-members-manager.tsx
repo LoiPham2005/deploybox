@@ -85,7 +85,7 @@ export function TeamMembersManager({
     <div className="space-y-4">
       <ul className="divide-y divide-white/5">
         {members.map((m) => (
-          <li key={m.id} className="flex items-center justify-between gap-4 py-2.5 text-sm">
+          <li key={m.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-sm">
             <div>
               <p className="font-medium">{m.name ?? m.email}</p>
               {m.name && <p className="text-xs text-white/40">{m.email}</p>}

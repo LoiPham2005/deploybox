@@ -86,7 +86,7 @@ export function EditProjectForm({ project }: { project: ProjectDetailDto }) {
           <p className="mt-1 text-xs text-white/30">Nhập khoảng trắng rồi xóa để clear token.</p>
         )}
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
           <Label htmlFor="gitBranch">Branch</Label>
           <Input
@@ -120,7 +120,7 @@ export function EditProjectForm({ project }: { project: ProjectDetailDto }) {
       )}
 
       {project.type === 'BACKEND' && (
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <Label htmlFor="startCommand">Lệnh chạy</Label>
             <Input

@@ -2,11 +2,37 @@
 
 import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
+import { ExternalLink } from 'lucide-react';
 import type { CreateProjectDto, ProjectType, ServerDto } from '@deploybox/shared';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
+
+/** Link tạo token cho từng provider — mở thẳng trang tạo + ghi rõ scope cần chọn */
+const TOKEN_GUIDES = [
+  {
+    id: 'github',
+    emoji: '🐙',
+    name: 'GitHub',
+    url: 'https://github.com/settings/personal-access-tokens/new',
+    scope: 'Fine-grained → Repository access → Contents: Read',
+  },
+  {
+    id: 'gitlab',
+    emoji: '🦊',
+    name: 'GitLab',
+    url: 'https://gitlab.com/-/user_settings/personal_access_tokens',
+    scope: 'Scope: read_repository',
+  },
+  {
+    id: 'bitbucket',
+    emoji: '🪣',
+    name: 'Bitbucket',
+    url: 'https://bitbucket.org/account/settings/app-passwords/',
+    scope: 'App password → Repositories: Read',
+  },
+] as const;
 
 const TEMPLATES: Array<{
   label: string;
@@ -43,10 +69,21 @@ export function NewProjectForm({
   const [fields, setFields] = useState<Record<string, string>>({});
   const [gitRepoUrl, setGitRepoUrl] = useState('');
   const [gitToken, setGitToken] = useState('');
+  const [authMode, setAuthMode] = useState('auto');
+  const [gitUsername, setGitUsername] = useState('');
   const [branches, setBranches] = useState<string[] | null>(null);
   const [selectedBranch, setSelectedBranch] = useState('main');
   const [fetchingBranches, setFetchingBranches] = useState(false);
   const [branchError, setBranchError] = useState<string | null>(null);
+
+  // Nhận diện provider từ URL để gợi ý
+  const provider = /github\.com/i.test(gitRepoUrl)
+    ? 'github'
+    : /gitlab/i.test(gitRepoUrl)
+    ? 'gitlab'
+    : /bitbucket/i.test(gitRepoUrl)
+    ? 'bitbucket'
+    : null;
 
   async function fetchBranches() {
     if (!gitRepoUrl.trim()) return;
@@ -54,7 +91,12 @@ export function NewProjectForm({
     setBranchError(null);
     setBranches(null);
     const { fetchBranchesAction } = await import('./actions');
-    const res = await fetchBranchesAction(gitRepoUrl.trim(), gitToken.trim() || undefined);
+    const res = await fetchBranchesAction(
+      gitRepoUrl.trim(),
+      gitToken.trim() || undefined,
+      authMode,
+      gitUsername.trim() || undefined,
+    );
     setFetchingBranches(false);
     if (res.ok && res.data) {
       setBranches(res.data);
@@ -195,22 +237,104 @@ export function NewProjectForm({
       </div>
 
       <div>
-        <Label htmlFor="gitToken">Git Access Token (để trống nếu repo public)</Label>
+        <Label htmlFor="gitToken">
+          Git Access Token (để trống nếu repo public)
+          {provider && (
+            <span className="ml-2 rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-normal capitalize text-white/50">
+              {provider}
+            </span>
+          )}
+        </Label>
         <Input
           id="gitToken"
           name="gitToken"
           type="password"
-          placeholder="ghp_xxxx hoặc gitlab-token…"
+          placeholder="ghp_… / github_pat_… / glpat-… / ATCTT… (Bitbucket)"
           autoComplete="off"
           value={gitToken}
           onChange={(e) => { setGitToken(e.target.value); setBranches(null); setBranchError(null); }}
         />
-        <p className="mt-1 text-xs text-white/30">
-          GitHub: Settings → Developer settings → Personal access tokens (scope: repo)
-        </p>
+
+        {/* Auth mode selector — hiện khi đã nhập token */}
+        {gitToken.trim() && (
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span className="shrink-0 text-xs text-white/30">Kiểu xác thực:</span>
+            <div className="flex flex-wrap gap-1">
+              {[
+                { value: 'auto',           label: 'Tự động',        hint: 'Tự detect theo prefix token + host repo' },
+                { value: 'x-access-token', label: 'GitHub (PAT)',   hint: 'GitHub fine-grained github_pat_… & classic ghp_…' },
+                { value: 'oauth2',         label: 'GitLab / oauth2', hint: 'GitLab glpat-… hoặc GitHub classic' },
+                { value: 'x-token-auth',   label: 'Bitbucket token', hint: 'Bitbucket access token ATCTT…' },
+                { value: 'basic',          label: 'User + token',    hint: 'Bitbucket app password / GitLab deploy token (cần username)' },
+              ].map((m) => (
+                <button
+                  key={m.value}
+                  type="button"
+                  title={m.hint}
+                  onClick={() => { setAuthMode(m.value); setBranches(null); setBranchError(null); }}
+                  className={`rounded-full border px-2 py-0.5 text-[10px] font-medium transition ${
+                    authMode === m.value
+                      ? 'border-indigo-500 bg-indigo-500/20 text-indigo-300'
+                      : 'border-white/10 text-white/35 hover:border-white/25 hover:text-white/60'
+                  }`}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Username field — bắt buộc cho mode 'basic' (Bitbucket app password) */}
+        {gitToken.trim() && authMode === 'basic' && (
+          <div className="mt-2">
+            <Input
+              placeholder="Git username (VD: tên Bitbucket của bạn)"
+              autoComplete="off"
+              value={gitUsername}
+              onChange={(e) => { setGitUsername(e.target.value); setBranches(null); setBranchError(null); }}
+            />
+            <p className="mt-1 text-[10px] text-amber-400/70">
+              Bitbucket app password cần đúng username (không phải email).
+            </p>
+          </div>
+        )}
+
+        {/* Hướng dẫn lấy token — bấm mở thẳng trang tạo của từng provider */}
+        <div className="mt-2.5">
+          <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-white/25">
+            Chưa có token? Bấm để lấy:
+          </p>
+          <div className="grid gap-1.5 sm:grid-cols-3">
+            {TOKEN_GUIDES.map((g) => (
+              <a
+                key={g.id}
+                href={g.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`group flex items-start gap-2 rounded-lg border px-2.5 py-2 transition ${
+                  provider === g.id
+                    ? 'border-indigo-500/50 bg-indigo-500/10'
+                    : 'border-white/8 bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.04]'
+                }`}
+              >
+                <span className="mt-0.5 shrink-0 text-sm">{g.emoji}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-1 text-xs font-medium text-white/70 group-hover:text-white">
+                    {g.name}
+                    <ExternalLink size={10} className="text-white/30 group-hover:text-white/50" />
+                  </span>
+                  <span className="mt-0.5 block text-[10px] leading-tight text-white/30">
+                    {g.scope}
+                  </span>
+                </span>
+              </a>
+            ))}
+          </div>
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
           <Label htmlFor="gitBranch">Branch</Label>
           {branches && branches.length > 0 ? (
@@ -291,7 +415,7 @@ export function NewProjectForm({
       )}
 
       {type === 'BACKEND' && (
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <Label htmlFor="startCommand">Lệnh chạy</Label>
             <Input

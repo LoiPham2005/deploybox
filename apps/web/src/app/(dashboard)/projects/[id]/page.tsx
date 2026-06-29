@@ -55,7 +55,7 @@ export default async function ProjectDetailPage({
         >
           ← Projects
         </Link>
-        <div className="mt-2 flex items-center justify-between gap-4">
+        <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
           <div>
             <h1 className="text-xl font-semibold">{project.name}</h1>
             <p className="mt-1 text-sm text-white/40">
@@ -166,7 +166,7 @@ export default async function ProjectDetailPage({
               <li key={d.id} className="flex items-center gap-2 rounded px-2 py-1.5 hover:bg-white/5">
                 <Link
                   href={`/projects/${project.id}/deployments/${d.id}`}
-                  className="flex flex-1 items-center justify-between"
+                  className="flex flex-1 flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <span className="text-white/60">
                     {d.id.slice(0, 8)}
@@ -174,7 +174,7 @@ export default async function ProjectDetailPage({
                       <code className="ml-2 text-xs text-white/30">{d.commitSha.slice(0, 7)}</code>
                     )}
                     {d.commitMsg && (
-                      <span className="ml-2 max-w-[200px] truncate text-xs text-white/40">{d.commitMsg}</span>
+                      <span className="ml-2 hidden max-w-[200px] truncate text-xs text-white/40 sm:inline">{d.commitMsg}</span>
                     )}
                     <span className="ml-2 text-white/30">
                       {new Date(d.queuedAt).toLocaleString('vi-VN')}

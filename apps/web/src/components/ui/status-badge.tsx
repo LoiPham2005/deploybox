@@ -1,37 +1,23 @@
 import type { DeploymentStatus } from '@deploybox/shared';
 import { cn } from '@/lib/utils';
 
-const STYLES: Record<DeploymentStatus, string> = {
-  QUEUED: 'bg-white/10 text-white/70',
-  BUILDING: 'bg-amber-500/15 text-amber-300',
-  DEPLOYING: 'bg-blue-500/15 text-blue-300',
-  RUNNING: 'bg-emerald-500/15 text-emerald-300',
-  SLEEPING: 'bg-violet-500/15 text-violet-300',
-  FAILED: 'bg-red-500/15 text-red-300',
-  STOPPED: 'bg-white/10 text-white/50',
-  CANCELLED: 'bg-white/10 text-white/50',
-};
-
-const LABELS: Record<DeploymentStatus, string> = {
-  QUEUED: 'Đang chờ',
-  BUILDING: 'Đang build',
-  DEPLOYING: 'Đang deploy',
-  RUNNING: 'Đang chạy',
-  SLEEPING: 'Đang ngủ',
-  FAILED: 'Thất bại',
-  STOPPED: 'Đã dừng',
-  CANCELLED: 'Đã hủy',
+const CONFIG: Record<DeploymentStatus, { dot: string; text: string; label: string }> = {
+  QUEUED:    { dot: 'bg-white/30',       text: 'text-white/50',    label: 'Chờ xử lý' },
+  BUILDING:  { dot: 'bg-amber-400 animate-pulse',  text: 'text-amber-300',   label: 'Building' },
+  DEPLOYING: { dot: 'bg-blue-400 animate-pulse',   text: 'text-blue-300',    label: 'Deploying' },
+  RUNNING:   { dot: 'bg-emerald-400',    text: 'text-emerald-400', label: 'Đang chạy' },
+  SLEEPING:  { dot: 'bg-violet-400',     text: 'text-violet-300',  label: 'Sleeping' },
+  FAILED:    { dot: 'bg-red-400',        text: 'text-red-400',     label: 'Thất bại' },
+  STOPPED:   { dot: 'bg-white/20',       text: 'text-white/40',    label: 'Đã dừng' },
+  CANCELLED: { dot: 'bg-white/20',       text: 'text-white/40',    label: 'Đã hủy' },
 };
 
 export function StatusBadge({ status }: { status: DeploymentStatus }) {
+  const c = CONFIG[status];
   return (
-    <span
-      className={cn(
-        'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
-        STYLES[status],
-      )}
-    >
-      {LABELS[status]}
+    <span className="inline-flex items-center gap-1.5">
+      <span className={cn('h-1.5 w-1.5 rounded-full', c.dot)} />
+      <span className={cn('text-xs font-medium', c.text)}>{c.label}</span>
     </span>
   );
 }

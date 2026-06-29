@@ -9,9 +9,20 @@ export class GitController {
 
   @Post('branches')
   async branches(
-    @Body() body: { repoUrl: string; gitToken?: string },
+    @Body()
+    body: {
+      repoUrl: string;
+      gitToken?: string;
+      authMode?: string;
+      gitUsername?: string;
+    },
   ): Promise<{ branches: string[] }> {
-    const branches = await this.git.listBranches(body.repoUrl, body.gitToken);
+    const branches = await this.git.listBranches(
+      body.repoUrl,
+      body.gitToken,
+      (body.authMode as any) ?? 'auto',
+      body.gitUsername,
+    );
     return { branches };
   }
 }

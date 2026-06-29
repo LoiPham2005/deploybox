@@ -12,6 +12,7 @@ import { LogBroadcastService } from '../../infra/log-broadcast/log-broadcast.ser
 import { CryptoService } from '../../common/crypto/crypto.service';
 import { SshService } from '../../infra/ssh/ssh.service';
 import { EnvService } from '../env/env.service';
+import { buildGitAuthUrl } from '../../common/git-auth.util';
 import type { BuildJobData } from './queue.constants';
 
 /**
@@ -36,17 +37,12 @@ export class BuildRunnerService {
     private readonly ssh: SshService,
   ) {}
 
-  /** Inject PAT vào HTTPS clone URL: https://host/... → https://oauth2:{token}@host/... */
+  /**
+   * Inject PAT vào HTTPS clone URL. Tự detect kiểu xác thực theo prefix token + host
+   * để hỗ trợ GitHub (classic + fine-grained), GitLab và Bitbucket access token.
+   */
   private cloneUrl(repoUrl: string, token?: string | null): string {
-    if (!token) return repoUrl;
-    try {
-      const u = new URL(repoUrl);
-      u.username = 'oauth2';
-      u.password = token;
-      return u.toString();
-    } catch {
-      return repoUrl;
-    }
+    return buildGitAuthUrl(repoUrl, token, 'auto');
   }
 
   async run(data: BuildJobData): Promise<void> {

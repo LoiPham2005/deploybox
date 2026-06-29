@@ -241,11 +241,18 @@ export async function deleteDomainAction(
 export async function fetchBranchesAction(
   repoUrl: string,
   gitToken?: string,
+  authMode?: string,
+  gitUsername?: string,
 ): Promise<ActionResult<string[]>> {
   try {
     const res = await serverApi<{ branches: string[] }>('/git/branches', {
       method: 'POST',
-      body: JSON.stringify({ repoUrl, gitToken: gitToken || undefined }),
+      body: JSON.stringify({
+        repoUrl,
+        gitToken: gitToken || undefined,
+        authMode: authMode || 'auto',
+        gitUsername: gitUsername || undefined,
+      }),
     });
     return { ok: true, data: res.branches };
   } catch (e) {
