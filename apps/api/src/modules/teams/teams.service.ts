@@ -156,7 +156,69 @@ export class TeamsService {
       throw new ForbiddenException('Không thể tự xoá mình khỏi team');
     }
 
+    // Dọn luôn quyền project của member này trong team
+    await this.prisma.projectMember.deleteMany({
+      where: { userId: member.userId, project: { teamId } },
+    });
     await this.prisma.teamMember.delete({ where: { id: memberId } });
+    return { ok: true };
+  }
+
+  /**
+   * Ma trận quyền project: danh sách project của team + mỗi member được cấp project nào.
+   * Chỉ OWNER xem/sửa được.
+   */
+  async listProjectAccess(
+    actorId: string,
+    teamId: string,
+  ): Promise<{
+    projects: { id: string; name: string }[];
+    access: Record<string, string[]>;
+  }> {
+    await this.assertRole(actorId, teamId, 'OWNER');
+    const projects = await this.prisma.project.findMany({
+      where: { teamId },
+      select: { id: true, name: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    const grants = await this.prisma.projectMember.findMany({
+      where: { project: { teamId } },
+      select: { projectId: true, userId: true },
+    });
+    const access: Record<string, string[]> = {};
+    for (const g of grants) {
+      (access[g.userId] ??= []).push(g.projectId);
+    }
+    return { projects, access };
+  }
+
+  /** Đặt lại danh sách project mà 1 member được xem (thay thế toàn bộ). */
+  async setMemberProjects(
+    actorId: string,
+    teamId: string,
+    memberUserId: string,
+    projectIds: string[],
+  ): Promise<{ ok: true }> {
+    await this.assertRole(actorId, teamId, 'OWNER');
+    const member = await this.prisma.teamMember.findUnique({
+      where: { teamId_userId: { teamId, userId: memberUserId } },
+    });
+    if (!member) throw new NotFoundException('Thành viên không thuộc team này');
+    // Chỉ nhận project thuộc đúng team
+    const valid = await this.prisma.project.findMany({
+      where: { teamId, id: { in: projectIds } },
+      select: { id: true },
+    });
+    await this.prisma.$transaction([
+      this.prisma.projectMember.deleteMany({
+        where: { userId: memberUserId, project: { teamId } },
+      }),
+      ...valid.map((p) =>
+        this.prisma.projectMember.create({
+          data: { projectId: p.id, userId: memberUserId },
+        }),
+      ),
+    ]);
     return { ok: true };
   }
 }

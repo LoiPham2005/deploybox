@@ -13,9 +13,9 @@ import { DeploymentsService } from './deployments.service';
 import { LogBroadcastService } from '../../infra/log-broadcast/log-broadcast.service';
 import { DockerService } from '../../infra/docker/docker.service';
 import {
-  JwtAuthGuard,
   type JwtPayload,
 } from '../../common/guards/jwt-auth.guard';
+import { JwtOrApiTokenGuard } from '../../common/guards/jwt-or-api-token.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 const TERMINAL = new Set(['RUNNING', 'FAILED', 'STOPPED', 'CANCELLED', 'SLEEPING']);
@@ -34,7 +34,7 @@ function sseWrite(res: Response, event: string, data: string): void {
   res.write(`event: ${event}\ndata: ${data}\n\n`);
 }
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtOrApiTokenGuard)
 @Controller()
 export class DeploymentsController {
   constructor(

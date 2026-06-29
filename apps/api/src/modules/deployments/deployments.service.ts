@@ -53,12 +53,34 @@ export class DeploymentsService {
     }
   }
 
+  /** MEMBER chỉ thao tác được project được cấp quyền; OWNER thì mọi project của team. */
+  private async assertProjectAccess(
+    userId: string,
+    project: { id: string; teamId: string },
+  ): Promise<void> {
+    const member = await this.prisma.teamMember.findUnique({
+      where: { teamId_userId: { teamId: project.teamId, userId } },
+    });
+    if (!member) throw new ForbiddenException('Bạn không thuộc team này');
+    if (member.role === 'OWNER') return;
+    const access = await this.prisma.projectMember.findUnique({
+      where: { projectId_userId: { projectId: project.id, userId } },
+    });
+    if (!access) {
+      throw new ForbiddenException('Bạn không được cấp quyền dùng project này');
+    }
+  }
+
   private async loadOwnedProject(userId: string, projectId: string, min: 'MEMBER' | 'OWNER' = 'MEMBER') {
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
     });
     if (!project) throw new NotFoundException('Không tìm thấy project');
-    await this.assertRole(userId, project.teamId, min);
+    if (min === 'OWNER') {
+      await this.assertRole(userId, project.teamId, 'OWNER');
+    } else {
+      await this.assertProjectAccess(userId, project);
+    }
     return project;
   }
 
@@ -79,7 +101,7 @@ export class DeploymentsService {
       include: { project: true },
     });
     if (!src) throw new NotFoundException('Không tìm thấy deployment');
-    await this.assertRole(userId, src.project.teamId, 'MEMBER');
+    await this.assertProjectAccess(userId, src.project);
     const deployment = await this.prisma.deployment.create({
       data: {
         projectId: src.projectId,
@@ -207,7 +229,7 @@ export class DeploymentsService {
       include: { project: true },
     });
     if (!deployment) throw new NotFoundException('Không tìm thấy deployment');
-    await this.assertRole(userId, deployment.project.teamId, 'MEMBER');
+    await this.assertProjectAccess(userId, deployment.project);
 
     const logs = await this.readLogs(deploymentId);
     const isMobile = deployment.project.type === ProjectType.MOBILE;
@@ -277,7 +299,7 @@ export class DeploymentsService {
       include: { project: true },
     });
     if (!d) throw new NotFoundException('Không tìm thấy deployment');
-    await this.assertRole(userId, d.project.teamId, 'MEMBER');
+    await this.assertProjectAccess(userId, d.project);
     return { status: d.status, projectSlug: d.project.slug, projectType: d.project.type };
   }
 

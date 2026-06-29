@@ -13,6 +13,8 @@ import { DomainManager } from '@/features/projects/domain-manager';
 import { MetricsCard } from '@/features/projects/metrics-card';
 import { RollbackButton } from '@/features/deployments/rollback-button';
 import { WebhookHistory } from '@/features/projects/webhook-history';
+import { DeployApiSnippet } from '@/features/projects/deploy-api-snippet';
+import { WebhookGuide } from '@/features/projects/webhook-guide';
 
 export default async function ProjectDetailPage({
   params,
@@ -114,26 +116,18 @@ export default async function ProjectDetailPage({
         <h2 className="mb-3 text-sm font-semibold text-white/70">
           Webhook — tự deploy khi git push
         </h2>
-        <div className="space-y-2 text-sm">
-          <div>
-            <p className="text-white/40">URL</p>
-            <code className="block break-all rounded bg-black/40 px-2 py-1 text-xs">
-              {project.webhookUrl}
-            </code>
-          </div>
-          <div>
-            <p className="text-white/40">Secret</p>
-            <code className="block break-all rounded bg-black/40 px-2 py-1 text-xs">
-              {project.webhookSecret ?? '—'}
-            </code>
-          </div>
-          <p className="text-xs text-white/40">
-            GitHub → repo Settings → Webhooks → Add webhook: dán URL, Content type{' '}
-            <code>application/json</code>, điền Secret như trên, chọn{' '}
-            <em>Just the push event</em>. Push lên branch{' '}
-            <code>{project.gitBranch}</code> sẽ tự deploy (cần bật “Tự deploy”).
-          </p>
-        </div>
+        <WebhookGuide
+          webhookUrl={project.webhookUrl}
+          webhookSecret={project.webhookSecret ?? null}
+          gitBranch={project.gitBranch}
+        />
+      </Card>
+
+      <Card>
+        <h2 className="mb-3 text-sm font-semibold text-white/70">
+          Deploy qua API / CI-CD
+        </h2>
+        <DeployApiSnippet projectId={project.id} />
       </Card>
 
       <Card>

@@ -2,7 +2,7 @@
 
 import { useMemo, useState, type DragEvent, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { Upload, FileText, X } from 'lucide-react';
+import { Upload, FileText, X, Pencil, EyeOff } from 'lucide-react';
 import type { EnvTarget, EnvVarDto } from '@deploybox/shared';
 import { deleteEnvAction, upsertEnvAction } from './actions';
 import { Button } from '@/components/ui/button';
@@ -54,6 +54,11 @@ export function EnvManager({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Sửa từng biến (mở rộng để xem/sửa value)
+  const [editKey, setEditKey] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
+  const [savingKey, setSavingKey] = useState<string | null>(null);
+
   // Bulk import state
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkText, setBulkText] = useState('');
@@ -95,6 +100,27 @@ export function EnvManager({
     await deleteEnvAction(projectId, key);
     setBusy(false);
     router.refresh();
+  }
+
+  function startEdit(v: EnvVarDto) {
+    setEditKey(v.key);
+    setEditValue(v.value); // secret → rỗng, nhập mới để thay
+    setError(null);
+  }
+
+  async function saveEdit(v: EnvVarDto) {
+    setSavingKey(v.key);
+    setError(null);
+    const res = await upsertEnvAction(projectId, [
+      { key: v.key, value: editValue, isSecret: v.isSecret, target: v.target },
+    ]);
+    setSavingKey(null);
+    if (res.ok) {
+      setEditKey(null);
+      router.refresh();
+    } else {
+      setError(res.error);
+    }
   }
 
   async function readFiles(files: FileList | File[]) {
@@ -140,26 +166,74 @@ export function EnvManager({
         <p className="text-sm text-white/40">Chưa có biến môi trường.</p>
       ) : (
         <ul className="space-y-1 text-sm">
-          {vars.map((v) => (
-            <li
-              key={v.key}
-              className="flex items-center justify-between gap-2 rounded bg-white/[0.02] px-2 py-1.5"
-            >
-              <span className="font-mono text-white/80">{v.key}</span>
-              <span className="flex items-center gap-2 text-xs text-white/40">
-                <span>{v.isSecret ? '••••• (secret)' : v.value || '(rỗng)'}</span>
-                <span className="rounded bg-white/10 px-1.5">{v.target}</span>
-                <button
-                  type="button"
-                  onClick={() => onDelete(v.key)}
-                  disabled={busy}
-                  className="text-red-400 hover:underline"
-                >
-                  xóa
-                </button>
-              </span>
-            </li>
-          ))}
+          {vars.map((v) => {
+            const isEditing = editKey === v.key;
+            return (
+              <li
+                key={v.key}
+                className="rounded bg-white/[0.02] px-2 py-1.5"
+              >
+                {/* Dòng thu gọn */}
+                <div className="flex items-center justify-between gap-2">
+                  <span className="min-w-0 flex-1 truncate font-mono text-white/80">
+                    {v.key}
+                  </span>
+                  <div className="flex shrink-0 items-center gap-2 text-xs text-white/40">
+                    {/* value thu gọn — cắt ngắn, secret thì ẩn */}
+                    {!isEditing && (
+                      <span className="max-w-[120px] truncate sm:max-w-[200px]">
+                        {v.isSecret ? '••••• (secret)' : v.value || '(rỗng)'}
+                      </span>
+                    )}
+                    <span className="rounded bg-white/10 px-1.5">{v.target}</span>
+                    <button
+                      type="button"
+                      onClick={() => (isEditing ? setEditKey(null) : startEdit(v))}
+                      className="flex items-center gap-1 text-white/50 hover:text-white"
+                      title={isEditing ? 'Thu gọn' : 'Mở rộng / Sửa'}
+                    >
+                      {isEditing ? <EyeOff size={13} /> : <Pencil size={13} />}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onDelete(v.key)}
+                      disabled={busy}
+                      className="text-red-400 hover:underline"
+                    >
+                      xóa
+                    </button>
+                  </div>
+                </div>
+
+                {/* Mở rộng: xem đầy đủ + sửa value */}
+                {isEditing && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <Input
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      placeholder={v.isSecret ? 'Nhập giá trị mới (secret)…' : 'value'}
+                      className="min-w-[12rem] flex-1 font-mono text-xs"
+                      autoFocus
+                    />
+                    <Button
+                      onClick={() => saveEdit(v)}
+                      disabled={savingKey === v.key}
+                      className="h-8 px-3 text-xs"
+                    >
+                      {savingKey === v.key ? 'Đang lưu…' : 'Lưu'}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      onClick={() => setEditKey(null)}
+                      className="h-8 px-3 text-xs"
+                    >
+                      Hủy
+                    </Button>
+                  </div>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
 

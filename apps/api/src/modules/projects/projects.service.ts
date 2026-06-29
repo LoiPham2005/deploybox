@@ -72,6 +72,30 @@ export class ProjectsService {
     return u?.isAdmin === true;
   }
 
+  /**
+   * Quyền xem/dùng 1 project ở cấp thành viên:
+   * - OWNER của team → xem hết project trong team
+   * - MEMBER → chỉ project được cấp quyền (ProjectMember)
+   * Lưu ý: admin hệ thống KHÔNG tự động xem được — quyền project theo team,
+   * admin chỉ "toàn quyền" ở giới hạn gói + Admin Panel, không phải xem lén team khác.
+   */
+  private async assertProjectAccess(
+    userId: string,
+    project: { id: string; teamId: string },
+  ): Promise<void> {
+    const member = await this.prisma.teamMember.findUnique({
+      where: { teamId_userId: { teamId: project.teamId, userId } },
+    });
+    if (!member) throw new ForbiddenException('Bạn không thuộc team này');
+    if (member.role === 'OWNER') return; // OWNER thấy mọi project
+    const access = await this.prisma.projectMember.findUnique({
+      where: { projectId_userId: { projectId: project.id, userId } },
+    });
+    if (!access) {
+      throw new ForbiddenException('Bạn không được cấp quyền xem project này');
+    }
+  }
+
   private async loadOwnedProject(
     userId: string,
     projectId: string,
@@ -83,7 +107,12 @@ export class ProjectsService {
     if (!project) {
       throw new NotFoundException('Không tìm thấy project');
     }
-    await this.assertRole(userId, project.teamId, minRole);
+    if (minRole === 'OWNER') {
+      await this.assertRole(userId, project.teamId, 'OWNER');
+    } else {
+      // Xem chi tiết: cần quyền project (OWNER thấy hết, MEMBER cần được cấp)
+      await this.assertProjectAccess(userId, project);
+    }
     return project;
   }
 
@@ -94,8 +123,14 @@ export class ProjectsService {
     teamId: string,
   ): Promise<Paginated<ProjectSummary>> {
     await this.assertMembership(userId, teamId);
+    // OWNER thấy hết project của team; MEMBER chỉ thấy project được cấp quyền
+    // (kể cả admin hệ thống — quyền project theo vai trò trong team, không phải isAdmin)
+    const member = await this.prisma.teamMember.findUnique({
+      where: { teamId_userId: { teamId, userId } },
+    });
+    const seesAll = member?.role === 'OWNER';
     const projects = await this.prisma.project.findMany({
-      where: { teamId },
+      where: seesAll ? { teamId } : { teamId, members: { some: { userId } } },
       orderBy: { createdAt: 'desc' },
       include: {
         domains: { where: { isPrimary: true }, take: 1 },

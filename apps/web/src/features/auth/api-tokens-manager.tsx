@@ -4,28 +4,7 @@ import { useState } from 'react';
 import type { ApiTokenDto } from '@deploybox/shared';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-
-const BASE = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000') + '/api/v1';
-
-async function apiCall(path: string, method: string, body?: unknown) {
-  const token = document.cookie
-    .split('; ')
-    .find((r) => r.startsWith('db_token='))
-    ?.split('=')[1];
-  const res = await fetch(`${BASE}${path}`, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    ...(body ? { body: JSON.stringify(body) } : {}),
-  });
-  if (!res.ok) {
-    const e = await res.json().catch(() => ({})) as { message?: string };
-    throw new Error(e.message ?? `Lỗi ${res.status}`);
-  }
-  return res.json();
-}
+import { createTokenAction, revokeTokenAction } from './token-actions';
 
 export function ApiTokensManager({ initialTokens }: { initialTokens: ApiTokenDto[] }) {
   const [tokens, setTokens] = useState(initialTokens);
@@ -39,26 +18,25 @@ export function ApiTokensManager({ initialTokens }: { initialTokens: ApiTokenDto
     setCreating(true);
     setErr(null);
     setNewToken(null);
-    try {
-      const res = await apiCall('/auth/tokens', 'POST', { name: name.trim() }) as ApiTokenDto & { token: string };
-      setTokens((prev) => [res, ...prev]);
-      setNewToken(res.token);
+    const res = await createTokenAction(name.trim());
+    setCreating(false);
+    if (res.ok && res.data) {
+      setTokens((prev) => [res.data!, ...prev]);
+      setNewToken(res.data.token);
       setName('');
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Lỗi');
-    } finally {
-      setCreating(false);
+    } else if (!res.ok) {
+      setErr(res.error);
     }
   }
 
   async function revoke(id: string) {
     if (!confirm('Thu hồi token này? Không thể hoàn tác.')) return;
-    try {
-      await apiCall(`/auth/tokens/${id}`, 'DELETE');
+    const res = await revokeTokenAction(id);
+    if (res.ok) {
       setTokens((prev) => prev.filter((t) => t.id !== id));
       if (newToken) setNewToken(null);
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Lỗi');
+    } else {
+      setErr(res.error);
     }
   }
 

@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -55,5 +56,30 @@ export class TeamsController {
     @Param('memberId') memberId: string,
   ) {
     return this.teams.removeMember(user.sub, teamId, memberId);
+  }
+
+  // Ma trận quyền project (OWNER): project nào, member nào được cấp
+  @Get('project-access')
+  projectAccess(
+    @CurrentUser() user: JwtPayload,
+    @Param('teamId') teamId: string,
+  ) {
+    return this.teams.listProjectAccess(user.sub, teamId);
+  }
+
+  // Đặt lại danh sách project mà 1 member (theo userId) được xem
+  @Put(':userId/projects')
+  setProjects(
+    @CurrentUser() user: JwtPayload,
+    @Param('teamId') teamId: string,
+    @Param('userId') userId: string,
+    @Body() body: { projectIds: string[] },
+  ) {
+    return this.teams.setMemberProjects(
+      user.sub,
+      teamId,
+      userId,
+      body.projectIds ?? [],
+    );
   }
 }
