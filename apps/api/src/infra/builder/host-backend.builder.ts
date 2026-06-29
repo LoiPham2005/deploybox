@@ -50,21 +50,36 @@ export class HostBackendBuilder {
     await this.exec('git', ['clone', '--depth', '1', '--branch', input.branch, input.repoUrl, appDir], input.dataDir, log, undefined, input.signal);
 
     const workDir = join(appDir, input.rootDir || '.');
-    const env = { ...process.env, ...(input.env ?? {}), PORT: String(input.internalPort), NODE_ENV: 'production' };
+    // Env lúc BUILD: KHÔNG ép production → npm cài cả devDependencies (rimraf, nest-cli, tsc...).
+    const buildEnv = {
+      ...process.env,
+      ...(input.env ?? {}),
+      PORT: String(input.internalPort),
+      NODE_ENV: 'development',
+    };
+    // Env lúc CHẠY: production.
+    const runEnv = {
+      ...process.env,
+      ...(input.env ?? {}),
+      PORT: String(input.internalPort),
+      NODE_ENV: 'production',
+    };
 
-    // 2. Install (nếu có package.json)
+    // 2. Install (nếu có package.json) — cần devDeps để build
     if (await this.exists(join(workDir, 'package.json'))) {
       const install =
         input.installCommand ||
-        ((await this.exists(join(workDir, 'package-lock.json'))) ? 'npm ci' : 'npm install');
+        ((await this.exists(join(workDir, 'package-lock.json')))
+          ? 'npm ci --include=dev'
+          : 'npm install --include=dev');
       log(`$ ${install}`, 'stdout');
-      await this.exec('sh', ['-c', install], workDir, log, env, input.signal);
+      await this.exec('sh', ['-c', install], workDir, log, buildEnv, input.signal);
     }
 
-    // 3. Build (nếu có lệnh)
+    // 3. Build (nếu có lệnh) — dùng buildEnv (có devDeps)
     if (input.buildCommand) {
       log(`$ ${input.buildCommand}`, 'stdout');
-      await this.exec('sh', ['-c', input.buildCommand], workDir, log, env, input.signal);
+      await this.exec('sh', ['-c', input.buildCommand], workDir, log, buildEnv, input.signal);
     }
 
     // 4. Dừng process cũ (nếu có)
@@ -76,11 +91,11 @@ export class HostBackendBuilder {
     const logPath = this.runtimeLog(input.dataDir, input.slug);
     await mkdir(join(input.dataDir, 'runtime-logs'), { recursive: true });
     await mkdir(join(input.dataDir, 'run'), { recursive: true });
-    const logFd = openSync(logPath, 'a');
+    const logFd = openSync(logPath, 'w'); // ghi mới mỗi lần deploy — không lẫn log cũ
 
     const child = spawn('sh', ['-c', startCmd], {
       cwd: workDir,
-      env,
+      env: runEnv,
       detached: true,
       stdio: ['ignore', logFd, logFd],
     });
@@ -91,8 +106,15 @@ export class HostBackendBuilder {
     // 6. Đợi 2.5s rồi kiểm tra process còn sống
     await new Promise((r) => setTimeout(r, 2500));
     if (!this.alive(child.pid)) {
-      const tail = await readFile(logPath, 'utf8').then((s) => s.slice(-800)).catch(() => '');
-      throw new Error(`App tắt ngay sau khi chạy. Log:\n${tail}`);
+      const full = await readFile(logPath, 'utf8').catch(() => '');
+      // Ưu tiên hiện dòng lỗi thật (Error/Exception/validation) thay vì cuối stack trace
+      const errLines = full
+        .split('\n')
+        .filter((l) => /error|exception|validation|cannot find|econnrefused|listen eaddr/i.test(l))
+        .slice(-6)
+        .join('\n');
+      const detail = errLines || full.slice(-1000);
+      throw new Error(`App tắt ngay sau khi chạy. Lỗi:\n${detail}`);
     }
     log(`App đang chạy ở port ${input.internalPort} (PID ${child.pid})`, 'stdout');
     return { pid: child.pid, port: input.internalPort };
