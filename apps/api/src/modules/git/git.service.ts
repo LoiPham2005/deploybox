@@ -1,10 +1,18 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { mkdtemp, rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { buildGitAuthUrl, type GitAuthMode } from '../../common/git-auth.util';
+import { PrismaService } from '../../infra/prisma/prisma.service';
+import { CryptoService } from '../../common/crypto/crypto.service';
 
 const execFileAsync = promisify(execFile);
 
@@ -22,6 +30,41 @@ export interface RemoteBranch {
 @Injectable()
 export class GitService {
   private readonly logger = new Logger(GitService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly crypto: CryptoService,
+  ) {}
+
+  /**
+   * Lấy branches cho project đã tồn tại — dùng token đã lưu (mã hóa) của project,
+   * nên không cần nhập lại token ở form Sửa cấu hình. Có check quyền team.
+   */
+  async listBranchesForProject(projectId: string, userId: string): Promise<RemoteBranch[]> {
+    const project = await this.prisma.project.findUnique({ where: { id: projectId } });
+    if (!project) throw new NotFoundException('Không tìm thấy project');
+
+    const member = await this.prisma.teamMember.findUnique({
+      where: { teamId_userId: { teamId: project.teamId, userId } },
+    });
+    if (!member) throw new ForbiddenException('Bạn không thuộc team này');
+
+    if (!project.gitRepoUrl) {
+      throw new BadRequestException('Project chưa có Git repo URL');
+    }
+
+    const token = project.gitToken
+      ? (() => {
+          try {
+            return this.crypto.decrypt(project.gitToken!);
+          } catch {
+            return undefined;
+          }
+        })()
+      : undefined;
+
+    return this.listBranches(project.gitRepoUrl, token, 'auto');
+  }
 
   async listBranches(
     repoUrl: string,

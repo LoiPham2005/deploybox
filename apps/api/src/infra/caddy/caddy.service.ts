@@ -123,15 +123,50 @@ export class CaddyService implements OnModuleInit {
     const file = join(caddyDir, 'Caddyfile');
     await writeFile(file, caddyfile);
 
-    const { code, stderr } = await capture('caddy', [
+    await this.applyCaddyfile(file);
+  }
+
+  /**
+   * Áp Caddyfile vào Caddy. Tự hồi phục: nếu Caddy đang chạy thì `reload`,
+   * nếu Caddy CHƯA chạy (admin :2019 refused) thì tự `caddy start`.
+   * Nhờ vậy không cần khởi động Caddy thủ công — DeployBox tự lo.
+   */
+  private async applyCaddyfile(file: string): Promise<void> {
+    const reload = await capture('caddy', [
       'reload',
       '--config',
       file,
       '--adapter',
       'caddyfile',
     ]);
-    if (code !== 0) {
-      throw new Error(`caddy reload lỗi: ${stderr.trim() || 'không rõ'}`);
+    if (reload.code === 0) return;
+
+    // Caddy chưa chạy → admin API từ chối kết nối. Khởi động mới.
+    const notRunning =
+      /connection refused|dial tcp|no such file|not running|couldn't determine|loading initial/i.test(
+        reload.stderr,
+      );
+    if (!notRunning) {
+      throw new Error(`caddy reload lỗi: ${reload.stderr.trim() || 'không rõ'}`);
     }
+
+    this.logger.log('Caddy chưa chạy — đang tự khởi động...');
+    const start = await capture('caddy', [
+      'start',
+      '--config',
+      file,
+      '--adapter',
+      'caddyfile',
+    ]);
+    if (start.code === 0) {
+      this.logger.log(`✓ Caddy đã khởi động (port ${this.proxyPort()})`);
+      return;
+    }
+    // Trường hợp đua: Caddy đã được start ở nơi khác → coi như OK rồi reload lại.
+    if (/already running/i.test(`${start.stderr}${start.stdout}`)) {
+      await capture('caddy', ['reload', '--config', file, '--adapter', 'caddyfile']);
+      return;
+    }
+    throw new Error(`caddy start lỗi: ${start.stderr.trim() || 'không rõ'}`);
   }
 }

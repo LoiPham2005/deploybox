@@ -3,16 +3,58 @@
 import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import type { ProjectDetailDto, UpdateProjectDto } from '@deploybox/shared';
-import { updateProjectAction } from './actions';
+import { updateProjectAction, fetchProjectBranchesAction, type RemoteBranch } from './actions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select } from '@/components/ui/select';
+
+/** "2 ngày trước"… từ ISO date */
+function relativeVi(iso: string | null): string {
+  if (!iso) return '';
+  const diff = Date.now() - new Date(iso).getTime();
+  if (Number.isNaN(diff)) return '';
+  const min = Math.floor(diff / 60_000);
+  const hr = Math.floor(min / 60);
+  const day = Math.floor(hr / 24);
+  const mon = Math.floor(day / 30);
+  const yr = Math.floor(day / 365);
+  if (yr > 0) return `${yr} năm trước`;
+  if (mon > 0) return `${mon} tháng trước`;
+  if (day > 0) return `${day} ngày trước`;
+  if (hr > 0) return `${hr} giờ trước`;
+  if (min > 0) return `${min} phút trước`;
+  return 'vừa xong';
+}
 
 export function EditProjectForm({ project }: { project: ProjectDetailDto }) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+
+  // Branch picker — dùng token đã lưu của project
+  const [selectedBranch, setSelectedBranch] = useState(project.gitBranch);
+  const [branches, setBranches] = useState<RemoteBranch[] | null>(null);
+  const [fetchingBranches, setFetchingBranches] = useState(false);
+  const [branchError, setBranchError] = useState<string | null>(null);
+
+  async function fetchBranches() {
+    setFetchingBranches(true);
+    setBranchError(null);
+    setBranches(null);
+    const res = await fetchProjectBranchesAction(project.id);
+    setFetchingBranches(false);
+    if (res.ok && res.data) {
+      setBranches(res.data);
+      // Giữ nhánh hiện tại nếu còn tồn tại, không thì chọn nhánh mới nhất
+      if (!res.data.some((b) => b.name === selectedBranch) && res.data[0]) {
+        setSelectedBranch(res.data[0].name);
+      }
+    } else if (!res.ok) {
+      setBranchError(res.error);
+    }
+  }
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -89,11 +131,60 @@ export function EditProjectForm({ project }: { project: ProjectDetailDto }) {
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
           <Label htmlFor="gitBranch">Branch</Label>
-          <Input
-            id="gitBranch"
-            name="gitBranch"
-            defaultValue={project.gitBranch}
-          />
+          {branches && branches.length > 0 ? (
+            <div className="flex gap-2">
+              <Select
+                id="gitBranch"
+                name="gitBranch"
+                value={selectedBranch}
+                onChange={(e) => setSelectedBranch(e.target.value)}
+                className="flex-1"
+              >
+                {/* Nhánh hiện tại nếu không có trong list vẫn cho chọn */}
+                {!branches.some((b) => b.name === selectedBranch) && (
+                  <option value={selectedBranch}>{selectedBranch} (hiện tại)</option>
+                )}
+                {branches.map((b) => (
+                  <option key={b.name} value={b.name}>
+                    {b.name}
+                    {b.lastCommitAt ? ` — ${relativeVi(b.lastCommitAt)}` : ''}
+                  </option>
+                ))}
+              </Select>
+              <button
+                type="button"
+                onClick={() => { setBranches(null); setBranchError(null); }}
+                className="text-xs text-white/30 hover:text-white/60"
+                title="Nhập tay"
+              >
+                ✕
+              </button>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <Input
+                id="gitBranch"
+                name="gitBranch"
+                value={selectedBranch}
+                onChange={(e) => setSelectedBranch(e.target.value)}
+                className="flex-1"
+              />
+              <button
+                type="button"
+                onClick={fetchBranches}
+                disabled={fetchingBranches}
+                className="shrink-0 rounded-md border border-white/10 px-2.5 py-1.5 text-xs text-white/60 hover:border-white/30 hover:text-white disabled:opacity-40"
+              >
+                {fetchingBranches ? '…' : 'Lấy branches'}
+              </button>
+            </div>
+          )}
+          {branchError && <p className="mt-1 text-xs text-red-400">{branchError}</p>}
+          {branches && branches.length > 0 && branches[0].lastCommitAt && (
+            <p className="mt-1 text-xs text-emerald-400">
+              {branches.length} nhánh · mới nhất: {branches[0].name} ({relativeVi(branches[0].lastCommitAt)})
+            </p>
+          )}
         </div>
         <div>
           <Label htmlFor="rootDir">Thư mục gốc</Label>

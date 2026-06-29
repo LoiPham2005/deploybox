@@ -265,6 +265,21 @@ export async function fetchBranchesAction(
   }
 }
 
+/** Lấy branches cho project đã tồn tại — dùng token đã lưu, không cần nhập lại. */
+export async function fetchProjectBranchesAction(
+  projectId: string,
+): Promise<ActionResult<RemoteBranch[]>> {
+  try {
+    const res = await serverApi<{ branches: RemoteBranch[] }>(
+      `/git/projects/${projectId}/branches`,
+      { method: 'POST' },
+    );
+    return { ok: true, data: res.branches };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Không lấy được branches' };
+  }
+}
+
 export async function setPrimaryDomainAction(
   projectId: string,
   domainId: string,
