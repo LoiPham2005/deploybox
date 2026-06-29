@@ -8,6 +8,25 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
+import type { RemoteBranch } from './actions';
+
+/** "2 ngày trước", "3 giờ trước"… từ ISO date */
+function relativeVi(iso: string | null): string {
+  if (!iso) return '';
+  const diff = Date.now() - new Date(iso).getTime();
+  if (Number.isNaN(diff)) return '';
+  const min = Math.floor(diff / 60_000);
+  const hr = Math.floor(min / 60);
+  const day = Math.floor(hr / 24);
+  const mon = Math.floor(day / 30);
+  const yr = Math.floor(day / 365);
+  if (yr > 0) return `${yr} năm trước`;
+  if (mon > 0) return `${mon} tháng trước`;
+  if (day > 0) return `${day} ngày trước`;
+  if (hr > 0) return `${hr} giờ trước`;
+  if (min > 0) return `${min} phút trước`;
+  return 'vừa xong';
+}
 
 /** Link tạo token cho từng provider — mở thẳng trang tạo + ghi rõ scope cần chọn */
 const TOKEN_GUIDES = [
@@ -71,7 +90,7 @@ export function NewProjectForm({
   const [gitToken, setGitToken] = useState('');
   const [authMode, setAuthMode] = useState('auto');
   const [gitUsername, setGitUsername] = useState('');
-  const [branches, setBranches] = useState<string[] | null>(null);
+  const [branches, setBranches] = useState<RemoteBranch[] | null>(null);
   const [selectedBranch, setSelectedBranch] = useState('main');
   const [fetchingBranches, setFetchingBranches] = useState(false);
   const [branchError, setBranchError] = useState<string | null>(null);
@@ -100,9 +119,8 @@ export function NewProjectForm({
     setFetchingBranches(false);
     if (res.ok && res.data) {
       setBranches(res.data);
-      if (res.data.includes('main')) setSelectedBranch('main');
-      else if (res.data.includes('master')) setSelectedBranch('master');
-      else if (res.data[0]) setSelectedBranch(res.data[0]);
+      // Danh sách đã sort theo ngày commit (mới nhất đầu) → chọn nhánh mới nhất
+      if (res.data[0]) setSelectedBranch(res.data[0].name);
     } else if (!res.ok) {
       setBranchError(res.error);
     }
@@ -346,7 +364,10 @@ export function NewProjectForm({
                 className="flex-1"
               >
                 {branches.map((b) => (
-                  <option key={b} value={b}>{b}</option>
+                  <option key={b.name} value={b.name}>
+                    {b.name}
+                    {b.lastCommitAt ? ` — ${relativeVi(b.lastCommitAt)}` : ''}
+                  </option>
                 ))}
               </Select>
               <button
@@ -380,7 +401,14 @@ export function NewProjectForm({
             </div>
           )}
           {branchError && <p className="mt-1 text-xs text-red-400">{branchError}</p>}
-          {branches && <p className="mt-1 text-xs text-emerald-400">Tìm thấy {branches.length} branches</p>}
+          {branches && branches.length > 0 && (
+            <p className="mt-1 text-xs text-emerald-400">
+              {branches.length} nhánh
+              {branches[0].lastCommitAt
+                ? ` · mới nhất: ${branches[0].name} (${relativeVi(branches[0].lastCommitAt)})`
+                : ' (đã sort theo ngày commit)'}
+            </p>
+          )}
         </div>
         <div>
           <Label htmlFor="rootDir">Thư mục gốc</Label>

@@ -21,7 +21,16 @@ export class SshService {
       }, 15_000);
       conn
         .on('ready', () => { clearTimeout(timer); resolve(conn); })
-        .on('error', (e) => { clearTimeout(timer); reject(e); })
+        .on('error', (e) => {
+          clearTimeout(timer);
+          const detail = (e as Error)?.message?.trim();
+          reject(
+            new Error(
+              detail ||
+                `Không kết nối được SSH tới ${opts.host}:${opts.port}. Kiểm tra: host/port đúng chưa, đã bật SSH chưa, SSH key có quyền không.`,
+            ),
+          );
+        })
         .connect({
           host: opts.host,
           port: opts.port,

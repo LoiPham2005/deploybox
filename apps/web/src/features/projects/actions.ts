@@ -18,6 +18,11 @@ type ActionResult<T = undefined> =
   | { ok: true; data?: T }
   | { ok: false; error: string };
 
+export interface RemoteBranch {
+  name: string;
+  lastCommitAt: string | null;
+}
+
 export async function createProjectAction(
   teamId: string,
   input: CreateProjectDto,
@@ -243,9 +248,9 @@ export async function fetchBranchesAction(
   gitToken?: string,
   authMode?: string,
   gitUsername?: string,
-): Promise<ActionResult<string[]>> {
+): Promise<ActionResult<RemoteBranch[]>> {
   try {
-    const res = await serverApi<{ branches: string[] }>('/git/branches', {
+    const res = await serverApi<{ branches: RemoteBranch[] }>('/git/branches', {
       method: 'POST',
       body: JSON.stringify({
         repoUrl,

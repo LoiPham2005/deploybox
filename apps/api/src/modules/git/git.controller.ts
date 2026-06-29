@@ -1,5 +1,5 @@
 import { Body, Controller, Post, UseGuards } from '@nestjs/common';
-import { GitService } from './git.service';
+import { GitService, type RemoteBranch } from './git.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 
 @UseGuards(JwtAuthGuard)
@@ -16,7 +16,7 @@ export class GitController {
       authMode?: string;
       gitUsername?: string;
     },
-  ): Promise<{ branches: string[] }> {
+  ): Promise<{ branches: RemoteBranch[] }> {
     const branches = await this.git.listBranches(
       body.repoUrl,
       body.gitToken,

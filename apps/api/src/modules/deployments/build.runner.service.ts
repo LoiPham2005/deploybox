@@ -89,10 +89,19 @@ export class BuildRunnerService {
       });
       log('=== BẮT ĐẦU BUILD ===', 'stdout');
 
-      // Project gắn server REMOTE → chạy qua SSH, không dùng local builders
+      // Server REMOTE → chạy qua SSH. Server LOCAL → build ngay trên máy chủ DeployBox
+      // (LOCAL không có SSH key, host=localhost — không được SSH vào chính mình).
       if ((project as any).serverId) {
-        await this.runRemote({ deploymentId, project: project as any, gitToken, log });
-        return;
+        const srv = await (this.prisma as any).server.findUnique({
+          where: { id: (project as any).serverId },
+          select: { type: true, name: true },
+        });
+        if (srv?.type === 'REMOTE') {
+          await this.runRemote({ deploymentId, project: project as any, gitToken, log });
+          return;
+        }
+        log(`=== Server "${srv?.name ?? 'local'}" (LOCAL) → build trên máy này ===`, 'stdout');
+        // rơi xuống local builders bên dưới
       }
 
       if (rollbackOf) {
