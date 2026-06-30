@@ -79,16 +79,48 @@ export class HostBackendBuilder {
       await this.exec('sh', ['-c', input.buildCommand], workDir, log, buildEnv, input.signal);
     }
 
-    // 4. Dừng process cũ (nếu có)
+    // 4. Dừng process cũ + spawn lệnh chạy
+    return this.spawnApp(workDir, runEnv, input, log);
+  }
+
+  /**
+   * Chạy lại app từ bản build SẴN CÓ trên máy (không clone/install/build lại).
+   * Dùng cho self-heal: khi DeployBox khởi động lại, process detached cũ có thể đã bị
+   * watch-reload kill — hàm này khởi động lại nhanh mà không cần build lại.
+   */
+  async restart(
+    input: Omit<HostBackendInput, 'repoUrl' | 'branch' | 'deploymentId'>,
+    log: BuildLogger,
+  ): Promise<{ pid: number; port: number }> {
+    const appDir = join(input.dataDir, 'apps', input.slug);
+    const workDir = join(appDir, input.rootDir || '.');
+    if (!(await this.exists(workDir))) {
+      throw new Error('Chưa có bản build trên máy — cần Deploy lại');
+    }
+    const runEnv = {
+      ...process.env,
+      ...(input.env ?? {}),
+      PORT: String(input.internalPort),
+      NODE_ENV: 'production',
+    };
+    return this.spawnApp(workDir, runEnv, input, log);
+  }
+
+  /** Stop process cũ rồi spawn lệnh chạy mới (detached) + verify còn sống. */
+  private async spawnApp(
+    workDir: string,
+    runEnv: NodeJS.ProcessEnv,
+    input: Pick<HostBackendInput, 'slug' | 'startCommand' | 'internalPort' | 'dataDir'>,
+    log: BuildLogger,
+  ): Promise<{ pid: number; port: number }> {
     await this.stop(input.dataDir, input.slug, log);
 
-    // 5. Spawn lệnh chạy — detached để sống độc lập với API
     const startCmd = input.startCommand || 'node dist/main.js';
     log(`$ ${startCmd}  (PORT=${input.internalPort})`, 'stdout');
     const logPath = this.runtimeLog(input.dataDir, input.slug);
     await mkdir(join(input.dataDir, 'runtime-logs'), { recursive: true });
     await mkdir(join(input.dataDir, 'run'), { recursive: true });
-    const logFd = openSync(logPath, 'w'); // ghi mới mỗi lần deploy — không lẫn log cũ
+    const logFd = openSync(logPath, 'w'); // ghi mới mỗi lần chạy — không lẫn log cũ
 
     const child = spawn('sh', ['-c', startCmd], {
       cwd: workDir,
@@ -100,7 +132,7 @@ export class HostBackendBuilder {
     if (!child.pid) throw new Error('Không spawn được process chạy app');
     await writeFile(this.pidFile(input.dataDir, input.slug), String(child.pid));
 
-    // 6. Đợi 2.5s rồi kiểm tra process còn sống
+    // Đợi 2.5s rồi kiểm tra process còn sống
     await new Promise((r) => setTimeout(r, 2500));
     if (!this.alive(child.pid)) {
       const full = await readFile(logPath, 'utf8').catch(() => '');
@@ -115,6 +147,14 @@ export class HostBackendBuilder {
     }
     log(`App đang chạy ở port ${input.internalPort} (PID ${child.pid})`, 'stdout');
     return { pid: child.pid, port: input.internalPort };
+  }
+
+  /** Process host-run của slug có đang chạy không (đọc PID file + kiểm tra alive). */
+  async isRunning(dataDir: string, slug: string): Promise<boolean> {
+    const pid = await readFile(this.pidFile(dataDir, slug), 'utf8')
+      .then((s) => parseInt(s.trim(), 10))
+      .catch(() => NaN);
+    return !!pid && !Number.isNaN(pid) && this.alive(pid);
   }
 
   /** Dừng process host-run của project (kill cả process group). */
