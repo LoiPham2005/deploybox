@@ -221,6 +221,18 @@ export class BuildRunnerService {
         });
       }
 
+      // Bản deploy này vừa RUNNING → hạ các bản RUNNING/SLEEPING cũ của project xuống STOPPED.
+      // Builder đã kill process cũ rồi, nên thực tế chỉ 1 bản chạy; cập nhật status cho khớp
+      // để lịch sử chỉ hiện đúng 1 "Đang chạy" (bản mới nhất).
+      await this.prisma.deployment.updateMany({
+        where: {
+          projectId: project.id,
+          id: { not: deploymentId },
+          status: { in: ['RUNNING', 'SLEEPING'] },
+        },
+        data: { status: 'STOPPED', finishedAt: new Date() },
+      });
+
       await this.prisma.domain.updateMany({
         where: { projectId: project.id, isPrimary: true },
         data: { status: 'ACTIVE' },

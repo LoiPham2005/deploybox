@@ -50,22 +50,19 @@ export class HostBackendBuilder {
     await this.exec('git', ['clone', '--depth', '1', '--branch', input.branch, input.repoUrl, appDir], input.dataDir, log, undefined, input.signal);
 
     const workDir = join(appDir, input.rootDir || '.');
-    // Env lúc BUILD: KHÔNG ép production → npm cài cả devDependencies (rimraf, nest-cli, tsc...).
+    // Env lúc BUILD: production (Next.js/Vite bắt buộc, chạy ở development sẽ lẫn runtime dev/prod
+    // → React null → useContext lỗi). devDeps vẫn được cài nhờ `--include=dev` bên dưới (flag này
+    // override NODE_ENV=production, vẫn cài rimraf/nest-cli/tsc...).
     const buildEnv = {
-      ...process.env,
-      ...(input.env ?? {}),
-      PORT: String(input.internalPort),
-      NODE_ENV: 'development',
-    };
-    // Env lúc CHẠY: production.
-    const runEnv = {
       ...process.env,
       ...(input.env ?? {}),
       PORT: String(input.internalPort),
       NODE_ENV: 'production',
     };
+    // Env lúc CHẠY: production.
+    const runEnv = buildEnv;
 
-    // 2. Install (nếu có package.json) — cần devDeps để build
+    // 2. Install (nếu có package.json) — `--include=dev` cài cả devDeps dù NODE_ENV=production
     if (await this.exists(join(workDir, 'package.json'))) {
       const install =
         input.installCommand ||
@@ -76,7 +73,7 @@ export class HostBackendBuilder {
       await this.exec('sh', ['-c', install], workDir, log, buildEnv, input.signal);
     }
 
-    // 3. Build (nếu có lệnh) — dùng buildEnv (có devDeps)
+    // 3. Build (nếu có lệnh) — production env + devDeps đã cài
     if (input.buildCommand) {
       log(`$ ${input.buildCommand}`, 'stdout');
       await this.exec('sh', ['-c', input.buildCommand], workDir, log, buildEnv, input.signal);

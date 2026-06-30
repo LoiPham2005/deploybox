@@ -33,6 +33,9 @@ export function EditProjectForm({ project }: { project: ProjectDetailDto }) {
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
+  // Loại project — đổi được để hiện đúng field (STATIC: output dir; BACKEND: cổng + lệnh chạy)
+  const [type, setType] = useState(project.type);
+
   // Branch picker — dùng token đã lưu của project
   const [selectedBranch, setSelectedBranch] = useState(project.gitBranch);
   const [branches, setBranches] = useState<RemoteBranch[] | null>(null);
@@ -65,24 +68,25 @@ export function EditProjectForm({ project }: { project: ProjectDetailDto }) {
     };
     const dto: UpdateProjectDto = {
       name: s('name'),
+      type,
       gitRepoUrl: s('gitRepoUrl') ?? '',
       gitBranch: s('gitBranch'),
       rootDir: s('rootDir'),
       buildCommand: s('buildCommand'),
-      outputDir: project.type === 'STATIC' ? s('outputDir') : undefined,
-      startCommand: project.type === 'BACKEND' ? s('startCommand') : undefined,
+      outputDir: type === 'STATIC' ? s('outputDir') : undefined,
+      startCommand: type === 'BACKEND' ? s('startCommand') : undefined,
       internalPort:
-        project.type === 'BACKEND' && s('internalPort')
+        type === 'BACKEND' && s('internalPort')
           ? Number(s('internalPort'))
           : undefined,
-      buildImage: project.type === 'MOBILE' ? (s('buildImage') ?? '') : undefined,
-      artifactPath: project.type === 'MOBILE' ? (s('artifactPath') ?? '') : undefined,
+      buildImage: type === 'MOBILE' ? (s('buildImage') ?? '') : undefined,
+      artifactPath: type === 'MOBILE' ? (s('artifactPath') ?? '') : undefined,
       // gitToken: undefined = không đổi, '' = xóa, giá trị = cập nhật
       gitToken: f.has('gitToken') ? (s('gitToken') ?? '') : undefined,
       notifyUrl: s('notifyUrl') ?? '',
       autoDeploy: f.get('autoDeploy') === 'on',
       sleepEnabled: f.get('sleepEnabled') === 'on',
-      useDocker: project.type === 'BACKEND' ? f.get('useDocker') === 'on' : undefined,
+      useDocker: type === 'BACKEND' ? f.get('useDocker') === 'on' : undefined,
     };
     setSaving(true);
     setErr(null);
@@ -102,6 +106,22 @@ export function EditProjectForm({ project }: { project: ProjectDetailDto }) {
       <div>
         <Label htmlFor="name">Tên</Label>
         <Input id="name" name="name" defaultValue={project.name} />
+      </div>
+      <div>
+        <Label htmlFor="type">Loại project</Label>
+        <Select
+          id="type"
+          name="type"
+          value={type}
+          onChange={(e) => setType(e.target.value as typeof type)}
+        >
+          <option value="STATIC">STATIC — web tĩnh (build ra file, serve qua Caddy)</option>
+          <option value="BACKEND">BACKEND — chạy server có cổng (API, Next.js SSR…)</option>
+        </Select>
+        <p className="mt-1 text-xs text-white/30">
+          Next.js/Nuxt SSR hoặc API → chọn <code>BACKEND</code> để có Lệnh chạy + Cổng. SPA (Vite/CRA)
+          build ra <code>dist</code> → <code>STATIC</code>.
+        </p>
       </div>
       <div>
         <Label htmlFor="gitRepoUrl">Git repo URL</Label>
@@ -200,7 +220,7 @@ export function EditProjectForm({ project }: { project: ProjectDetailDto }) {
           defaultValue={project.buildCommand ?? ''}
         />
       </div>
-      {project.type === 'STATIC' && (
+      {type === 'STATIC' && (
         <div>
           <Label htmlFor="outputDir">Output dir</Label>
           <Input
@@ -211,7 +231,7 @@ export function EditProjectForm({ project }: { project: ProjectDetailDto }) {
         </div>
       )}
 
-      {project.type === 'BACKEND' && (
+      {type === 'BACKEND' && (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <Label htmlFor="startCommand">Lệnh chạy</Label>
@@ -252,7 +272,7 @@ export function EditProjectForm({ project }: { project: ProjectDetailDto }) {
         </div>
       )}
 
-      {project.type === 'MOBILE' && (
+      {type === 'MOBILE' && (
         <div className="space-y-3">
           <div>
             <Label htmlFor="buildImage">Docker image build</Label>

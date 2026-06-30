@@ -44,6 +44,7 @@ export type AddDomainDto = z.infer<typeof addDomainSchema>;
 
 export const updateProjectSchema = z.object({
   name: z.string().min(1).max(60).optional(),
+  type: z.enum(['STATIC', 'BACKEND', 'MOBILE']).optional(),
   gitRepoUrl: z.string().url().optional().or(z.literal('')),
   gitBranch: z.string().optional(),
   rootDir: z.string().optional(),
