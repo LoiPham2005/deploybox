@@ -1,0 +1,27 @@
+# Chạy DeployBox bằng Docker — thay cho pm2 native. CHỈ chạy 1 trong 2 (đụng cổng 3000/4000/8080).
+# Dùng:  docker compose up -d --build   |   Dừng: docker compose down   |   Log: docker compose logs -f
+services:
+  deploybox:
+    build: .
+    image: deploybox:local
+    container_name: deploybox
+    restart: unless-stopped
+    ports:
+      - '3000:3000' # Dashboard (web)
+      - '4000:4000' # API
+      - '8080:8080' # Caddy (subdomain app user)
+    env_file:
+      - .env # nạp DATABASE_URL, JWT_SECRET, ENCRYPTION_KEY... vào container
+    volumes:
+      # docker.sock: cho phép deploy app user kiểu Docker-mode (Docker-out-of-Docker)
+      - /var/run/docker.sock:/var/run/docker.sock
+      # builds + app đã deploy. Dùng VOLUME RIÊNG (không bind thư mục host) vì native binary
+      # build trên host (macOS) khác Linux trong container → để container tự build lại (Linux).
+      # Config/env/project vẫn chung qua Supabase → chỉ cần Deploy lại 1 lần trong môi trường mới.
+      - deploybox-data:/app/apps/api/.deploybox-data
+    extra_hosts:
+      # để Caddy trong container gọi được app Docker-mode chạy trên host (nếu dùng)
+      - 'host.docker.internal:host-gateway'
+
+volumes:
+  deploybox-data:
