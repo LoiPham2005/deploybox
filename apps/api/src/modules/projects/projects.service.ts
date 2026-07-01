@@ -18,6 +18,7 @@ import { randomBytes } from 'crypto';
 import { rm } from 'fs/promises';
 import { join, resolve } from 'path';
 import { PrismaService } from '../../infra/prisma/prisma.service';
+import { FeatureFlagsService } from '../../infra/feature-flags/feature-flags.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
 
 function slugify(input: string): string {
@@ -40,6 +41,7 @@ export class ProjectsService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly crypto: CryptoService,
+    private readonly flags: FeatureFlagsService,
   ) {}
 
   // ----- truy cập theo team (nền tảng cô lập tenant) -----
@@ -149,9 +151,10 @@ export class ProjectsService {
     await this.assertRole(userId, teamId, 'OWNER');
 
     const team = await this.prisma.team.findUniqueOrThrow({ where: { id: teamId } });
-    // Admin hệ thống: không giới hạn
+    // Admin hệ thống, hoặc admin đã TẮT giới hạn theo gói → không giới hạn
     const isAdmin = await this.isPlatformAdmin(userId);
-    const limit = isAdmin ? -1 : PLAN_LIMITS[team.plan as 'FREE' | 'PRO'].projects;
+    const noLimit = isAdmin || !this.flags.isEnabled('plan_limits_enabled');
+    const limit = noLimit ? -1 : PLAN_LIMITS[team.plan as 'FREE' | 'PRO'].projects;
     if (limit !== -1) {
       const count = await this.prisma.project.count({ where: { teamId } });
       if (count >= limit) {

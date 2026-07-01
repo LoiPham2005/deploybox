@@ -8,12 +8,16 @@ import { PLAN_LIMITS, isAdminRole } from '@deploybox/shared';
 import type { TeamMemberDto } from '@deploybox/shared';
 import type { TeamRole } from '../../generated/prisma';
 import { PrismaService } from '../../infra/prisma/prisma.service';
+import { FeatureFlagsService } from '../../infra/feature-flags/feature-flags.service';
 
 const ROLE_ORDER: Record<TeamRole, number> = { MEMBER: 0, OWNER: 1 };
 
 @Injectable()
 export class TeamsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly flags: FeatureFlagsService,
+  ) {}
 
   private async assertRole(
     userId: string,
@@ -64,13 +68,14 @@ export class TeamsService {
     await this.assertRole(actorId, teamId, 'OWNER');
 
     const team = await this.prisma.team.findUniqueOrThrow({ where: { id: teamId } });
-    // Admin hệ thống: mời thoải mái, không cần PRO, không giới hạn
+    // Admin hệ thống, hoặc admin đã TẮT giới hạn theo gói → mời thoải mái, không giới hạn
     const isAdmin = await this.isPlatformAdmin(actorId);
-    if (!isAdmin && team.plan !== 'PRO') {
+    const limitsOn = this.flags.isEnabled('plan_limits_enabled');
+    if (!isAdmin && limitsOn && team.plan !== 'PRO') {
       throw new ForbiddenException('Chỉ gói PRO mới được mời thành viên. Nâng cấp để mời.');
     }
 
-    const limit = isAdmin ? -1 : PLAN_LIMITS['PRO'].members;
+    const limit = isAdmin || !limitsOn ? -1 : PLAN_LIMITS['PRO'].members;
     if (limit !== -1) {
       const count = await this.prisma.teamMember.count({ where: { teamId } });
       if (count >= limit) {

@@ -14,6 +14,13 @@ export const KNOWN_FLAGS: {
     description: 'Gửi thông báo deploy (thành công/thất bại) qua Telegram.',
     default: true,
   },
+  {
+    key: 'plan_limits_enabled',
+    label: 'Giới hạn theo gói',
+    description:
+      'Bật: giới hạn số project/thành viên/server theo gói FREE/PRO (cần mua PRO để vượt). Tắt: không giới hạn, miễn phí toàn bộ.',
+    default: true,
+  },
 ];
 
 /**

@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import type { Server, TeamRole } from '../../generated/prisma';
 import { PrismaService } from '../../infra/prisma/prisma.service';
+import { FeatureFlagsService } from '../../infra/feature-flags/feature-flags.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
 import { SshService } from '../../infra/ssh/ssh.service';
 import { PLAN_LIMITS, isAdminRole } from '@deploybox/shared';
@@ -18,6 +19,7 @@ export class ServersService {
     private readonly prisma: PrismaService,
     private readonly crypto: CryptoService,
     private readonly ssh: SshService,
+    private readonly flags: FeatureFlagsService,
   ) {}
 
   private async assertRole(userId: string, teamId: string, min: TeamRole) {
@@ -51,9 +53,10 @@ export class ServersService {
     await this.assertRole(userId, teamId, 'OWNER');
 
     const team = await this.prisma.team.findUniqueOrThrow({ where: { id: teamId } });
-    // Admin hệ thống: không giới hạn
+    // Admin hệ thống, hoặc admin đã TẮT giới hạn theo gói → không giới hạn
     const isAdmin = await this.isPlatformAdmin(userId);
-    const limit = isAdmin ? -1 : PLAN_LIMITS[team.plan as 'FREE' | 'PRO'].servers;
+    const noLimit = isAdmin || !this.flags.isEnabled('plan_limits_enabled');
+    const limit = noLimit ? -1 : PLAN_LIMITS[team.plan as 'FREE' | 'PRO'].servers;
     if (limit !== -1) {
       const count = await this.prisma.server.count({ where: { teamId } });
       if (count >= limit) {
