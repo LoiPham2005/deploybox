@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Menu, X, FolderOpen, Users, Server, Key, User, ShieldCheck, Check, Building2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { TeamDto, UserDto } from '@deploybox/shared';
+import { isAdminRole, type TeamDto, type UserDto } from '@deploybox/shared';
 
 type NavItem = { href: string; label: string; icon: React.ReactNode; exact?: boolean };
 
@@ -171,7 +171,7 @@ export function MobileSidebarTrigger({
               </ul>
             </div>
           ))}
-          {user.isAdmin && (
+          {isAdminRole(user.role) && (
             <div>
               <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-indigo-400/50">
                 System

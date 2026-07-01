@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { PLAN_LIMITS } from '@deploybox/shared';
+import { PLAN_LIMITS, isAdminRole } from '@deploybox/shared';
 import type { TeamMemberDto } from '@deploybox/shared';
 import type { TeamRole } from '../../generated/prisma';
 import { PrismaService } from '../../infra/prisma/prisma.service';
@@ -33,9 +33,9 @@ export class TeamsService {
   private async isPlatformAdmin(userId: string): Promise<boolean> {
     const u = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { isAdmin: true },
+      select: { role: true },
     });
-    return u?.isAdmin === true;
+    return isAdminRole(u?.role);
   }
 
   async listMembers(userId: string, teamId: string): Promise<TeamMemberDto[]> {

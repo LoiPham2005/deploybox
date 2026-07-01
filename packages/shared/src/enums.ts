@@ -76,3 +76,15 @@ export const ServerStatus = {
   OFFLINE: 'OFFLINE',
 } as const;
 export type ServerStatus = (typeof ServerStatus)[keyof typeof ServerStatus];
+
+// Vai trò cấp HỆ THỐNG (khác TeamRole — phạm vi team). Thêm SUPERADMIN/SUPPORT sau chỉ 1 dòng.
+export const UserRole = {
+  USER: 'USER',
+  ADMIN: 'ADMIN',
+} as const;
+export type UserRole = (typeof UserRole)[keyof typeof UserRole];
+
+/** Role có quyền admin hệ thống? Thêm SUPERADMIN sau thì sửa DUY NHẤT ở đây. */
+export function isAdminRole(role: UserRole | string | null | undefined): boolean {
+  return role === 'ADMIN';
+}

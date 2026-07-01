@@ -13,7 +13,7 @@ import {
   ArrowUpRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { TeamDto, UserDto } from '@deploybox/shared';
+import { isAdminRole, type TeamDto, type UserDto } from '@deploybox/shared';
 
 type NavItem = { href: string; label: string; icon: React.ReactNode; exact?: boolean };
 type NavSection = { title: string; items: NavItem[] };
@@ -79,7 +79,7 @@ export function SidebarNav({ user, currentTeam }: { user: UserDto; currentTeam: 
         </div>
       ))}
 
-      {user.isAdmin && (
+      {isAdminRole(user.role) && (
         <div>
           <p className="mb-1 px-2.5 text-[10px] font-semibold uppercase tracking-widest text-indigo-400/50">
             System

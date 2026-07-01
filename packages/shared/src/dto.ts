@@ -9,6 +9,7 @@ import type {
   ServerStatus,
   ServerType,
   TeamRole,
+  UserRole,
 } from './enums';
 
 export interface UserDto {
@@ -16,7 +17,7 @@ export interface UserDto {
   email: string;
   name?: string | null;
   avatarUrl?: string | null;
-  isAdmin?: boolean;
+  role?: UserRole;
 }
 
 export interface TeamDto {

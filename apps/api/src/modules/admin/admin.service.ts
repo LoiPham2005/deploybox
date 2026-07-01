@@ -11,7 +11,7 @@ export class AdminService {
         id: true,
         email: true,
         name: true,
-        isAdmin: true,
+        role: true,
         createdAt: true,
         memberships: {
           where: { team: { isPersonal: true } },

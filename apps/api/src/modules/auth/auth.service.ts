@@ -17,6 +17,7 @@ import type {
   RegisterDto,
   UpdateMeDto,
   UserDto,
+  UserRole,
 } from '@deploybox/shared';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 
@@ -34,7 +35,7 @@ type UserRow = {
   email: string;
   name: string | null;
   avatarUrl: string | null;
-  isAdmin: boolean;
+  role: UserRole;
 };
 
 @Injectable()
@@ -185,6 +186,6 @@ export class AuthService {
   }
 
   private toUserDto(u: UserRow): UserDto {
-    return { id: u.id, email: u.email, name: u.name, avatarUrl: u.avatarUrl, isAdmin: u.isAdmin };
+    return { id: u.id, email: u.email, name: u.name, avatarUrl: u.avatarUrl, role: u.role };
   }
 }

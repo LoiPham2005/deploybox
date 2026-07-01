@@ -4,7 +4,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { PLAN_LIMITS } from '@deploybox/shared';
+import { PLAN_LIMITS, isAdminRole } from '@deploybox/shared';
 import { ConfigService } from '@nestjs/config';
 import type { Deployment, Domain, Project, TeamRole } from '../../generated/prisma';
 import type {
@@ -67,9 +67,9 @@ export class ProjectsService {
   private async isPlatformAdmin(userId: string): Promise<boolean> {
     const u = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { isAdmin: true },
+      select: { role: true },
     });
-    return u?.isAdmin === true;
+    return isAdminRole(u?.role);
   }
 
   /**

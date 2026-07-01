@@ -7,7 +7,7 @@ import type { Server, TeamRole } from '../../generated/prisma';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
 import { SshService } from '../../infra/ssh/ssh.service';
-import { PLAN_LIMITS } from '@deploybox/shared';
+import { PLAN_LIMITS, isAdminRole } from '@deploybox/shared';
 import type { ServerDto, CreateServerDto } from '@deploybox/shared';
 
 const ROLE_ORDER: Record<TeamRole, number> = { MEMBER: 0, OWNER: 1 };
@@ -33,9 +33,9 @@ export class ServersService {
   private async isPlatformAdmin(userId: string): Promise<boolean> {
     const u = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { isAdmin: true },
+      select: { role: true },
     });
-    return u?.isAdmin === true;
+    return isAdminRole(u?.role);
   }
 
   async list(userId: string, teamId: string): Promise<ServerDto[]> {

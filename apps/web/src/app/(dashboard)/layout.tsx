@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { redirect } from 'next/navigation';
+import { isAdminRole } from '@deploybox/shared';
 import { getToken } from '@/lib/auth';
 import { authApi } from '@/lib/api';
 import { LogoutButton } from '@/features/auth/logout-button';
@@ -50,7 +51,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
             <PlanBadge
               plan={currentTeam.plan}
               teamName={currentTeam.name}
-              isAdmin={me.user.isAdmin}
+              isAdmin={isAdminRole(me.user.role)}
             />
           )}
           <div className="flex items-center gap-2 px-1">

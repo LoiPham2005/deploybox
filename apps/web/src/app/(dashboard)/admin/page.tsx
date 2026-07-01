@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import { isAdminRole, type UserRole } from '@deploybox/shared';
 import { getToken } from '@/lib/auth';
 import { authApi } from '@/lib/api';
 import { serverApi } from '@/lib/api-server';
@@ -15,7 +16,7 @@ interface AdminUser {
   id: string;
   email: string;
   name?: string | null;
-  isAdmin: boolean;
+  role: UserRole;
   createdAt: string;
   memberships: Array<{
     team: { id: string; plan: string };
@@ -27,7 +28,7 @@ export default async function AdminPage() {
   if (!token) redirect('/login');
 
   const me = await authApi.me(token).catch(() => redirect('/login'));
-  if (!me.user.isAdmin) redirect('/dashboard');
+  if (!isAdminRole(me.user.role)) redirect('/dashboard');
 
   const [stats, users] = await Promise.all([
     serverApi<AdminStats>('/admin/stats').catch(() => ({ users: 0, teams: 0, projects: 0 })),
@@ -68,7 +69,7 @@ export default async function AdminPage() {
                 <div>
                   <div className="flex items-center gap-2">
                     <p className="font-medium">{u.name ?? u.email}</p>
-                    {u.isAdmin && (
+                    {isAdminRole(u.role) && (
                       <span className="rounded bg-red-500/20 px-1.5 py-0.5 text-xs text-red-400">
                         Admin
                       </span>
