@@ -134,10 +134,11 @@ DeployBox viết cho Unix (`sh`, process group, Caddy). **Windows thuần không
 4. **Copy `.env`** — ⚠️ giữ NGUYÊN: `DATABASE_URL` (Supabase dùng chung), `ENCRYPTION_KEY` (khác key → secret cũ giải mã lỗi), `JWT_SECRET`.
 5. **Build + chạy:** `pnpm install && pnpm build` → `pm2 start ecosystem.config.js`.
 
-### 3 chỗ phải sửa cho WSL/Windows
+### 2 chỗ phải sửa cho WSL/Windows
+> `ecosystem.config.js` không cần sửa path — tự nhận (`__dirname`).
+
 | Mac (hiện tại) | WSL2 (ở nhà) |
 |---|---|
-| `ROOT = '/Users/loipd/...'` trong `ecosystem.config.js` | đổi thành `/home/<tên-bạn>/...` |
 | Auto-start = **launchd** (LaunchAgent) | dùng **`pm2 startup`** → tạo **systemd** |
 | Docker = Colima | Docker Desktop for Windows + bật **WSL2 integration** *(chỉ cần nếu deploy bằng Docker; host-run thì không cần)* |
 

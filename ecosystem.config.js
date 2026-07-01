@@ -1,6 +1,8 @@
 // PM2 — chạy DeployBox ở chế độ production, tự restart khi crash, tự lên khi boot.
 // Dùng: pm2 start ecosystem.config.js  → pm2 save  → cấu hình auto-start (LaunchAgent).
-const ROOT = '/Users/loipd/personal/deploybox';
+// ROOT = thư mục chứa file này → tự nhận đúng đường dẫn ở MỌI máy (Mac / VPS / WSL2),
+// KHÔNG cần sửa tay khi đổi máy.
+const ROOT = __dirname;
 
 module.exports = {
   apps: [
