@@ -10,6 +10,7 @@ import { HostBackendBuilder } from '../../infra/builder/host-backend.builder';
 import { HostRunReconcilerService } from './host-run-reconciler.service';
 import { MobileBuilder } from '../../infra/builder/mobile.builder';
 import { CleanupService } from '../../infra/cleanup/cleanup.service';
+import { NotifyService } from '../../infra/notify/notify.service';
 import { SleepService } from '../../infra/sleep/sleep.service';
 import { LogBroadcastService } from '../../infra/log-broadcast/log-broadcast.service';
 import { WakeController } from './wake.controller';
@@ -39,6 +40,7 @@ const USE_REDIS = !!(process.env.REDIS_URL ?? '');
     DockerBackendEngine,
     HostBackendBuilder,
     HostRunReconcilerService,
+    NotifyService,
     MobileBuilder,
     CleanupService,
     SleepService,

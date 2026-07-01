@@ -8,6 +8,7 @@ import { HostBackendBuilder } from '../../infra/builder/host-backend.builder';
 import { MobileBuilder } from '../../infra/builder/mobile.builder';
 import { CaddyService } from '../../infra/caddy/caddy.service';
 import { CleanupService } from '../../infra/cleanup/cleanup.service';
+import { NotifyService } from '../../infra/notify/notify.service';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 import { LogBroadcastService } from '../../infra/log-broadcast/log-broadcast.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
@@ -37,6 +38,7 @@ export class BuildRunnerService {
     private readonly broadcast: LogBroadcastService,
     private readonly crypto: CryptoService,
     private readonly ssh: SshService,
+    private readonly notify: NotifyService,
   ) {}
 
   /**
@@ -241,6 +243,11 @@ export class BuildRunnerService {
         .sync()
         .catch((e) => log(`Cảnh báo: không cập nhật được Caddy (${e})`, 'stderr'));
       log('=== DEPLOY THÀNH CÔNG ===', 'stdout');
+      await this.notify.deployResult({
+        ok: true,
+        projectName: project.name,
+        branch: project.gitBranch,
+      });
       await this.cleanup
         .pruneProject(project, dataDir)
         .catch((e) => this.logger.warn(`Dọn dẹp lỗi: ${e}`));
@@ -266,6 +273,12 @@ export class BuildRunnerService {
           signal: AbortSignal.timeout(10_000),
         }).catch((e) => this.logger.warn(`Gửi notify thất bại: ${e}`));
       }
+      await this.notify.deployResult({
+        ok: false,
+        projectName: project.name,
+        branch: project.gitBranch,
+        error: msg,
+      });
     } finally {
       clearTimeout(tid);
       this.broadcast.end(deploymentId);
