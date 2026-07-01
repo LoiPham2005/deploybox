@@ -88,6 +88,11 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  // Telegram: chat_id nhận thông báo deploy (user tự nối qua deep-link).
+  // telegramLinkCode = mã tạm sinh khi bấm "Kết nối", khớp với /start <code> để lấy chat_id.
+  telegramChatId   String?
+  telegramLinkCode String? @unique
+
   memberships   TeamMember[]
   apiTokens     ApiToken[]
   projectAccess ProjectMember[]

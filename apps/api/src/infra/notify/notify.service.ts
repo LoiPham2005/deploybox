@@ -7,8 +7,9 @@ function esc(s: string): string {
 }
 
 /**
- * Gửi thông báo deploy. Hiện hỗ trợ Telegram (bật khi có
- * TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID trong .env). Không cấu hình → tự bỏ qua.
+ * Gửi thông báo deploy qua Telegram (1 bot chung của instance).
+ * Người nhận = chat global (TELEGRAM_CHAT_ID, nếu đặt) + danh sách chat_id truyền vào
+ * (thường là các thành viên team đã nối Telegram). Tự dedupe. Không có ai → bỏ qua.
  */
 @Injectable()
 export class NotifyService {
@@ -16,12 +17,14 @@ export class NotifyService {
 
   constructor(private readonly config: ConfigService) {}
 
-  /** Gửi 1 message tới Telegram (im lặng nếu chưa cấu hình / lỗi mạng). */
-  async telegram(text: string): Promise<void> {
-    const token = this.config.get<string>('TELEGRAM_BOT_TOKEN');
-    const chatId = this.config.get<string>('TELEGRAM_CHAT_ID');
-    if (!token || !chatId) return; // chưa bật → bỏ qua
+  private token(): string {
+    return this.config.get<string>('TELEGRAM_BOT_TOKEN') ?? '';
+  }
 
+  /** Gửi 1 message tới 1 chat_id cụ thể (im lặng nếu chưa cấu hình / lỗi). */
+  async telegram(chatId: string, text: string): Promise<void> {
+    const token = this.token();
+    if (!token || !chatId) return;
     try {
       const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
         method: 'POST',
@@ -35,21 +38,25 @@ export class NotifyService {
         signal: AbortSignal.timeout(10_000),
       });
       if (!res.ok) {
-        this.logger.warn(`Telegram trả lỗi ${res.status}: ${(await res.text()).slice(0, 200)}`);
+        this.logger.warn(`Telegram trả lỗi ${res.status} (chat ${chatId}): ${(await res.text()).slice(0, 200)}`);
       }
     } catch (e) {
       this.logger.warn(`Gửi Telegram thất bại: ${e instanceof Error ? e.message : e}`);
     }
   }
 
-  /** Thông báo kết quả deploy (thành công / thất bại) — format sẵn cho Telegram. */
-  async deployResult(opts: {
-    ok: boolean;
-    projectName: string;
-    branch?: string | null;
-    url?: string | null;
-    error?: string | null;
-  }): Promise<void> {
+  /**
+   * Thông báo kết quả deploy tới global + `extraRecipients` (dedupe).
+   * @param extraRecipients chat_id thêm (vd thành viên team đã nối Telegram)
+   */
+  async deployResult(
+    opts: { ok: boolean; projectName: string; branch?: string | null; url?: string | null; error?: string | null },
+    extraRecipients: string[] = [],
+  ): Promise<void> {
+    const global = this.config.get<string>('TELEGRAM_CHAT_ID') ?? '';
+    const recipients = [...new Set([global, ...extraRecipients].filter(Boolean))];
+    if (!recipients.length) return;
+
     const icon = opts.ok ? '✅' : '❌';
     const status = opts.ok ? 'THÀNH CÔNG' : 'THẤT BẠI';
     const lines = [
@@ -58,6 +65,8 @@ export class NotifyService {
     ];
     if (opts.ok && opts.url) lines.push(`🔗 ${esc(opts.url)}`);
     if (!opts.ok && opts.error) lines.push(`⚠️ <code>${esc(opts.error.slice(0, 350))}</code>`);
-    await this.telegram(lines.join('\n'));
+    const text = lines.join('\n');
+
+    for (const chatId of recipients) await this.telegram(chatId, text);
   }
 }

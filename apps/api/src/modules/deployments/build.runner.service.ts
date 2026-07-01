@@ -41,6 +41,17 @@ export class BuildRunnerService {
     private readonly notify: NotifyService,
   ) {}
 
+  /** chat_id Telegram của các thành viên team đã nối (để gửi thông báo deploy). */
+  private async telegramRecipients(teamId: string): Promise<string[]> {
+    const members = await this.prisma.teamMember.findMany({
+      where: { teamId },
+      select: { user: { select: { telegramChatId: true } } },
+    });
+    return members
+      .map((m) => m.user.telegramChatId)
+      .filter((x): x is string => !!x);
+  }
+
   /**
    * Inject PAT vào HTTPS clone URL. Tự detect kiểu xác thực theo prefix token + host
    * để hỗ trợ GitHub (classic + fine-grained), GitLab và Bitbucket access token.
@@ -243,11 +254,10 @@ export class BuildRunnerService {
         .sync()
         .catch((e) => log(`Cảnh báo: không cập nhật được Caddy (${e})`, 'stderr'));
       log('=== DEPLOY THÀNH CÔNG ===', 'stdout');
-      await this.notify.deployResult({
-        ok: true,
-        projectName: project.name,
-        branch: project.gitBranch,
-      });
+      await this.notify.deployResult(
+        { ok: true, projectName: project.name, branch: project.gitBranch },
+        await this.telegramRecipients(project.teamId),
+      );
       await this.cleanup
         .pruneProject(project, dataDir)
         .catch((e) => this.logger.warn(`Dọn dẹp lỗi: ${e}`));
@@ -273,12 +283,10 @@ export class BuildRunnerService {
           signal: AbortSignal.timeout(10_000),
         }).catch((e) => this.logger.warn(`Gửi notify thất bại: ${e}`));
       }
-      await this.notify.deployResult({
-        ok: false,
-        projectName: project.name,
-        branch: project.gitBranch,
-        error: msg,
-      });
+      await this.notify.deployResult(
+        { ok: false, projectName: project.name, branch: project.gitBranch, error: msg },
+        await this.telegramRecipients(project.teamId).catch(() => []),
+      );
     } finally {
       clearTimeout(tid);
       this.broadcast.end(deploymentId);
