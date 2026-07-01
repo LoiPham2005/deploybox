@@ -25,6 +25,9 @@ export const envSchema = z.object({
   ACME_EMAIL: z.string().default(''),
   WEB_UPSTREAM: z.string().default('localhost:3000'),
   API_UPSTREAM: z.string().default('localhost:4000'),
+  // Thông báo deploy qua Telegram (tùy chọn). Có cả 2 = bật; để trống = tắt.
+  TELEGRAM_BOT_TOKEN: z.string().default(''),
+  TELEGRAM_CHAT_ID: z.string().default(''),
 });
 
 export type AppEnv = z.infer<typeof envSchema>;
