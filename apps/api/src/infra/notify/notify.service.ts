@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
 
 /** Escape ký tự HTML để không vỡ message Telegram (parse_mode HTML). */
 function esc(s: string): string {
@@ -15,7 +16,10 @@ function esc(s: string): string {
 export class NotifyService {
   private readonly logger = new Logger(NotifyService.name);
 
-  constructor(private readonly config: ConfigService) {}
+  constructor(
+    private readonly config: ConfigService,
+    private readonly flags: FeatureFlagsService,
+  ) {}
 
   private token(): string {
     return this.config.get<string>('TELEGRAM_BOT_TOKEN') ?? '';
@@ -53,6 +57,9 @@ export class NotifyService {
     opts: { ok: boolean; projectName: string; branch?: string | null; url?: string | null; error?: string | null },
     extraRecipients: string[] = [],
   ): Promise<void> {
+    // Admin tắt tính năng này thì không gửi gì (vd lúc bảo trì).
+    if (!this.flags.isEnabled('telegram_notifications')) return;
+
     const global = this.config.get<string>('TELEGRAM_CHAT_ID') ?? '';
     const recipients = [...new Set([global, ...extraRecipients].filter(Boolean))];
     if (!recipients.length) return;

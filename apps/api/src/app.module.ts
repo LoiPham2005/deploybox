@@ -5,6 +5,7 @@ import { validateEnv } from './config/config.schema';
 import { CryptoModule } from './common/crypto/crypto.module';
 import { MetricsModule } from './infra/metrics/metrics.module';
 import { PrismaModule } from './infra/prisma/prisma.module';
+import { FeatureFlagsModule } from './infra/feature-flags/feature-flags.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { HealthModule } from './modules/health/health.module';
 import { ProjectsModule } from './modules/projects/projects.module';
@@ -44,6 +45,7 @@ const REDIS_URL = process.env.REDIS_URL ?? '';
         ]
       : []),
     PrismaModule,
+    FeatureFlagsModule,
     CryptoModule,
     MetricsModule,
     AuthModule,

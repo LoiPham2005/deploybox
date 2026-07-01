@@ -21,3 +21,20 @@ export async function setPlanAction(
     return { ok: false, error: e instanceof Error ? e.message : 'Đổi plan thất bại' };
   }
 }
+
+/** Admin bật/tắt 1 tính năng hệ thống. */
+export async function toggleFeatureAction(
+  key: string,
+  enabled: boolean,
+): Promise<Result> {
+  try {
+    await serverApi(`/admin/features/${key}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ enabled }),
+    });
+    revalidatePath('/admin');
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Đổi tính năng thất bại' };
+  }
+}

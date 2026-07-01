@@ -288,3 +288,12 @@ model ApiToken {
 
   @@index([userId])
 }
+
+// Cờ bật/tắt tính năng toàn hệ thống (admin quản). Seed từ danh sách biết trước trong code.
+model FeatureFlag {
+  key         String   @id
+  enabled     Boolean  @default(true)
+  label       String
+  description String?
+  updatedAt   DateTime @updatedAt
+}

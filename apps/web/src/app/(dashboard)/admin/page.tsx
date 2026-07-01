@@ -5,6 +5,7 @@ import { authApi } from '@/lib/api';
 import { serverApi } from '@/lib/api-server';
 import { Card } from '@/components/ui/card';
 import { PlanToggle } from './plan-toggle';
+import { FeatureFlagsPanel, type Feature } from './feature-flags-panel';
 
 interface AdminStats {
   users: number;
@@ -30,9 +31,10 @@ export default async function AdminPage() {
   const me = await authApi.me(token).catch(() => redirect('/login'));
   if (!isAdminRole(me.user.role)) redirect('/dashboard');
 
-  const [stats, users] = await Promise.all([
+  const [stats, users, features] = await Promise.all([
     serverApi<AdminStats>('/admin/stats').catch(() => ({ users: 0, teams: 0, projects: 0 })),
     serverApi<AdminUser[]>('/admin/users').catch(() => [] as AdminUser[]),
+    serverApi<Feature[]>('/admin/features').catch(() => [] as Feature[]),
   ]);
 
   return (
@@ -57,6 +59,15 @@ export default async function AdminPage() {
           <p className="mt-1 text-3xl font-bold">{stats.projects}</p>
         </Card>
       </div>
+
+      {/* Tính năng hệ thống */}
+      <Card>
+        <h2 className="mb-1 text-sm font-semibold text-white/70">Tính năng hệ thống</h2>
+        <p className="mb-4 text-xs text-white/40">
+          Bật/tắt tính năng toàn hệ thống (áp dụng cho mọi người dùng) — vd tắt tạm khi bảo trì.
+        </p>
+        <FeatureFlagsPanel features={features} />
+      </Card>
 
       {/* Users list */}
       <Card>

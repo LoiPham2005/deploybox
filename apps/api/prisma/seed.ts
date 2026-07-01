@@ -10,8 +10,8 @@ async function main() {
   // Có personal team riêng, không phải admin hệ thống
   const owner = await prisma.user.upsert({
     where: { email: 'owner@deploybox.local' },
-    update: { name: 'Owner Test', passwordHash, isAdmin: false },
-    create: { email: 'owner@deploybox.local', name: 'Owner Test', passwordHash, isAdmin: false },
+    update: { name: 'Owner Test', passwordHash, role: 'USER' },
+    create: { email: 'owner@deploybox.local', name: 'Owner Test', passwordHash, role: 'USER' },
   });
 
   const ownerTeam = await prisma.team.upsert({
@@ -42,8 +42,8 @@ async function main() {
   // Có personal team riêng + được mời vào team của Owner
   const member = await prisma.user.upsert({
     where: { email: 'member@deploybox.local' },
-    update: { name: 'Member Test', passwordHash, isAdmin: false },
-    create: { email: 'member@deploybox.local', name: 'Member Test', passwordHash, isAdmin: false },
+    update: { name: 'Member Test', passwordHash, role: 'USER' },
+    create: { email: 'member@deploybox.local', name: 'Member Test', passwordHash, role: 'USER' },
   });
 
   // Personal team của member
@@ -72,8 +72,8 @@ async function main() {
   // Platform admin, có personal team riêng
   const admin = await prisma.user.upsert({
     where: { email: 'admin@deploybox.local' },
-    update: { name: 'Admin Test', passwordHash, isAdmin: true },
-    create: { email: 'admin@deploybox.local', name: 'Admin Test', passwordHash, isAdmin: true },
+    update: { name: 'Admin Test', passwordHash, role: 'ADMIN' },
+    create: { email: 'admin@deploybox.local', name: 'Admin Test', passwordHash, role: 'ADMIN' },
   });
 
   const adminTeam = await prisma.team.upsert({
