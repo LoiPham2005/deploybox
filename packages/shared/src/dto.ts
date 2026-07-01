@@ -52,6 +52,26 @@ export interface ProjectSummary {
   };
 }
 
+/** Kết quả AI "bác sĩ lỗi deploy" — đọc log thất bại, chỉ nguyên nhân + cách sửa. */
+export interface AiDiagnosis {
+  cause: string; // Nguyên nhân gốc (tiếng Việt)
+  fix: string; // Cách sửa (tiếng Việt)
+  commands: string[]; // Lệnh / đoạn config cần chạy hoặc sửa (có thể rỗng)
+  // Trường cấu hình project nên sửa (để sau có thể auto-apply), 'none' nếu không có
+  configField:
+    | 'installCommand'
+    | 'buildCommand'
+    | 'startCommand'
+    | 'outputDir'
+    | 'internalPort'
+    | 'rootDir'
+    | 'none';
+  configValue: string; // Giá trị đề xuất cho configField ('' nếu none)
+  confidence: 'cao' | 'trung bình' | 'thấp';
+  model: string; // Model đã dùng
+  createdAt: string; // ISO time chẩn đoán
+}
+
 export interface DeploymentDetail {
   id: string;
   projectId: string;
@@ -63,6 +83,7 @@ export interface DeploymentDetail {
   startedAt?: string | null;
   finishedAt?: string | null;
   errorMessage?: string | null;
+  aiDiagnosis?: AiDiagnosis | null;
 }
 
 export interface AddDomainResponse {

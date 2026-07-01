@@ -8,8 +8,8 @@ import {
   Optional,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { type Deployment, ProjectType } from '../../generated/prisma';
-import type { DeploymentDetail, DeploymentView } from '@deploybox/shared';
+import { type Deployment, Prisma, ProjectType } from '../../generated/prisma';
+import type { AiDiagnosis, DeploymentDetail, DeploymentView } from '@deploybox/shared';
 import { Queue } from 'bullmq';
 import { readFile, rm } from 'fs/promises';
 import { join, resolve } from 'path';
@@ -20,6 +20,7 @@ import { HostBackendBuilder } from '../../infra/builder/host-backend.builder';
 import { CaddyService } from '../../infra/caddy/caddy.service';
 import { SleepService } from '../../infra/sleep/sleep.service';
 import { BuildRunnerService } from './build.runner.service';
+import { AiService } from '../../infra/ai/ai.service';
 import { BUILD_QUEUE, type BuildJobData } from './queue.constants';
 
 @Injectable()
@@ -34,6 +35,7 @@ export class DeploymentsService {
     private readonly sleepSvc: SleepService,
     private readonly runner: BuildRunnerService,
     private readonly hostBackend: HostBackendBuilder,
+    private readonly ai: AiService,
     @Optional() @InjectQueue(BUILD_QUEUE) private readonly buildQueue: Queue<BuildJobData> | null,
   ) {
     if (buildQueue) {
@@ -334,6 +336,42 @@ export class DeploymentsService {
       startedAt: d.startedAt?.toISOString() ?? null,
       finishedAt: d.finishedAt?.toISOString() ?? null,
       errorMessage: d.errorMessage,
+      aiDiagnosis: (d.aiDiagnosis as unknown as AiDiagnosis | null) ?? null,
     };
+  }
+
+  /**
+   * AI "bác sĩ lỗi deploy": đọc log bản deploy này → nguyên nhân + cách sửa.
+   * Lưu kết quả vào deployment.aiDiagnosis (cache) để lần sau không gọi lại.
+   */
+  async diagnose(userId: string, deploymentId: string): Promise<DeploymentDetail> {
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      include: { project: true },
+    });
+    if (!deployment) throw new NotFoundException('Không tìm thấy deployment');
+    await this.assertProjectAccess(userId, deployment.project);
+
+    const p = deployment.project;
+    const log = await this.readLogs(deploymentId);
+    const diagnosis = await this.ai.diagnose({
+      projectName: p.name,
+      projectType: p.type,
+      useDocker: p.useDocker,
+      installCommand: p.installCommand,
+      buildCommand: p.buildCommand,
+      startCommand: p.startCommand,
+      outputDir: p.outputDir,
+      internalPort: p.internalPort,
+      rootDir: p.rootDir,
+      errorMessage: deployment.errorMessage,
+      log,
+    });
+
+    const updated = await this.prisma.deployment.update({
+      where: { id: deploymentId },
+      data: { aiDiagnosis: diagnosis as unknown as Prisma.InputJsonValue },
+    });
+    return this.toDetail(updated);
   }
 }

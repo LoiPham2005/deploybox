@@ -21,6 +21,13 @@ export const KNOWN_FLAGS: {
       'Bật: giới hạn số project/thành viên/server theo gói FREE/PRO (cần mua PRO để vượt). Tắt: không giới hạn, miễn phí toàn bộ.',
     default: true,
   },
+  {
+    key: 'ai_features',
+    label: 'AI bác sĩ lỗi deploy',
+    description:
+      'Bật: khi deploy thất bại, AI đọc log và gợi ý nguyên nhân + cách sửa (cần ANTHROPIC_API_KEY). Tắt: không gọi AI.',
+    default: true,
+  },
 ];
 
 /**

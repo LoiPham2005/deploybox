@@ -228,6 +228,9 @@ model Deployment {
   logKey       String?
   errorMessage String?
 
+  // Kết quả AI "bác sĩ lỗi deploy" (nguyên nhân + cách sửa). Null = chưa chẩn đoán.
+  aiDiagnosis  Json?
+
   queuedAt   DateTime  @default(now())
   startedAt  DateTime?
   finishedAt DateTime?

@@ -28,6 +28,11 @@ export const envSchema = z.object({
   // Thông báo deploy qua Telegram (tùy chọn). Có cả 2 = bật; để trống = tắt.
   TELEGRAM_BOT_TOKEN: z.string().default(''),
   TELEGRAM_CHAT_ID: z.string().default(''),
+  // AI "bác sĩ lỗi deploy" (tùy chọn). Có key = bật; để trống = tắt.
+  ANTHROPIC_API_KEY: z.string().default(''),
+  // Model dùng cho AI. Mặc định Opus 4.8 (mạnh nhất); đổi sang claude-sonnet-5
+  // hoặc claude-haiku-4-5 nếu muốn rẻ hơn.
+  AI_MODEL: z.string().default('claude-opus-4-8'),
 });
 
 export type AppEnv = z.infer<typeof envSchema>;

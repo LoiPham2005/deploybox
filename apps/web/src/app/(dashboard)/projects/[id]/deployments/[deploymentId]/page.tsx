@@ -9,6 +9,7 @@ import { AutoRefresh } from '@/features/deployments/auto-refresh';
 import { RollbackButton } from '@/features/deployments/rollback-button';
 import { LogStream } from '@/features/deployments/log-stream';
 import { RuntimeLog } from '@/features/deployments/runtime-log';
+import { AiDiagnosis } from '@/features/deployments/ai-diagnosis';
 
 const TERMINAL = ['RUNNING', 'FAILED', 'STOPPED', 'CANCELLED'];
 
@@ -97,6 +98,13 @@ export default async function DeploymentPage({
         <Card className="border-red-500/20">
           <p className="text-sm text-red-300">{deployment.errorMessage}</p>
         </Card>
+      )}
+
+      {deployment.status === 'FAILED' && (
+        <AiDiagnosis
+          deploymentId={deployment.id}
+          initial={deployment.aiDiagnosis ?? null}
+        />
       )}
 
       <Card>

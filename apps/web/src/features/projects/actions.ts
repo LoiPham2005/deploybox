@@ -6,6 +6,7 @@ import {
   updateProjectSchema,
   upsertEnvSchema,
   type AddDomainResponse,
+  type AiDiagnosis,
   type CreateProjectDto,
   type DeploymentDetail,
   type ProjectSummary,
@@ -157,6 +158,23 @@ export async function rollbackAction(
     return {
       ok: false,
       error: e instanceof Error ? e.message : 'Rollback thất bại',
+    };
+  }
+}
+
+export async function diagnoseDeploymentAction(
+  deploymentId: string,
+): Promise<ActionResult<AiDiagnosis>> {
+  try {
+    const dep = await serverApi<DeploymentDetail>(
+      `/deployments/${deploymentId}/diagnose`,
+      { method: 'POST' },
+    );
+    return { ok: true, data: dep.aiDiagnosis ?? undefined };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : 'AI chẩn đoán thất bại',
     };
   }
 }

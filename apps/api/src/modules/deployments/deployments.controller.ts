@@ -103,6 +103,15 @@ export class DeploymentsController {
     return this.deployments.rollback(user.sub, deploymentId);
   }
 
+  /** AI chẩn đoán lỗi deploy: đọc log → nguyên nhân + cách sửa. */
+  @Post('deployments/:deploymentId/diagnose')
+  diagnose(
+    @CurrentUser() user: JwtPayload,
+    @Param('deploymentId') deploymentId: string,
+  ) {
+    return this.deployments.diagnose(user.sub, deploymentId);
+  }
+
   /** SSE: stream build log realtime. Replay file trước, rồi stream live. */
   @Get('deployments/:deploymentId/logs/stream')
   async streamBuildLogs(
