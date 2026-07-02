@@ -9,6 +9,7 @@ import { getSelectedTeam } from '@/lib/team';
 import { SidebarNav, PlanBadge } from '@/components/sidebar-nav';
 import { MobileSidebarTrigger } from '@/components/mobile-sidebar';
 import { CopilotWidget } from '@/features/copilot/copilot-widget';
+import { LogoMark } from '@/components/logo';
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
   const token = getToken();
@@ -30,9 +31,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
       <aside className="hidden lg:flex w-[220px] shrink-0 flex-col border-r border-white/[0.07]">
         {/* Brand */}
         <div className="flex items-center gap-2.5 px-4 py-3.5 border-b border-white/[0.07]">
-          <div className="flex h-6 w-6 items-center justify-center rounded-md bg-indigo-600 shadow-lg shadow-indigo-900/50">
-            <span className="text-[11px] font-black text-white">D</span>
-          </div>
+          <LogoMark size={24} className="shadow-lg shadow-indigo-900/50 rounded-md" />
           <span className="text-sm font-bold tracking-tight">DeployBox</span>
         </div>
 
@@ -80,9 +79,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 
           {/* Mobile: logo (lg= hidden since sidebar shows it) */}
           <div className="flex items-center gap-2 lg:hidden">
-            <div className="flex h-6 w-6 items-center justify-center rounded-md bg-indigo-600">
-              <span className="text-[11px] font-black text-white">D</span>
-            </div>
+            <LogoMark size={24} />
             <span className="text-sm font-bold">DeployBox</span>
           </div>
 

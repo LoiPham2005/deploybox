@@ -1,0 +1,5 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Bản không nền (dùng trên nền sáng/tối tuỳ màu stroke) -->
+  <path d="M120 240 V386 H392 V240" stroke="#6366F1" stroke-width="52" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M256 344 V120 M180 196 L256 120 L332 196" stroke="#6366F1" stroke-width="52" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
