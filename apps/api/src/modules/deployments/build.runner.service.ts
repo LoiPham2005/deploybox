@@ -336,6 +336,9 @@ export class BuildRunnerService {
         data: { status: 'STOPPED', finishedAt: new Date() },
       });
 
+      // 📚 Deploy thành công ngay sau 1 bản FAILED có chẩn đoán → cách sửa đó hiệu quả → HỌC
+      void this.learnFromRecovery(project.id, deploymentId, dataDir).catch(() => undefined);
+
       await this.prisma.domain.updateMany({
         where: { projectId: project.id, isPrimary: true },
         data: { status: 'ACTIVE' },
@@ -392,6 +395,27 @@ export class BuildRunnerService {
       clearTimeout(tid);
       this.broadcast.end(deploymentId);
     }
+  }
+
+  /** 📚 Bản TRƯỚC fail + có chẩn đoán, bản NÀY thành công → lưu cách sửa vào trí nhớ. */
+  private async learnFromRecovery(
+    projectId: string,
+    currentDeploymentId: string,
+    dataDir: string,
+  ): Promise<void> {
+    const prev = await this.prisma.deployment.findFirst({
+      where: { projectId, id: { not: currentDeploymentId } },
+      orderBy: { queuedAt: 'desc' },
+      select: { id: true, status: true, errorMessage: true, aiDiagnosis: true },
+    });
+    if (!prev || prev.status !== 'FAILED' || !prev.aiDiagnosis) return;
+    const prevLog = await readFile(join(dataDir, 'logs', `${prev.id}.log`), 'utf8').catch(() => '');
+    await this.ai.learnFix({
+      projectId,
+      errorMessage: prev.errorMessage,
+      logTail: prevLog,
+      diagnosis: prev.aiDiagnosis as unknown as import('@deploybox/shared').AiDiagnosis,
+    });
   }
 
   /** Ảnh chụp nhẹ repo ĐÃ CLONE trên máy (cho AI sinh Dockerfile): cây 2 cấp + file chìa khóa. */
@@ -476,19 +500,23 @@ export class BuildRunnerService {
         ? await readFile(this.hostBackend.runtimeLog(dataDir, project.slug), 'utf8').catch(() => '')
         : await this.docker.logsTail(`deploybox-${project.slug}`, 200).catch(() => '');
 
-    const diagnosis = await this.ai.tryDiagnose({
-      projectName: project.name,
-      projectType: project.type,
-      useDocker: project.useDocker,
-      installCommand: project.installCommand,
-      buildCommand: project.buildCommand,
-      startCommand: project.startCommand,
-      outputDir: project.outputDir,
-      internalPort: project.internalPort,
-      rootDir: project.rootDir,
-      errorMessage: `Smoke test thất bại: ${detail}`,
-      log: `[RUNTIME LOG — deploy xong nhưng smoke test thất bại]\n${runtimeLog.slice(-12_000)}`,
-    });
+    const diagnosis = await this.ai.tryDiagnose(
+      {
+        projectId: project.id,
+        projectName: project.name,
+        projectType: project.type,
+        useDocker: project.useDocker,
+        installCommand: project.installCommand,
+        buildCommand: project.buildCommand,
+        startCommand: project.startCommand,
+        outputDir: project.outputDir,
+        internalPort: project.internalPort,
+        rootDir: project.rootDir,
+        errorMessage: `Smoke test thất bại: ${detail}`,
+        log: `[RUNTIME LOG — deploy xong nhưng smoke test thất bại]\n${runtimeLog.slice(-12_000)}`,
+      },
+      'smoke',
+    );
 
     await this.prisma.deployment.update({
       where: { id: deploymentId },
@@ -572,19 +600,23 @@ export class BuildRunnerService {
     const log = await readFile(logFile, 'utf8').catch(() => '');
     if (!log && !errorMessage) return;
 
-    const diagnosis = await this.ai.tryDiagnose({
-      projectName: project.name,
-      projectType: project.type,
-      useDocker: project.useDocker,
-      installCommand: project.installCommand,
-      buildCommand: project.buildCommand,
-      startCommand: project.startCommand,
-      outputDir: project.outputDir,
-      internalPort: project.internalPort,
-      rootDir: project.rootDir,
-      errorMessage,
-      log,
-    });
+    const diagnosis = await this.ai.tryDiagnose(
+      {
+        projectId: project.id,
+        projectName: project.name,
+        projectType: project.type,
+        useDocker: project.useDocker,
+        installCommand: project.installCommand,
+        buildCommand: project.buildCommand,
+        startCommand: project.startCommand,
+        outputDir: project.outputDir,
+        internalPort: project.internalPort,
+        rootDir: project.rootDir,
+        errorMessage,
+        log,
+      },
+      'auto_diagnosis',
+    );
     if (!diagnosis) return;
 
     await this.prisma.deployment.update({

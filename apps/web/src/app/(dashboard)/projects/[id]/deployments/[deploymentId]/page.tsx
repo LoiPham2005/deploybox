@@ -11,6 +11,7 @@ import { LogStream } from '@/features/deployments/log-stream';
 import { RuntimeLog } from '@/features/deployments/runtime-log';
 import { AiDiagnosis } from '@/features/deployments/ai-diagnosis';
 import { LogSummary } from '@/features/deployments/log-summary';
+import { ReleaseNotes } from '@/features/deployments/release-notes';
 
 const TERMINAL = ['RUNNING', 'FAILED', 'STOPPED', 'CANCELLED'];
 
@@ -112,6 +113,7 @@ export default async function DeploymentPage({
       <Card>
         <div className="mb-3">
           <LogSummary deploymentId={deployment.id} />
+          <ReleaseNotes deploymentId={deployment.id} />
         </div>
         <LogStream
           deploymentId={deployment.id}

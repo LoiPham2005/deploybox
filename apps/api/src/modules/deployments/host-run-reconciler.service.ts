@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { readFile } from 'fs/promises';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import { resolve } from 'path';
 import type { Prisma } from '../../generated/prisma';
 import { PrismaService } from '../../infra/prisma/prisma.service';
@@ -20,6 +22,11 @@ import { opsTip } from '../git/secret-scan.util';
 const SWEEP_MS = 60_000;
 const MAX_CRASHES = 3;
 const CRASH_WINDOW_MS = 10 * 60_000;
+const execFileAsync = promisify(execFile);
+// 📈 RAM: giữ tối đa 120 mẫu (~2h), cảnh báo khi tăng ≥1.5x và ≥150MB trong ≥30 phút
+const RSS_KEEP = 120;
+const RSS_MIN_SAMPLES = 30;
+const RSS_COOLDOWN_MS = 6 * 60 * 60_000;
 
 interface WatchedProject {
   id: string;
@@ -61,6 +68,10 @@ export class HostRunReconcilerService
   private logSize = new Map<string, number>();
   /** projectId → lần cảnh báo sớm gần nhất (cooldown 30 phút, tránh spam) */
   private warnedAt = new Map<string, number>();
+  /** projectId → lịch sử RAM (MB) theo phút — phát hiện tăng đều (memory leak) */
+  private rssHistory = new Map<string, { t: number; mb: number }[]>();
+  /** projectId → lần cảnh báo RAM gần nhất (cooldown 6h) */
+  private rssWarnedAt = new Map<string, number>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -120,6 +131,8 @@ export class HostRunReconcilerService
         if (await this.hostBackend.isRunning(dataDir, project.slug)) {
           // App còn sống → soi lỗi mới trong runtime log (cảnh báo sớm trước khi chết)
           await this.checkErrorSpike(project, dataDir).catch(() => undefined);
+          // 📈 + lấy mẫu RAM để phát hiện tăng đều (memory leak)
+          await this.checkMemoryTrend(project, dataDir).catch(() => undefined);
           continue;
         }
         await this.handleCrash(project, dataDir);
@@ -170,6 +183,56 @@ export class HostRunReconcilerService
         windowSec: 60,
         sample: errLines.slice(0, 3).map((l) => l.slice(0, 160)),
         tip: this.flags.aiEnabled('ai_ops_tips') ? opsTip(fresh) : '',
+      },
+      members.map((m) => m.user.telegramChatId).filter((x): x is string => !!x),
+    );
+  }
+
+  /**
+   * 📈 Lấy mẫu RAM (RSS) mỗi vòng quét; RAM tăng ≥1.5x VÀ ≥150MB trong ≥30 phút
+   * → báo Telegram nghi memory leak. Cooldown 6h/project. (Lịch sử ở RAM — mất khi restart API.)
+   */
+  private async checkMemoryTrend(project: WatchedProject, dataDir: string): Promise<void> {
+    if (!this.flags.aiEnabled('ai_metrics_anomaly')) return;
+
+    const pid = await this.hostBackend.getPid(dataDir, project.slug);
+    if (!pid) return;
+    const rssKb = await execFileAsync('ps', ['-o', 'rss=', '-p', String(pid)])
+      .then((r) => parseInt(r.stdout.trim(), 10))
+      .catch(() => NaN);
+    if (!Number.isFinite(rssKb) || rssKb <= 0) return;
+
+    const mb = Math.round(rssKb / 1024);
+    const hist = this.rssHistory.get(project.id) ?? [];
+    hist.push({ t: Date.now(), mb });
+    while (hist.length > RSS_KEEP) hist.shift();
+    this.rssHistory.set(project.id, hist);
+    if (hist.length < RSS_MIN_SAMPLES) return;
+
+    const third = Math.floor(hist.length / 3);
+    const avg = (arr: { mb: number }[]) => arr.reduce((s, x) => s + x.mb, 0) / arr.length;
+    const first = avg(hist.slice(0, third));
+    const last = avg(hist.slice(-third));
+    if (!(last >= first * 1.5 && last - first >= 150)) return;
+
+    const now = Date.now();
+    if (now - (this.rssWarnedAt.get(project.id) ?? 0) < RSS_COOLDOWN_MS) return;
+    this.rssWarnedAt.set(project.id, now);
+
+    const minutes = Math.round((hist[hist.length - 1].t - hist[0].t) / 60_000);
+    this.logger.warn(
+      `RAM bất thường: ${project.slug} ${Math.round(first)}MB → ${Math.round(last)}MB trong ~${minutes} phút`,
+    );
+    const members = await this.prisma.teamMember.findMany({
+      where: { teamId: project.teamId },
+      select: { user: { select: { telegramChatId: true } } },
+    });
+    await this.notify.resourceAnomaly(
+      {
+        projectName: project.name,
+        fromMb: Math.round(first),
+        toMb: Math.round(last),
+        minutes,
       },
       members.map((m) => m.user.telegramChatId).filter((x): x is string => !!x),
     );
@@ -251,6 +314,7 @@ export class HostRunReconcilerService
     let diagnosis = null;
     if (crashLog && sig && this.diagnosedSig.get(project.id) !== sig) {
       diagnosis = await this.ai.tryDiagnose({
+        projectId: project.id,
         projectName: project.name,
         projectType: project.type,
         useDocker: project.useDocker,
@@ -262,7 +326,7 @@ export class HostRunReconcilerService
         rootDir: project.rootDir,
         errorMessage: 'App đang chạy thì bị crash (process chết)',
         log: `[RUNTIME LOG — app crash khi đang chạy]\n${crashLog}`,
-      });
+      }, 'watchdog');
       if (diagnosis) {
         this.diagnosedSig.set(project.id, sig);
         // Lưu vào bản deploy mới nhất để web hiện card AI

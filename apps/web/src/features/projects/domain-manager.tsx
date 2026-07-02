@@ -8,6 +8,7 @@ import {
   deleteDomainAction,
   setPrimaryDomainAction,
   verifyDomainAction,
+  diagnoseDomainAction,
 } from './actions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -73,6 +74,18 @@ export function DomainManager({
     router.refresh();
   }
 
+  const [dnsAdvice, setDnsAdvice] = useState<string | null>(null);
+  const [diagId, setDiagId] = useState<string | null>(null);
+  async function onDiagnose(id: string) {
+    setDiagId(id);
+    setDnsAdvice(null);
+    setError(null);
+    const res = await diagnoseDomainAction(id);
+    setDiagId(null);
+    if (res.ok && res.data) setDnsAdvice(res.data.advice);
+    else if (!res.ok) setError(res.error);
+  }
+
   return (
     <div className="space-y-3">
       <ul className="space-y-1 text-sm">
@@ -94,6 +107,16 @@ export function DomainManager({
                   <span title={s.hint} className={`cursor-help ${s.cls}`}>{s.label}</span>
                 );
               })()}
+              {d.isPrimary && d.status !== 'ACTIVE' && (
+                <button
+                  type="button"
+                  onClick={() => onDiagnose(d.id)}
+                  disabled={diagId === d.id}
+                  className="text-sky-400 hover:underline"
+                >
+                  {diagId === d.id ? 'đang tra…' : '🩺 AI'}
+                </button>
+              )}
               {!d.isPrimary && (
                 <>
                   {d.status === 'ACTIVE' && (
@@ -107,14 +130,24 @@ export function DomainManager({
                     </button>
                   )}
                   {d.status !== 'ACTIVE' && (
-                    <button
-                      type="button"
-                      onClick={() => onVerify(d.id)}
-                      disabled={busy}
-                      className="text-indigo-400 hover:underline"
-                    >
-                      verify
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => onVerify(d.id)}
+                        disabled={busy}
+                        className="text-indigo-400 hover:underline"
+                      >
+                        verify
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onDiagnose(d.id)}
+                        disabled={diagId === d.id}
+                        className="text-sky-400 hover:underline"
+                      >
+                        {diagId === d.id ? 'đang tra…' : '🩺 AI'}
+                      </button>
+                    </>
                   )}
                   <button
                     type="button"
@@ -130,6 +163,11 @@ export function DomainManager({
           </li>
         ))}
       </ul>
+      {dnsAdvice && (
+        <div className="whitespace-pre-wrap rounded-lg border border-sky-500/20 bg-sky-500/5 p-3 text-xs leading-relaxed text-white/75">
+          🩺 {dnsAdvice}
+        </div>
+      )}
 
       <form onSubmit={onAdd} className="flex gap-2">
         <Input

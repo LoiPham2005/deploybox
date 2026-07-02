@@ -9,6 +9,7 @@ import type {
 import { PrismaService } from '../prisma/prisma.service';
 import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
 import type { LlmProvider } from './providers/llm-provider';
+import { errorSig } from './error-sig.util';
 import { AnthropicProvider } from './providers/anthropic.provider';
 import { OpenaiProvider } from './providers/openai.provider';
 import { GeminiProvider } from './providers/gemini.provider';
@@ -86,10 +87,29 @@ const SUGGESTION_SCHEMA: Record<string, unknown> = {
       description: 'Tên các biến môi trường app cần lúc chạy/build (đọc từ .env.example, code). Rỗng nếu không thấy.',
     },
     reason: { type: 'string', description: 'Giải thích ngắn gọn (1–2 câu, tiếng Việt) vì sao nhận diện như vậy.' },
+    apps: {
+      type: 'array',
+      description:
+        'MONOREPO: repo chứa NHIỀU app deploy độc lập (vd backend + web) → liệt kê TẤT CẢ app ở đây (kể cả app chính). Repo chỉ 1 app → mảng RỖNG.',
+      items: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Tên ngắn gợi ý, vd "backend", "web".' },
+          type: { type: 'string', enum: ['STATIC', 'BACKEND', 'MOBILE'] },
+          rootDir: { type: 'string', description: 'Thư mục của app này trong repo.' },
+          buildCommand: { type: 'string' },
+          startCommand: { type: 'string', description: '"" nếu không phải BACKEND.' },
+          outputDir: { type: 'string', description: '"" nếu không phải STATIC.' },
+          internalPort: { type: 'integer', description: '0 nếu không phải BACKEND. Mỗi app 1 cổng KHÁC nhau.' },
+        },
+        required: ['name', 'type', 'rootDir', 'buildCommand', 'startCommand', 'outputDir', 'internalPort'],
+        additionalProperties: false,
+      },
+    },
   },
   required: [
     'type', 'framework', 'rootDir', 'installCommand', 'buildCommand', 'startCommand',
-    'outputDir', 'internalPort', 'buildImage', 'artifactPath', 'envKeys', 'reason',
+    'outputDir', 'internalPort', 'buildImage', 'artifactPath', 'envKeys', 'reason', 'apps',
   ],
   additionalProperties: false,
 };
@@ -112,7 +132,10 @@ Quy tắc QUAN TRỌNG:
 - buildImage (MOBILE): CHỈ dùng image công khai CÓ THẬT trên registry, vd "ghcr.io/cirruslabs/flutter:stable" hoặc "cirrusci/flutter:stable". Không tự bịa tên image.
 - MOBILE có flavor (android/app/build.gradle có productFlavors) → buildCommand kèm --flavor và artifactPath đúng tên file flavor (vd app-prod-release.apk).
 - LUÔN điền framework (tên framework chính) và reason (1–2 câu tiếng Việt) — không để trống.
-- envKeys: liệt kê từ .env.example và những biến bắt buộc thấy trong config.`;
+- envKeys: liệt kê từ .env.example và những biến bắt buộc thấy trong config.
+- MONOREPO: nếu repo chứa NHIỀU app deploy độc lập (vd apps/backend + apps/web, hoặc backend/ + frontend/),
+  điền app QUAN TRỌNG NHẤT vào các trường gốc và liệt kê TẤT CẢ app vào mảng "apps"
+  (mỗi app đúng rootDir + lệnh + cổng riêng, cổng không trùng nhau). Repo 1 app → apps = [].`;
 
 export interface AnalyzeRepoInput {
   repoUrl: string;
@@ -146,6 +169,7 @@ Quy tắc:
 - Câu hỏi ngoài phạm vi DeployBox/deploy → từ chối nhẹ nhàng, nói bạn chỉ hỗ trợ về deploy.`;
 
 export interface DiagnoseInput {
+  projectId?: string; // để khớp "trí nhớ sửa lỗi" theo project
   projectName: string;
   projectType: string; // STATIC | BACKEND | MOBILE
   useDocker: boolean;
@@ -228,6 +252,113 @@ export class AiService {
     return this.cfgCache;
   }
 
+
+  /** Gọi provider + ghi nhật ký token (best-effort, flag ai_usage_tracking) → trả data. */
+  private async run(
+    feature: string,
+    provider: LlmProvider,
+    model: string,
+    opts: { system: string; user: string; schema: Record<string, unknown> },
+  ): Promise<Record<string, unknown>> {
+    const res = await provider.complete({ model, ...opts });
+    if (this.flags.aiEnabled('ai_usage_tracking')) {
+      void this.prisma.aiUsage
+        .create({
+          data: {
+            feature,
+            provider: provider.id,
+            model,
+            inputTokens: res.inputTokens,
+            outputTokens: res.outputTokens,
+          },
+        })
+        .catch(() => undefined);
+    }
+    return res.data;
+  }
+
+  /** Như run() nhưng kèm 1 ảnh (vision). */
+  private async runVision(
+    feature: string,
+    provider: LlmProvider,
+    model: string,
+    opts: { system: string; user: string; schema: Record<string, unknown>; imageBase64: string; imageMime: string },
+  ): Promise<Record<string, unknown>> {
+    const res = await provider.completeVision({ model, ...opts });
+    if (this.flags.aiEnabled('ai_usage_tracking')) {
+      void this.prisma.aiUsage
+        .create({
+          data: {
+            feature,
+            provider: provider.id,
+            model,
+            inputTokens: res.inputTokens,
+            outputTokens: res.outputTokens,
+          },
+        })
+        .catch(() => undefined);
+    }
+    return res.data;
+  }
+
+  /** Provider hiện hành nếu dùng được, kèm thông báo lỗi thân thiện. */
+  private async requireProvider(): Promise<{ provider: LlmProvider; model: string }> {
+    if (!this.isEnabled()) {
+      throw new BadRequestException('Tính năng AI đang tắt (Admin → Tính năng hệ thống).');
+    }
+    const cfg = await this.getConfig();
+    const provider = this.providers[cfg.provider];
+    if (!provider.isConfigured()) {
+      throw new BadRequestException(
+        `Server chưa có API key cho ${provider.label} — admin thêm key hoặc đổi nhà cung cấp.`,
+      );
+    }
+    return { provider, model: cfg.model };
+  }
+
+  /** 💰 Tổng hợp chi phí AI theo tính năng/model (ước tính theo bảng giá public). */
+  async usageSummary(days = 30) {
+    const since = new Date(Date.now() - days * 86_400_000);
+    const rows = await this.prisma.aiUsage.groupBy({
+      by: ['feature', 'provider', 'model'],
+      where: { createdAt: { gte: since } },
+      _count: { _all: true },
+      _sum: { inputTokens: true, outputTokens: true },
+    });
+    const priceFor = (model: string): { in: number; out: number } => {
+      const m = model.toLowerCase();
+      if (m.includes('opus')) return { in: 5, out: 25 };
+      if (m.includes('sonnet')) return { in: 3, out: 15 };
+      if (m.includes('haiku')) return { in: 1, out: 5 };
+      if (m.includes('mini')) return { in: 0.15, out: 0.6 };
+      if (m.includes('gpt')) return { in: 2.5, out: 10 };
+      if (m.includes('gemini')) return { in: 0.1, out: 0.4 };
+      return { in: 1, out: 5 };
+    };
+    const items = rows
+      .map((r) => {
+        const inTok = r._sum.inputTokens ?? 0;
+        const outTok = r._sum.outputTokens ?? 0;
+        const p = priceFor(r.model);
+        return {
+          feature: r.feature,
+          provider: r.provider,
+          model: r.model,
+          calls: r._count._all,
+          inputTokens: inTok,
+          outputTokens: outTok,
+          estCostUsd: +((inTok / 1e6) * p.in + (outTok / 1e6) * p.out).toFixed(4),
+        };
+      })
+      .sort((a, b) => b.estCostUsd - a.estCostUsd);
+    return {
+      days,
+      items,
+      totalCalls: items.reduce((s, i) => s + i.calls, 0),
+      totalUsd: +items.reduce((s, i) => s + i.estCostUsd, 0).toFixed(4),
+    };
+  }
+
   /** Admin đổi provider + model dùng toàn app. */
   async setConfig(provider: string, model: string): Promise<AiConfigStatus> {
     const p = this.normProvider(provider);
@@ -270,12 +401,17 @@ export class AiService {
   }
 
   /** Chẩn đoán lỗi deploy. Ném lỗi thân thiện nếu tắt / chưa cấu hình / gọi AI thất bại. */
-  async diagnose(input: DiagnoseInput): Promise<AiDiagnosis> {
+  async diagnose(input: DiagnoseInput, feature = 'diagnosis'): Promise<AiDiagnosis> {
     if (!this.isEnabled()) {
       throw new BadRequestException(
         'Tính năng AI chẩn đoán đang tắt. Admin bật lại ở tab Admin → Tính năng hệ thống.',
       );
     }
+
+    // 📚 Trí nhớ sửa lỗi: lỗi trùng với ca đã sửa THÀNH CÔNG → trả từ lịch sử, 0 đồng
+    const remembered = await this.recallFix(input);
+    if (remembered) return remembered;
+
     const cfg = await this.getConfig();
     const provider = this.providers[cfg.provider];
     if (!provider.isConfigured()) {
@@ -285,8 +421,7 @@ export class AiService {
     }
 
     try {
-      const raw = await provider.complete({
-        model: cfg.model,
+      const raw = await this.run(feature, provider, cfg.model, {
         system: SYSTEM_PROMPT,
         user: this.buildUserContent(input),
         schema: DIAGNOSIS_SCHEMA,
@@ -335,8 +470,7 @@ export class AiService {
     ].join('\n');
 
     try {
-      const raw = await provider.complete({
-        model: cfg.model,
+      const raw = await this.run('analyze', provider, cfg.model, {
         system: ANALYZE_SYSTEM_PROMPT,
         user,
         schema: SUGGESTION_SCHEMA,
@@ -370,6 +504,20 @@ export class AiService {
         ? raw.envKeys.filter((k): k is string => typeof k === 'string').slice(0, 30)
         : [],
       reason: str(raw.reason),
+      apps: Array.isArray(raw.apps)
+        ? (raw.apps as Record<string, unknown>[]).slice(0, 6).map((a) => {
+            const p = Number(a.internalPort);
+            return {
+              name: str(a.name) || 'app',
+              type: a.type === 'BACKEND' || a.type === 'MOBILE' ? a.type : ('STATIC' as const),
+              rootDir: str(a.rootDir) || '.',
+              buildCommand: str(a.buildCommand),
+              startCommand: str(a.startCommand),
+              outputDir: str(a.outputDir),
+              internalPort: Number.isInteger(p) && p > 0 && p <= 65535 ? p : 0,
+            };
+          })
+        : [],
     };
   }
 
@@ -393,8 +541,7 @@ export class AiService {
       .map(([p, c]) => `--- ${p} ---\n${c}`)
       .join('\n\n');
     try {
-      const raw = await provider.complete({
-        model: cfg.model,
+      const raw = await this.run('dockerfile', provider, cfg.model, {
         system: [
           'Bạn là kỹ sư DevOps. Sinh Dockerfile PRODUCTION cho repo dưới đây.',
           'Quy tắc:',
@@ -454,8 +601,7 @@ export class AiService {
         ? logText.slice(0, 6_000) + '\n...(lược bớt giữa)...\n' + logText.slice(-14_000)
         : logText;
     try {
-      const raw = await provider.complete({
-        model: cfg.model,
+      const raw = await this.run('summary', provider, cfg.model, {
         system:
           'Bạn là kỹ sư DevOps. Tóm tắt build/deploy log thành 3–6 dòng tiếng Việt, plain text: ' +
           'diễn biến chính theo thứ tự, thời điểm đáng chú ý (cài đặt, build, chạy), cảnh báo/lỗi nếu có. Không bịa.',
@@ -492,8 +638,7 @@ export class AiService {
       );
     }
     try {
-      const raw = await provider.complete({
-        model: cfg.model,
+      const raw = await this.run('answer', provider, cfg.model, {
         system: ANSWER_SYSTEM_PROMPT,
         user: [
           'DỮ LIỆU PROJECT CỦA NGƯỜI DÙNG:',
@@ -513,12 +658,236 @@ export class AiService {
     }
   }
 
-  /** Bản "best-effort": trả null thay vì ném lỗi (dùng ở đường nền — notify, webhook). */
-  async tryDiagnose(input: DiagnoseInput): Promise<AiDiagnosis | null> {
+  /** 🖼 Đọc ảnh lỗi (bot Telegram): chẩn đoán từ ảnh chụp màn hình. */
+  async analyzeImage(
+    question: string,
+    context: string,
+    imageBase64: string,
+    imageMime: string,
+  ): Promise<string> {
+    const { provider, model } = await this.requireProvider();
     try {
-      return await this.diagnose(input);
+      const raw = await this.runVision('photo', provider, model, {
+        system:
+          'Bạn là kỹ sư DevOps. Người dùng gửi ẢNH chụp màn hình (log lỗi, trang lỗi, terminal…). ' +
+          'Đọc kỹ nội dung trong ảnh → chẩn đoán vấn đề + cách xử lý, tiếng Việt, ngắn gọn (~8 dòng), plain text. ' +
+          'Ảnh không liên quan lỗi/kỹ thuật → nói thẳng là không thấy lỗi gì trong ảnh. Không bịa.',
+        user: [
+          context ? `DỮ LIỆU PROJECT CỦA NGƯỜI DÙNG:\n${context}\n` : '',
+          `CÂU HỎI KÈM ẢNH: ${question || 'Ảnh này bị lỗi gì và sửa thế nào?'}`,
+        ].join('\n'),
+        schema: {
+          type: 'object',
+          properties: { answer: { type: 'string', description: 'Chẩn đoán + cách sửa, tiếng Việt, plain text.' } },
+          required: ['answer'],
+          additionalProperties: false,
+        },
+        imageBase64,
+        imageMime,
+      });
+      const answer = String(raw.answer ?? '').trim();
+      if (!answer) throw new Error('AI không trả về câu trả lời');
+      return answer;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      this.logger.warn(`AI đọc ảnh thất bại: ${msg}`);
+      throw new BadRequestException(`Gọi ${provider.label} thất bại: ${msg}`);
+    }
+  }
+
+  /** 📝 Release notes: tóm tắt danh sách commit thành changelog tiếng Việt. */
+  async releaseNotes(projectName: string, commits: string[]): Promise<string> {
+    const { provider, model } = await this.requireProvider();
+    try {
+      const raw = await this.run('release_notes', provider, model, {
+        system:
+          'Bạn viết release notes tiếng Việt từ danh sách commit. Gọn, dễ hiểu cho người không code. ' +
+          'Nhóm theo: ✨ Tính năng mới / 🐛 Sửa lỗi / 🔧 Khác (bỏ nhóm rỗng). ' +
+          'Mỗi dòng 1 gạch đầu dòng, gộp commit trùng ý, bỏ commit vô nghĩa (wip, typo…). Plain text.',
+        user: `Project: ${projectName}\n\nCOMMITS (mới → cũ):\n${commits.join('\n').slice(0, 8_000)}`,
+        schema: {
+          type: 'object',
+          properties: { notes: { type: 'string', description: 'Release notes tiếng Việt, plain text.' } },
+          required: ['notes'],
+          additionalProperties: false,
+        },
+      });
+      const notes = String(raw.notes ?? '').trim();
+      if (!notes) throw new Error('AI không trả về nội dung');
+      return notes;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      throw new BadRequestException(`Gọi ${provider.label} thất bại: ${msg}`);
+    }
+  }
+
+  /** ⚙️ Sinh GitHub Actions workflow gọi API deploy của project. */
+  async generateCi(input: {
+    projectName: string;
+    branch: string;
+    apiUrl: string;
+    projectId: string;
+  }): Promise<string> {
+    const { provider, model } = await this.requireProvider();
+    try {
+      const raw = await this.run('ci_generator', provider, model, {
+        system:
+          'Bạn là kỹ sư DevOps. Sinh file GitHub Actions workflow YAML hợp lệ, chú thích tiếng Việt. ' +
+          'KHÔNG bịa secret — dùng đúng ${{ secrets.DEPLOYBOX_TOKEN }}. Chỉ trả YAML trong field json.',
+        user: [
+          `Sinh workflow cho project "${input.projectName}":`,
+          `- Kích hoạt: push lên nhánh "${input.branch}"`,
+          `- Việc duy nhất: gọi API deploy của DeployBox:`,
+          `  curl -f -X POST "${input.apiUrl}/api/v1/projects/${input.projectId}/deploy" \\`,
+          `    -H "Authorization: Bearer \${{ secrets.DEPLOYBOX_TOKEN }}"`,
+          `- Thêm chú thích hướng dẫn: tạo token ở DeployBox → Settings → API Tokens,`,
+          `  rồi thêm vào GitHub repo → Settings → Secrets với tên DEPLOYBOX_TOKEN.`,
+        ].join('\n'),
+        schema: {
+          type: 'object',
+          properties: { yaml: { type: 'string', description: 'Nội dung file .github/workflows/deploy.yml' } },
+          required: ['yaml'],
+          additionalProperties: false,
+        },
+      });
+      const yaml = String(raw.yaml ?? '').trim();
+      if (!yaml.includes('on:')) throw new Error('AI không trả về workflow hợp lệ');
+      return yaml;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      throw new BadRequestException(`Gọi ${provider.label} thất bại: ${msg}`);
+    }
+  }
+
+  /** 🤖 Copilot: 1 lượt chat — trả lời + (tuỳ) đề xuất hành động cần user xác nhận. */
+  async copilotTurn(params: {
+    question: string;
+    history: string; // các lượt trước, dạng text
+    context: string; // dữ liệu project user có quyền xem
+    onboarding: boolean;
+  }): Promise<{ reply: string; action: 'none' | 'deploy' | 'stop'; projectSlug: string }> {
+    const { provider, model } = await this.requireProvider();
+    const base =
+      'Bạn là Copilot của DeployBox (nền tảng tự deploy), chat trong dashboard. ' +
+      'CHỈ dựa vào DỮ LIỆU PROJECT được cấp — không bịa. Trả lời tiếng Việt, ngắn gọn, plain text. ' +
+      'Không lộ giá trị env/token/mật khẩu. ' +
+      'Nếu user muốn deploy lại / tắt app: KHÔNG tự làm — đặt action="deploy"|"stop" + projectSlug đúng, ' +
+      'reply giải thích ngắn; hệ thống sẽ hiện nút xác nhận. Không chắc app nào → hỏi lại, action="none".';
+    const onboardingExtra =
+      ' NGƯỜI DÙNG MỚI (chưa có project): dẫn từng bước một — 1) chuẩn bị repo GitHub, ' +
+      '2) vào "Tạo project" dán repo URL + bấm "✨ Tự nhận diện cấu hình (AI)", 3) bấm Tạo rồi Deploy, ' +
+      '4) xem log/domain ở trang project. Mỗi lượt chỉ hướng dẫn 1 bước, hỏi lại khi xong.';
+    try {
+      const raw = await this.run('copilot', provider, model, {
+        system: base + (params.onboarding ? onboardingExtra : ''),
+        user: [
+          'DỮ LIỆU PROJECT:',
+          params.context || '(chưa có project nào)',
+          '',
+          params.history ? `HỘI THOẠI TRƯỚC:\n${params.history}\n` : '',
+          `NGƯỜI DÙNG: ${params.question}`,
+        ].join('\n'),
+        schema: {
+          type: 'object',
+          properties: {
+            reply: { type: 'string', description: 'Câu trả lời tiếng Việt, plain text.' },
+            action: { type: 'string', enum: ['none', 'deploy', 'stop'], description: 'Hành động đề xuất (cần user xác nhận).' },
+            projectSlug: { type: 'string', description: 'Slug project cho action; "" nếu action=none.' },
+          },
+          required: ['reply', 'action', 'projectSlug'],
+          additionalProperties: false,
+        },
+      });
+      const action = raw.action === 'deploy' || raw.action === 'stop' ? raw.action : 'none';
+      return {
+        reply: String(raw.reply ?? '').trim() || 'Mình chưa hiểu ý bạn, nói rõ hơn nhé?',
+        action,
+        projectSlug: action === 'none' ? '' : String(raw.projectSlug ?? '').trim(),
+      };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      throw new BadRequestException(`Gọi ${provider.label} thất bại: ${msg}`);
+    }
+  }
+
+  /** Bản "best-effort": trả null thay vì ném lỗi (dùng ở đường nền — notify, webhook). */
+  async tryDiagnose(input: DiagnoseInput, feature = 'diagnosis'): Promise<AiDiagnosis | null> {
+    try {
+      return await this.diagnose(input, feature);
     } catch {
       return null;
+    }
+  }
+
+  /** 📚 Tìm trong trí nhớ: lỗi cùng chữ ký đã có cách sửa ĐÃ CHỨNG MINH chưa. */
+  private async recallFix(input: DiagnoseInput): Promise<AiDiagnosis | null> {
+    if (!this.flags.aiEnabled('ai_fix_memory')) return null;
+    try {
+      const sig = errorSig(input.errorMessage, input.log);
+      // Ưu tiên bản ghi cùng project, rồi tới bản ghi chung
+      const hit = await this.prisma.fixMemory.findFirst({
+        where: { errorSig: sig, verified: true },
+        orderBy: [{ projectId: input.projectId ? 'desc' : 'asc' }, { hits: 'desc' }],
+      });
+      if (!hit) return null;
+      await this.prisma.fixMemory.update({
+        where: { id: hit.id },
+        data: { hits: { increment: 1 } },
+      });
+      this.logger.log(`📚 Trí nhớ sửa lỗi khớp (sig ${sig.slice(0, 8)}, hits ${hit.hits + 1}) — không gọi AI.`);
+      return {
+        cause: hit.cause,
+        fix: `${hit.fix}\n\n📚 Lỗi này từng gặp và đã sửa THÀNH CÔNG bằng cách trên (dùng lại lần thứ ${hit.hits + 1}).`,
+        commands: [],
+        configField: (hit.configField as AiDiagnosis['configField']) ?? 'none',
+        configValue: hit.configValue ?? '',
+        confidence: 'cao',
+        model: '📚 Trí nhớ DeployBox (0 đồng)',
+        createdAt: new Date().toISOString(),
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * 📚 Học: gọi khi deploy THÀNH CÔNG ngay sau 1 bản FAILED có chẩn đoán —
+   * tức là cách sửa đó đã hiệu quả → lưu (chữ ký lỗi → cách sửa) verified.
+   */
+  async learnFix(params: {
+    projectId: string;
+    errorMessage: string | null;
+    logTail: string;
+    diagnosis: AiDiagnosis;
+  }): Promise<void> {
+    if (!this.flags.aiEnabled('ai_fix_memory')) return;
+    try {
+      const sig = errorSig(params.errorMessage, params.logTail);
+      const existing = await this.prisma.fixMemory.findFirst({
+        where: { errorSig: sig, projectId: params.projectId },
+      });
+      if (existing) {
+        await this.prisma.fixMemory.update({
+          where: { id: existing.id },
+          data: { verified: true, cause: params.diagnosis.cause, fix: params.diagnosis.fix },
+        });
+      } else {
+        await this.prisma.fixMemory.create({
+          data: {
+            projectId: params.projectId,
+            errorSig: sig,
+            cause: params.diagnosis.cause,
+            fix: params.diagnosis.fix,
+            configField:
+              params.diagnosis.configField === 'none' ? null : params.diagnosis.configField,
+            configValue: params.diagnosis.configValue || null,
+            verified: true,
+          },
+        });
+      }
+      this.logger.log(`📚 Đã học cách sửa lỗi (sig ${sig.slice(0, 8)}) từ ca fail→thành công.`);
+    } catch {
+      /* best-effort */
     }
   }
 

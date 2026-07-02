@@ -310,3 +310,35 @@ model Setting {
   value     String
   updatedAt DateTime @updatedAt
 }
+
+// 📚 "Trí nhớ sửa lỗi": lỗi đã gặp + cách sửa ĐÃ CHỨNG MINH hiệu quả (fail → fix → deploy OK).
+// Lỗi mới trùng chữ ký → trả lời từ đây, không tốn AI.
+model FixMemory {
+  id          String   @id @default(cuid())
+  projectId   String?  // ưu tiên khớp cùng project; null = dùng chung
+  errorSig    String   // chữ ký lỗi đã chuẩn hoá (bỏ số/id/đường dẫn)
+  cause       String
+  fix         String
+  configField String?
+  configValue String?
+  verified    Boolean  @default(false) // fix này đã dẫn tới deploy thành công
+  hits        Int      @default(0) // số lần được dùng lại
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([errorSig])
+}
+
+// 💰 Nhật ký gọi AI (đếm token để tính chi phí theo tính năng/model)
+model AiUsage {
+  id           String   @id @default(cuid())
+  feature      String   // diagnosis | auto_diagnosis | analyze | summary | answer | dockerfile | report
+  provider     String
+  model        String
+  inputTokens  Int      @default(0)
+  outputTokens Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([feature])
+}

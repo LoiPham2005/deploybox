@@ -24,6 +24,13 @@ export class AdminController {
     return { days: d, text: text || '(Không có hoạt động nào trong kỳ)' };
   }
 
+  /** 💰 Chi phí AI theo tính năng/model (ước tính, ?days=30). */
+  @Get('ai-usage')
+  aiUsage(@Query('days') days?: string) {
+    const d = days ? parseInt(days, 10) || 30 : 30;
+    return this.ai.usageSummary(Math.min(Math.max(d, 1), 365));
+  }
+
   /** Cấu hình AI: provider/model đang chọn + danh sách nhà cung cấp. */
   @Get('ai')
   aiConfig() {

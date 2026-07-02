@@ -8,6 +8,21 @@ import { PlanToggle } from './plan-toggle';
 import { FeatureFlagsPanel, type Feature } from './feature-flags-panel';
 import { AiConfigPanel } from './ai-config-panel';
 
+interface AiUsageSummary {
+  days: number;
+  totalCalls: number;
+  totalUsd: number;
+  items: Array<{
+    feature: string;
+    provider: string;
+    model: string;
+    calls: number;
+    inputTokens: number;
+    outputTokens: number;
+    estCostUsd: number;
+  }>;
+}
+
 interface AdminStats {
   users: number;
   teams: number;
@@ -32,11 +47,12 @@ export default async function AdminPage() {
   const me = await authApi.me(token).catch(() => redirect('/login'));
   if (!isAdminRole(me.user.role)) redirect('/dashboard');
 
-  const [stats, users, features, aiConfig] = await Promise.all([
+  const [stats, users, features, aiConfig, aiUsage] = await Promise.all([
     serverApi<AdminStats>('/admin/stats').catch(() => ({ users: 0, teams: 0, projects: 0 })),
     serverApi<AdminUser[]>('/admin/users').catch(() => [] as AdminUser[]),
     serverApi<Feature[]>('/admin/features').catch(() => [] as Feature[]),
     serverApi<AiConfigStatus>('/admin/ai').catch(() => null),
+    serverApi<AiUsageSummary>('/admin/ai-usage?days=30').catch(() => null),
   ]);
 
   return (
@@ -82,6 +98,50 @@ export default async function AdminPage() {
             deploy) trên toàn hệ thống. Đổi lúc nào cũng được.
           </p>
           <AiConfigPanel config={aiConfig} />
+        </Card>
+      )}
+
+      {/* 💰 Chi phí AI */}
+      {aiUsage && (
+        <Card>
+          <h2 className="mb-1 text-sm font-semibold text-white/70">
+            💰 Chi phí AI ({aiUsage.days} ngày qua)
+          </h2>
+          <p className="mb-3 text-xs text-white/40">
+            {aiUsage.totalCalls} lượt gọi · ước tính{' '}
+            <span className="font-semibold text-emerald-300">${aiUsage.totalUsd}</span>{' '}
+            (theo bảng giá public — chỉ để tham khảo)
+          </p>
+          {aiUsage.items.length === 0 ? (
+            <p className="text-xs text-white/30">Chưa có lượt gọi AI nào được ghi.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead className="text-white/40">
+                  <tr className="border-b border-white/10 text-left">
+                    <th className="py-1.5 pr-3">Tính năng</th>
+                    <th className="py-1.5 pr-3">Model</th>
+                    <th className="py-1.5 pr-3 text-right">Lượt</th>
+                    <th className="py-1.5 pr-3 text-right">Token vào/ra</th>
+                    <th className="py-1.5 text-right">~$</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5 text-white/70">
+                  {aiUsage.items.map((r) => (
+                    <tr key={`${r.feature}-${r.model}`}>
+                      <td className="py-1.5 pr-3">{r.feature}</td>
+                      <td className="py-1.5 pr-3 text-white/50">{r.model}</td>
+                      <td className="py-1.5 pr-3 text-right">{r.calls}</td>
+                      <td className="py-1.5 pr-3 text-right text-white/50">
+                        {(r.inputTokens / 1000).toFixed(1)}k / {(r.outputTokens / 1000).toFixed(1)}k
+                      </td>
+                      <td className="py-1.5 text-right text-emerald-300">${r.estCostUsd}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </Card>
       )}
 

@@ -161,8 +161,7 @@ multi-stage (đúng port, Prisma generate, layer cache) → ghi vào workdir + i
 
 ---
 
-## 🗺️ Lộ trình chính: ✅ ĐÃ XONG 19/19 (8 gốc + Đợt 1 + Đợt 2)
-Còn lại: Vòng 3 (5 ý cuối) + Đợt 3 (khi thành sản phẩm) — xem bên dưới.
+## 🗺️ Lộ trình: ✅ ĐÃ XONG TẤT CẢ 31/31 (8 gốc + Đợt 1 + Đợt 2 + Vòng 3 + Đợt 3)
 
 ---
 
@@ -170,20 +169,81 @@ Còn lại: Vòng 3 (5 ý cuối) + Đợt 3 (khi thành sản phẩm) — xem b
 
 ### ~~Đợt 1~~ — ✅ XONG (mục 9–13) · ~~Đợt 2~~ — ✅ XONG (mục 14–19)
 
-### Vòng 3 — 5 ý tưởng MỚI cuối cùng (góc khác hẳn, sau đó nên coi là ĐỦ)
+### ~~Vòng 3~~ — ✅ ĐÃ LÀM XONG CẢ 5 (xem mục 20–24)
 
-| # | Ý tưởng | Mô tả | Cỡ | Vì sao đáng |
-|---|---|---|---|---|
-| A | **Học từ lịch sử sửa lỗi** 🌟 | Lỗi mới giống lỗi CŨ đã từng sửa thành công (aiDiagnosis + fix đã áp dụng + deploy sau đó OK) → trả lời NGAY từ lịch sử, không tốn AI, kèm "lần trước bạn sửa bằng cách X". Hệ thống tự khôn dần theo thời gian | Vừa | Biến 13 tính năng hiện có thành vòng lặp TỰ HỌC — không nhà nào (Coolify/Vercel) có |
-| B | **Bot Telegram thao tác được** | Nhắn bot "deploy lại sports-booking-web" / "tắt app X" → bot xác nhận → làm thật (đúng RBAC, có confirm). Copilot thu nhỏ, không cần mở máy | Vừa | Bot đã có sẵn auth + quyền; chỉ thêm hành động |
-| C | **Theo dõi chi phí AI** | Log token/lượt gọi từng tính năng AI vào DB → card Admin "AI đã tốn ~$X tháng này, tính năng nào tốn nhất" + gợi ý đổi model rẻ | Nhỏ | Quản chính con AI — cần khi bật nhiều tính năng |
-| D | **Nhận diện monorepo đa app** | Repo chứa cả backend + web (như sports_booking) → "Tự nhận diện" đề xuất TẠO NHIỀU project cùng lúc, mỗi cái đúng rootDir/config | Vừa | Đúng pain thật của bạn (2 app tách 2 repo vì chưa hỗ trợ) |
-| E | **Cảnh báo bất thường từ metrics** | Đã có prom-client: AI xem RAM/CPU theo thời gian → "app X RAM tăng đều 3 ngày, nghi memory leak" — khác cảnh báo theo log | Vừa | Tận dụng metrics đang có sẵn mà chưa ai đọc |
+### 20. 📚 Học từ lịch sử sửa lỗi (A)
+Deploy thành công ngay sau 1 bản FAILED có chẩn đoán → hệ thống **tự học**: lưu
+(chữ ký lỗi → cách sửa) vào bảng `FixMemory` (verified). Lỗi mới trùng chữ ký →
+trả lời **ngay từ trí nhớ, 0 đồng**, model hiện "📚 Trí nhớ DeployBox" + đếm số lần dùng lại.
+- Chữ ký lỗi (`error-sig.util.ts`): chuẩn hoá bỏ id/số/timestamp → cùng "bệnh" = cùng sig
+- Áp dụng cho MỌI đường chẩn đoán (thủ công, tự động, watchdog, smoke) — flag `ai_fix_memory`
+- Đã test live: trồng trí nhớ → diagnose trả từ lịch sử trong 1.5s, hits +1 ✓
 
-> Sau Vòng 3, lời khuyên: **DỪNG thêm tính năng AI mới** — chuyển sang dùng thật hằng ngày
-> để lọc cái nào đáng giữ, cái nào thừa. Nền tảng đã đủ để mở rộng bất cứ lúc nào.
+### 21. 🎮 Bot Telegram thao tác được (B)
+`/deploy <tên app>` · `/stop <tên app>` → bot hiện **nút xác nhận inline** (✅/❌, hết hạn 2ph)
+→ bấm ✅ là làm thật, đúng RBAC của người nhắn (gọi DeploymentsService nên mọi luật quyền giữ nguyên).
+- Tên mờ (khớp một phần) → gợi ý danh sách; nút chỉ người gọi lệnh bấm được
+- Flag `ai_bot_actions` · cần test tay từ điện thoại (bot chỉ nhận tin từ người thật)
 
-### Đợt 3 — khi DeployBox thành sản phẩm cho người khác dùng
+### 22. 💰 Theo dõi chi phí AI (C)
+Mọi lượt gọi AI ghi token vào bảng `AiUsage` (theo tính năng/provider/model) →
+card **"💰 Chi phí AI"** ở Admin: tổng lượt, ước tính $, bảng chi tiết từng tính năng.
+- Endpoint `GET /admin/ai-usage?days=30` · flag `ai_usage_tracking`
+- Đã test live: 2 lượt Gemini ghi đúng feature/token, ước tính $0.0016 ✓
+
+### 23. 🗂 Nhận diện monorepo đa app (D)
+"✨ Tự nhận diện" giờ phát hiện repo chứa NHIỀU app: trả mảng `apps[]` (tên, type,
+rootDir, lệnh, cổng riêng từng app) → form tạo project hiện panel "Monorepo: N app"
+với nút chọn từng app để điền form (tạo lần lượt, cùng repo URL).
+- Đã test live trên chính repo deploybox: phát hiện đúng `api` (apps/api, 4000) + `web` (apps/web, 3000) ✓
+
+### 24. 📈 Cảnh báo RAM bất thường (E)
+Watchdog lấy mẫu RAM (RSS) app host-run mỗi phút; RAM **tăng ≥1.5x và ≥150MB trong ≥30 phút**
+→ Telegram 📈 "nghi memory leak" (cooldown 6h/project). Lịch sử giữ trong RAM (~2h).
+- Flag `ai_metrics_anomaly` · verify bằng typecheck + logic (cần app chạy ≥30ph có leak thật mới bắn)
+
+### 25. 🤖 Copilot trong dashboard (#12)
+Nút 🤖 nổi góc phải dưới mọi trang → khung chat: hỏi về project (dữ liệu thật, đúng quyền),
+AI đề xuất hành động deploy/stop → **hiện nút xác nhận trong chat, bấm mới chạy** (RBAC
+qua DeploymentsService). Module mới `modules/copilot` (`POST /copilot/message|action`).
+- Flag `ai_copilot` · đã test live: hỏi trạng thái + xin deploy → action đúng project ✓
+
+### 26. 🧭 Onboarding bằng chat (#18)
+User **chưa có project nào** → copilot tự vào chế độ dẫn từng bước (chuẩn bị repo →
+Tự nhận diện → Tạo → Deploy → xem log/domain), mỗi lượt 1 bước. Flag `ai_onboarding`.
+
+### 27. 🖼 Gửi ảnh lỗi cho bot Telegram (#13)
+Gửi ảnh chụp màn hình (kèm caption làm câu hỏi) cho bot → tải ảnh qua getFile → AI **vision**
+đọc ảnh chẩn đoán. Cả 3 provider đều thêm `completeVision` (Claude image block / GPT-4o
+image_url / Gemini inlineData). Trong nhóm phải nhắc @bot ở caption. Flag `ai_photo_diagnosis`.
+- Cần test tay từ điện thoại (bot chỉ nhận tin người thật)
+
+### 28. 🩺 Chẩn đoán domain/DNS (#14)
+Nút "🩺 AI" cạnh domain chưa ACTIVE (card Domains) → tra DNS THẬT (A record hiện tại,
+A record đích, TXT verify) → AI hướng dẫn trỏ record từng bước. `POST /domains/:id/diagnose`.
+- Flag `ai_dns_diagnosis` · đã test live: giải thích đúng ca `.localhost` không có DNS công khai ✓
+
+### 29. 📝 Release notes tự động (#15)
+Nút "📝 Release notes AI" ở trang deployment → `git log` giữa commit của bản này và bản
+thành công trước (repo private dùng token đã lưu; deploy tay → 15 commit gần nhất) →
+AI viết changelog tiếng Việt theo nhóm ✨/🐛/🔧. Cache theo deployment.
+- Flag `ai_release_notes` · phần git đã chạy live ✓ (phần AI vướng quota Gemini trong ngày — mai chạy)
+
+### 30. ⚙️ AI sinh file CI (#16)
+Nút "⚙️ Sinh GitHub Actions (AI)" ở card "Deploy qua API" → workflow YAML gọi
+`POST /projects/:id/deploy` với `secrets.DEPLOYBOX_TOKEN`, kèm hướng dẫn tạo secret. Copy là chạy.
+- Flag `ai_ci_generator` · đã test live: YAML hợp lệ, đủ on:/secret ✓
+
+### 31. 💡 Gợi ý giờ ngủ/chọn server (#17)
+Nút ở card "🔍 Kiểm tra AI" → đọc access log Caddy đếm request theo giờ-trong-ngày +
+tải từng server → AI gợi ý bật sleep khung giờ nào, đặt app server nào.
+- Flag `ai_ops_advice` · code path đã verify (vướng quota Gemini trong ngày)
+
+> 🏁 **TOÀN BỘ danh sách AI đã làm xong: 31 tính năng.** Từ đây trở đi: dùng thật hằng ngày
+> để lọc — cái nào phiền thì TẮT (mỗi cái 1 công tắc), cái nào hay dùng thì mài sắc.
+> Không thêm tính năng AI mới nếu không có pain thật.
+
+### ~~Đợt 3~~ — ✅ ĐÃ LÀM XONG (xem mục 25–31)
 
 | # | Tính năng | Mô tả | Cỡ | Vì sao để sau |
 |---|---|---|---|---|

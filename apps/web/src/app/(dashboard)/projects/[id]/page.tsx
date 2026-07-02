@@ -16,6 +16,8 @@ import { WebhookHistory } from '@/features/projects/webhook-history';
 import { DeployApiSnippet } from '@/features/projects/deploy-api-snippet';
 import { WebhookGuide } from '@/features/projects/webhook-guide';
 import { AiCheckPanel } from '@/features/projects/ai-check-panel';
+import { GenerateCi } from '@/features/projects/generate-ci';
+import { OpsAdvice } from '@/features/projects/ops-advice';
 
 export default async function ProjectDetailPage({
   params,
@@ -115,6 +117,7 @@ export default async function ProjectDetailPage({
           envVars={env}
           hasRepo={!!project.gitRepoUrl}
         />
+        <OpsAdvice projectId={project.id} />
       </Card>
 
       <Card>
@@ -138,6 +141,7 @@ export default async function ProjectDetailPage({
           Deploy qua API / CI-CD
         </h2>
         <DeployApiSnippet projectId={project.id} />
+        <GenerateCi projectId={project.id} />
       </Card>
 
       <Card>

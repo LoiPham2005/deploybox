@@ -41,6 +41,15 @@ export class ProjectsController {
     return this.projects.create(user.sub, teamId, dto);
   }
 
+  /** ⚙️ AI sinh GitHub Actions workflow cho project. */
+  @Post('projects/:projectId/generate-ci')
+  generateCi(
+    @CurrentUser() user: JwtPayload,
+    @Param('projectId') projectId: string,
+  ) {
+    return this.projects.generateCi(user.sub, projectId);
+  }
+
   @Get('projects/:projectId')
   get(@CurrentUser() user: JwtPayload, @Param('projectId') projectId: string) {
     return this.projects.get(user.sub, projectId);

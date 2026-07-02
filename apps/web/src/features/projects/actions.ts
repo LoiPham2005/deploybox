@@ -350,6 +350,61 @@ export async function aiCheckProjectAction(
   }
 }
 
+/** 🩺 AI chẩn đoán domain kẹt DNS. */
+export async function diagnoseDomainAction(
+  domainId: string,
+): Promise<ActionResult<{ advice: string }>> {
+  try {
+    const res = await serverApi<{ advice: string }>(`/domains/${domainId}/diagnose`, {
+      method: 'POST',
+    });
+    return { ok: true, data: res };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Chẩn đoán thất bại' };
+  }
+}
+
+/** 📝 AI viết release notes từ commit giữa 2 bản deploy. */
+export async function releaseNotesAction(
+  deploymentId: string,
+): Promise<ActionResult<{ notes: string; commits: number }>> {
+  try {
+    const res = await serverApi<{ notes: string; commits: number }>(
+      `/deployments/${deploymentId}/release-notes`,
+      { method: 'POST' },
+    );
+    return { ok: true, data: res };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Tạo release notes thất bại' };
+  }
+}
+
+/** ⚙️ AI sinh GitHub Actions workflow cho project. */
+export async function generateCiAction(
+  projectId: string,
+): Promise<ActionResult<{ yaml: string }>> {
+  try {
+    const res = await serverApi<{ yaml: string }>(`/projects/${projectId}/generate-ci`, {
+      method: 'POST',
+    });
+    return { ok: true, data: res };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Sinh file CI thất bại' };
+  }
+}
+
+/** 💡 AI gợi ý vận hành (sleep/chọn server) từ lịch sử truy cập. */
+export async function opsAdviceAction(
+  projectId: string,
+): Promise<ActionResult<{ advice: string }>> {
+  try {
+    const res = await serverApi<{ advice: string }>(`/projects/${projectId}/ops-advice`);
+    return { ok: true, data: res };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Lấy gợi ý thất bại' };
+  }
+}
+
 /** ✨ AI đọc repo → đề xuất cấu hình deploy (type, build/start command, port…). */
 export async function analyzeRepoAction(
   repoUrl: string,

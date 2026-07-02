@@ -72,26 +72,29 @@ export default function LoginPage() {
         <p className="mt-1 text-sm text-white/50">Dùng tài khoản nội bộ của bạn</p>
       </div>
 
-      {/* Quick login panel */}
-      <div className="rounded-xl border border-white/8 bg-white/[0.02] p-3">
-        <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-widest text-white/25">
-          Đăng nhập nhanh (dev)
-        </p>
-        <div className="flex gap-2">
-          {QUICK_ACCOUNTS.map((a) => (
-            <button
-              key={a.label}
-              type="button"
-              disabled={loading}
-              onClick={() => onQuickLogin(a.email)}
-              className={`flex flex-1 flex-col items-center rounded-lg border px-2 py-2 text-center transition disabled:opacity-40 ${a.cls}`}
-            >
-              <span className="text-xs font-semibold">{a.label}</span>
-              <span className="mt-0.5 text-[10px] opacity-60">{a.desc}</span>
-            </button>
-          ))}
+
+      {/* Đăng nhập nhanh (dev) — ĐANG TẮT. Muốn bật lại: đổi false thành true. */}
+      {false && (
+        <div className="rounded-xl border border-white/8 bg-white/[0.02] p-3">
+          <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-widest text-white/25">
+            Đăng nhập nhanh (dev)
+          </p>
+          <div className="flex gap-2">
+            {QUICK_ACCOUNTS.map((a) => (
+              <button
+                key={a.label}
+                type="button"
+                disabled={loading}
+                onClick={() => onQuickLogin(a.email)}
+                className={`flex flex-1 flex-col items-center rounded-lg border px-2 py-2 text-center transition disabled:opacity-40 ${a.cls}`}
+              >
+                <span className="text-xs font-semibold">{a.label}</span>
+                <span className="mt-0.5 text-[10px] opacity-60">{a.desc}</span>
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       <form onSubmit={onSubmit} className="space-y-4">
         <div>

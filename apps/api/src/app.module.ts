@@ -20,6 +20,7 @@ import { SshModule } from './infra/ssh/ssh.module';
 import { GitModule } from './modules/git/git.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { TelegramModule } from './modules/telegram/telegram.module';
+import { CopilotModule } from './modules/copilot/copilot.module';
 
 // Đọc sớm để quyết định có import BullModule không (trước khi NestJS bootstrap)
 const REDIS_URL = process.env.REDIS_URL ?? '';
@@ -63,6 +64,7 @@ const REDIS_URL = process.env.REDIS_URL ?? '';
     GitModule,
     AdminModule,
     TelegramModule,
+    CopilotModule,
   ],
 })
 export class AppModule {}

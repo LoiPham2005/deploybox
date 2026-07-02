@@ -7,5 +7,6 @@ import { GitService } from './git.service';
   imports: [AuthModule],
   controllers: [GitController],
   providers: [GitService],
+  exports: [GitService],
 })
 export class GitModule {}

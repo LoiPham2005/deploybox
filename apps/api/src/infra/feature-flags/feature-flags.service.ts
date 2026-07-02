@@ -145,6 +145,77 @@ export const KNOWN_FLAGS: {
       'Kèm gợi ý xử lý theo loại lỗi khi crash/smoke fail: hết RAM → tăng memoryMb, cổng bận → đổi port…',
     default: true,
   },
+  {
+    key: 'ai_fix_memory',
+    label: 'AI · Học từ lịch sử sửa lỗi',
+    description:
+      'Lỗi trùng với lỗi CŨ đã sửa thành công → trả lời ngay từ lịch sử (0 đồng, tức thì) kèm ghi chú "lần trước sửa bằng cách này".',
+    default: true,
+  },
+  {
+    key: 'ai_bot_actions',
+    label: 'AI · Bot Telegram thao tác',
+    description:
+      'Cho phép nhắn bot /deploy /stop <tên app> — có nút xác nhận, đúng quyền của người nhắn. Tắt: bot chỉ đọc.',
+    default: true,
+  },
+  {
+    key: 'ai_usage_tracking',
+    label: 'AI · Theo dõi chi phí',
+    description:
+      'Ghi lại token/lượt gọi của từng tính năng AI → card "Chi phí AI" ở Admin. Tắt: không ghi.',
+    default: true,
+  },
+  {
+    key: 'ai_metrics_anomaly',
+    label: 'AI · Cảnh báo RAM bất thường',
+    description:
+      'Theo dõi RAM app đang chạy (host-run): tăng đều liên tục nghi memory leak → báo Telegram trước khi OOM.',
+    default: true,
+  },
+  {
+    key: 'ai_copilot',
+    label: 'AI · Copilot trong dashboard',
+    description:
+      'Khung chat nổi trong web: hỏi về project + AI đề xuất hành động (deploy/stop — phải bấm xác nhận mới chạy).',
+    default: true,
+  },
+  {
+    key: 'ai_onboarding',
+    label: 'AI · Onboarding người mới',
+    description: 'Dashboard trống → copilot mở chế độ dẫn từng bước: nối repo → nhận diện → deploy đầu tiên.',
+    default: true,
+  },
+  {
+    key: 'ai_photo_diagnosis',
+    label: 'AI · Đọc ảnh lỗi qua bot',
+    description: 'Gửi ảnh chụp màn hình lỗi cho bot Telegram (kèm câu hỏi) → AI đọc ảnh chẩn đoán.',
+    default: true,
+  },
+  {
+    key: 'ai_dns_diagnosis',
+    label: 'AI · Chẩn đoán domain/DNS',
+    description: 'Domain kẹt PENDING_DNS/FAILED → nút chẩn đoán: tra DNS thật + hướng dẫn trỏ record từng bước.',
+    default: true,
+  },
+  {
+    key: 'ai_release_notes',
+    label: 'AI · Release notes tự động',
+    description: 'Nút ở trang deployment: tóm tắt commit giữa 2 bản deploy thành changelog tiếng Việt.',
+    default: true,
+  },
+  {
+    key: 'ai_ci_generator',
+    label: 'AI · Sinh file CI',
+    description: 'Sinh GitHub Actions workflow gọi API deploy của project (copy-paste là chạy).',
+    default: true,
+  },
+  {
+    key: 'ai_ops_advice',
+    label: 'AI · Gợi ý giờ ngủ/chọn server',
+    description: 'Đọc lịch sử truy cập (access log) → gợi ý bật sleep giờ nào, đặt app lên server nào.',
+    default: true,
+  },
 ];
 
 /**

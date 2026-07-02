@@ -33,6 +33,13 @@ export class HostBackendBuilder {
   }
 
   /** Đường dẫn file log runtime (stdout/stderr của process). */
+  /** PID app đang chạy (null nếu không có pidfile / không đọc được). */
+  async getPid(dataDir: string, slug: string): Promise<number | null> {
+    const raw = await readFile(this.pidFile(dataDir, slug), 'utf8').catch(() => '');
+    const pid = parseInt(raw.trim(), 10);
+    return Number.isInteger(pid) && pid > 0 ? pid : null;
+  }
+
   runtimeLog(dataDir: string, slug: string): string {
     return join(dataDir, 'runtime-logs', `${slug}.log`);
   }

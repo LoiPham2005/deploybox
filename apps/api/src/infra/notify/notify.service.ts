@@ -86,6 +86,30 @@ export class NotifyService {
     for (const chatId of recipients) await this.telegram(chatId, textHtml.slice(0, 4000));
   }
 
+  /** 📈 RAM app tăng đều bất thường (nghi memory leak) — báo trước khi OOM. */
+  async resourceAnomaly(
+    opts: {
+      projectName: string;
+      fromMb: number;
+      toMb: number;
+      minutes: number;
+      memoryLimitMb?: number;
+    },
+    extraRecipients: string[] = [],
+  ): Promise<void> {
+    if (!this.flags.isEnabled('telegram_notifications')) return;
+    const global = this.config.get<string>('TELEGRAM_CHAT_ID') ?? '';
+    const recipients = [...new Set([global, ...extraRecipients].filter(Boolean))];
+    if (!recipients.length) return;
+    const text = [
+      `📈 <b>RAM BẤT THƯỜNG</b> · 📦 <b>${esc(opts.projectName)}</b>`,
+      `RAM tăng đều: ${opts.fromMb}MB → ${opts.toMb}MB trong ~${opts.minutes} phút — nghi memory leak.`,
+      opts.memoryLimitMb ? `Giới hạn hiện tại: ${opts.memoryLimitMb}MB — chạm trần là app bị OOM kill.` : '',
+      '💡 Theo dõi thêm / restart app / tăng memoryMb / soi memory leak trong code.',
+    ].filter(Boolean).join('\n');
+    for (const chatId of recipients) await this.telegram(chatId, text);
+  }
+
   /** ⚡ Cảnh báo SỚM: app còn sống nhưng log lỗi tăng vọt — báo trước khi chết hẳn. */
   async earlyWarning(
     opts: {

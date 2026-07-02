@@ -35,6 +35,15 @@ export class DomainsController {
     return this.domains.add(user.sub, projectId, dto);
   }
 
+  /** 🩺 AI chẩn đoán domain kẹt DNS. */
+  @Post('domains/:domainId/diagnose')
+  diagnose(
+    @CurrentUser() user: JwtPayload,
+    @Param('domainId') domainId: string,
+  ) {
+    return this.domains.diagnose(user.sub, domainId);
+  }
+
   @Post('domains/:domainId/verify')
   verify(
     @CurrentUser() user: JwtPayload,

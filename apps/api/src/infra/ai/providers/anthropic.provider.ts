@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Anthropic from '@anthropic-ai/sdk';
-import type { CompleteOpts, LlmProvider } from './llm-provider';
+import type { CompleteOpts, CompleteResult, LlmProvider, VisionOpts } from './llm-provider';
 
 /** Claude (Anthropic) — dùng structured output json_schema. */
 @Injectable()
@@ -30,7 +30,7 @@ export class AnthropicProvider implements LlmProvider {
     return this.client;
   }
 
-  async complete({ model, system, user, schema }: CompleteOpts): Promise<Record<string, unknown>> {
+  async complete({ model, system, user, schema }: CompleteOpts): Promise<CompleteResult> {
     const res = await this.getClient().messages.create({
       model,
       max_tokens: 4096,
@@ -40,6 +40,36 @@ export class AnthropicProvider implements LlmProvider {
     });
     const text = res.content.find((b) => b.type === 'text');
     if (!text || text.type !== 'text') throw new Error('Claude không trả về nội dung');
-    return JSON.parse(text.text) as Record<string, unknown>;
+    return {
+      data: JSON.parse(text.text) as Record<string, unknown>,
+      inputTokens: res.usage?.input_tokens ?? 0,
+      outputTokens: res.usage?.output_tokens ?? 0,
+    };
+  }
+
+  async completeVision({ model, system, user, schema, imageBase64, imageMime }: VisionOpts): Promise<CompleteResult> {
+    const res = await this.getClient().messages.create({
+      model,
+      max_tokens: 4096,
+      system,
+      messages: [{
+        role: 'user',
+        content: [
+          {
+            type: 'image',
+            source: { type: 'base64', media_type: imageMime as 'image/jpeg', data: imageBase64 },
+          },
+          { type: 'text', text: user },
+        ],
+      }],
+      output_config: { format: { type: 'json_schema', schema } },
+    });
+    const text = res.content.find((b) => b.type === 'text');
+    if (!text || text.type !== 'text') throw new Error('Claude không trả về nội dung');
+    return {
+      data: JSON.parse(text.text) as Record<string, unknown>,
+      inputTokens: res.usage?.input_tokens ?? 0,
+      outputTokens: res.usage?.output_tokens ?? 0,
+    };
   }
 }

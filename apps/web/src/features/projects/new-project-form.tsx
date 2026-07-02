@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { ExternalLink, Sparkles } from 'lucide-react';
 import type {
   AiProjectSuggestion,
+  AiRepoApp,
   CreateProjectDto,
   ProjectType,
   ServerDto,
@@ -167,6 +168,20 @@ export function NewProjectForm({
       buildImage: s.buildImage,
       artifactPath: s.artifactPath,
     });
+  }
+
+  /** Monorepo: điền form theo 1 app con được chọn. */
+  function applyRepoApp(app: AiRepoApp) {
+    setType(app.type);
+    setRootDir(app.rootDir || '.');
+    setTemplateApplied(null);
+    setFields((f) => ({
+      ...f,
+      buildCommand: app.buildCommand,
+      startCommand: app.startCommand,
+      outputDir: app.outputDir,
+      internalPort: String(app.internalPort || 3000),
+    }));
   }
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
@@ -338,6 +353,29 @@ export function NewProjectForm({
                         <li key={s}>{s}</li>
                       ))}
                     </ul>
+                  </div>
+                )}
+                {(aiSuggestion.apps?.length ?? 0) >= 2 && (
+                  <div className="mt-2 rounded-md border border-indigo-500/30 bg-indigo-500/10 p-2">
+                    <p className="font-medium text-indigo-300">
+                      🗂 Monorepo: phát hiện {aiSuggestion.apps!.length} app trong repo này
+                    </p>
+                    <p className="mt-0.5 text-white/40">
+                      Mỗi lần tạo 1 project — bấm chọn app để điền form, tạo xong quay lại
+                      tạo tiếp app còn lại (cùng repo URL).
+                    </p>
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {aiSuggestion.apps!.map((a) => (
+                        <button
+                          key={a.rootDir + a.name}
+                          type="button"
+                          onClick={() => applyRepoApp(a)}
+                          className="rounded-full border border-indigo-400/40 px-2.5 py-0.5 text-[11px] text-indigo-200 hover:bg-indigo-500/20"
+                        >
+                          {a.name} · {a.type} · {a.rootDir}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>

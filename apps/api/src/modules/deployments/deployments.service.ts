@@ -21,6 +21,8 @@ import { CaddyService } from '../../infra/caddy/caddy.service';
 import { SleepService } from '../../infra/sleep/sleep.service';
 import { BuildRunnerService } from './build.runner.service';
 import { AiService } from '../../infra/ai/ai.service';
+import { GitService } from '../git/git.service';
+import { CryptoService } from '../../common/crypto/crypto.service';
 import { FeatureFlagsService } from '../../infra/feature-flags/feature-flags.service';
 import { BUILD_QUEUE, type BuildJobData } from './queue.constants';
 
@@ -38,6 +40,8 @@ export class DeploymentsService {
     private readonly hostBackend: HostBackendBuilder,
     private readonly ai: AiService,
     private readonly flags: FeatureFlagsService,
+    private readonly git: GitService,
+    private readonly cryptoSvc: CryptoService,
     @Optional() @InjectQueue(BUILD_QUEUE) private readonly buildQueue: Queue<BuildJobData> | null,
   ) {
     if (buildQueue) {
@@ -326,6 +330,103 @@ export class DeploymentsService {
     return this.docker.stats(`deploybox-${project.slug}`);
   }
 
+  /** Cache release notes theo deployment. */
+  private notesCache = new Map<string, string>();
+
+  /** 📝 Release notes: commit giữa bản deploy này và bản thành công TRƯỚC nó. */
+  async releaseNotes(userId: string, deploymentId: string): Promise<{ notes: string; commits: number }> {
+    if (!this.flags.aiEnabled('ai_release_notes')) {
+      throw new BadRequestException('Tính năng "Release notes" đang tắt (Admin → Tính năng hệ thống).');
+    }
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      include: { project: true },
+    });
+    if (!deployment) throw new NotFoundException('Không tìm thấy deployment');
+    await this.assertProjectAccess(userId, deployment.project);
+    const p = deployment.project;
+    if (!p.gitRepoUrl) throw new BadRequestException('Project không có Git repo');
+
+    const cached = this.notesCache.get(deploymentId);
+    if (cached) return { notes: cached, commits: -1 };
+
+    // Bản thành công gần nhất TRƯỚC bản này (để lấy khoảng commit)
+    const prev = await this.prisma.deployment.findFirst({
+      where: {
+        projectId: p.id,
+        queuedAt: { lt: deployment.queuedAt },
+        commitSha: { not: null },
+        status: { in: ['RUNNING', 'STOPPED', 'SLEEPING'] },
+      },
+      orderBy: { queuedAt: 'desc' },
+      select: { commitSha: true },
+    });
+    const token = p.gitToken
+      ? (() => { try { return this.cryptoSvc.decrypt(p.gitToken!); } catch { return undefined; } })()
+      : undefined;
+    const commits = await this.git.listCommits(
+      p.gitRepoUrl,
+      token,
+      p.gitBranch,
+      prev?.commitSha && deployment.commitSha ? prev.commitSha : null,
+      prev?.commitSha && deployment.commitSha ? deployment.commitSha : null,
+    );
+    if (!commits.length) throw new BadRequestException('Không có commit nào để tóm tắt');
+
+    const notes = await this.ai.releaseNotes(p.name, commits);
+    this.notesCache.set(deploymentId, notes);
+    if (this.notesCache.size > 200) {
+      const first = this.notesCache.keys().next().value;
+      if (first) this.notesCache.delete(first);
+    }
+    return { notes, commits: commits.length };
+  }
+
+  /** 💡 Gợi ý vận hành: đọc access log Caddy → giờ vắng/bận + gợi ý sleep/chọn server. */
+  async opsAdvice(userId: string, projectId: string): Promise<{ advice: string }> {
+    if (!this.flags.aiEnabled('ai_ops_advice')) {
+      throw new BadRequestException('Tính năng "Gợi ý vận hành" đang tắt (Admin → Tính năng hệ thống).');
+    }
+    const project = await this.loadOwnedProject(userId, projectId);
+
+    // Đếm request theo giờ-trong-ngày từ access log (JSON mỗi dòng, có field request.host)
+    const dataDir = resolve(process.cwd(), this.config.get<string>('DATA_DIR', '.deploybox-data'));
+    const logText = await readFile(join(dataDir, 'caddy', 'access.log'), 'utf8').catch(() => '');
+    const lines = logText.split('\n').slice(-50_000);
+    const byHour = new Array(24).fill(0);
+    let total = 0;
+    for (const line of lines) {
+      if (!line.includes(project.slug)) continue;
+      try {
+        const j = JSON.parse(line);
+        const host: string = j.request?.host ?? '';
+        if (!host.startsWith(project.slug + '.')) continue;
+        const d = new Date((j.ts ?? 0) * 1000);
+        byHour[d.getHours()]++;
+        total++;
+      } catch { /* dòng hỏng */ }
+    }
+
+    const servers = await this.prisma.server.findMany({
+      where: { teamId: project.teamId },
+      select: { name: true, type: true, projects: { select: { id: true } } },
+    });
+    const stats = [
+      `App: ${project.name} (sleepEnabled=${project.sleepEnabled}, memoryMb=${project.memoryMb})`,
+      `Tổng request ghi nhận: ${total}`,
+      'Request theo giờ trong ngày (0-23h): ' + byHour.map((c, h) => `${h}h:${c}`).join(', '),
+      `Server của team: ${servers.map((s) => `${s.name}(${s.type}, ${s.projects.length} project)`).join('; ') || '(chỉ local)'}`,
+    ].join('\n');
+
+    const advice = await this.ai.answer(
+      'Dựa vào số liệu, gợi ý: 1) có nên bật chế độ ngủ (sleep) không và khung giờ nào vắng, ' +
+        '2) app nên đặt ở server nào (nếu có nhiều server), 3) 1 gợi ý tối ưu khác nếu thấy. ' +
+        'Ngắn gọn ~6 dòng. Không có dữ liệu thì nói thẳng cần chạy thêm vài ngày.',
+      stats,
+    );
+    return { advice };
+  }
+
   private toDetail(d: Deployment): DeploymentDetail {
     return {
       id: d.id,
@@ -393,6 +494,7 @@ export class DeploymentsService {
     const p = deployment.project;
     const log = await this.readLogs(deploymentId);
     const diagnosis = await this.ai.diagnose({
+      projectId: p.id,
       projectName: p.name,
       projectType: p.type,
       useDocker: p.useDocker,

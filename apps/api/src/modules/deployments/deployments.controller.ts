@@ -112,6 +112,24 @@ export class DeploymentsController {
     return this.deployments.diagnose(user.sub, deploymentId);
   }
 
+  /** 📝 AI viết release notes từ commit giữa 2 bản deploy. */
+  @Post('deployments/:deploymentId/release-notes')
+  releaseNotes(
+    @CurrentUser() user: JwtPayload,
+    @Param('deploymentId') deploymentId: string,
+  ) {
+    return this.deployments.releaseNotes(user.sub, deploymentId);
+  }
+
+  /** 💡 AI gợi ý vận hành (sleep/chọn server) từ access log. */
+  @Get('projects/:projectId/ops-advice')
+  opsAdvice(
+    @CurrentUser() user: JwtPayload,
+    @Param('projectId') projectId: string,
+  ) {
+    return this.deployments.opsAdvice(user.sub, projectId);
+  }
+
   /** AI tóm tắt build log dài thành vài dòng. */
   @Post('deployments/:deploymentId/summarize')
   summarize(

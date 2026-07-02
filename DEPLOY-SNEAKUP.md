@@ -123,7 +123,7 @@ JWT_EXPIRES_IN=7d
 # ── HTTPS production ──
 PUBLIC_TLS=true
 APP_DOMAIN=sneakup.io.vn
-ACME_EMAIL=vantuan8802@gmail.com
+ACME_EMAIL=phamducloi919@gmail.com
 PORT=4000
 WEB_UPSTREAM=localhost:3000
 API_UPSTREAM=localhost:4000

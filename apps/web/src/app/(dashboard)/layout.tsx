@@ -8,6 +8,7 @@ import { TeamSwitcher } from '@/features/teams/team-switcher';
 import { getSelectedTeam } from '@/lib/team';
 import { SidebarNav, PlanBadge } from '@/components/sidebar-nav';
 import { MobileSidebarTrigger } from '@/components/mobile-sidebar';
+import { CopilotWidget } from '@/features/copilot/copilot-widget';
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
   const token = getToken();
@@ -110,6 +111,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 
         <main className="flex-1 p-4 lg:p-6">{children}</main>
       </div>
+      <CopilotWidget />
     </div>
   );
 }

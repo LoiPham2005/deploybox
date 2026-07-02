@@ -293,6 +293,41 @@ export class GitService {
     }
   }
 
+  /**
+   * 📝 Danh sách commit cho release notes: from..to (2 sha) hoặc N commit mới nhất của nhánh.
+   * Dùng bare clone --filter=blob:none: có đủ lịch sử commit nhưng không tải nội dung file.
+   */
+  async listCommits(
+    repoUrl: string,
+    gitToken: string | undefined,
+    branch: string,
+    fromSha?: string | null,
+    toSha?: string | null,
+  ): Promise<string[]> {
+    const url = buildGitAuthUrl(repoUrl, gitToken, 'auto');
+    let tmp: string | null = null;
+    try {
+      tmp = await mkdtemp(join(tmpdir(), 'db-commits-'));
+      await execFileAsync(
+        'git',
+        ['clone', '--bare', '--filter=blob:none', '--no-tags', '--single-branch', '--branch', branch, url, tmp],
+        { timeout: 60_000, env: { ...process.env, ...NO_PROMPT_ENV } },
+      );
+      const range = fromSha && toSha ? [`${fromSha}..${toSha}`] : ['-15', branch];
+      const { stdout } = await execFileAsync(
+        'git',
+        ['--git-dir', tmp, 'log', '--oneline', '--no-decorate', ...range],
+        { timeout: 30_000 },
+      );
+      return stdout.split('\n').map((l) => l.trim()).filter(Boolean).slice(0, 60);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw this.friendly(msg);
+    } finally {
+      if (tmp) await rm(tmp, { recursive: true, force: true }).catch(() => {});
+    }
+  }
+
   private isAuthOrNotFound(msg: string): boolean {
     return (
       msg.includes('Authentication failed') ||

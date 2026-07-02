@@ -19,6 +19,7 @@ import { rm } from 'fs/promises';
 import { join, resolve } from 'path';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 import { FeatureFlagsService } from '../../infra/feature-flags/feature-flags.service';
+import { AiService } from '../../infra/ai/ai.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
 
 function slugify(input: string): string {
@@ -42,7 +43,24 @@ export class ProjectsService {
     private readonly config: ConfigService,
     private readonly crypto: CryptoService,
     private readonly flags: FeatureFlagsService,
+    private readonly ai: AiService,
   ) {}
+
+  /** ⚙️ AI sinh GitHub Actions workflow gọi API deploy của project này. */
+  async generateCi(userId: string, projectId: string): Promise<{ yaml: string }> {
+    if (!this.flags.aiEnabled('ai_ci_generator')) {
+      throw new ForbiddenException('Tính năng "Sinh file CI" đang tắt (Admin → Tính năng hệ thống).');
+    }
+    const project = await this.loadOwnedProject(userId, projectId);
+    const apiUrl = this.config.get<string>('PUBLIC_API_URL', 'http://localhost:4000');
+    const yaml = await this.ai.generateCi({
+      projectName: project.name,
+      branch: project.gitBranch,
+      apiUrl,
+      projectId: project.id,
+    });
+    return { yaml };
+  }
 
   // ----- truy cập theo team (nền tảng cô lập tenant) -----
 

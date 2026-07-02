@@ -67,6 +67,17 @@ export interface AiConfigStatus {
   }>;
 }
 
+/** 1 app con phát hiện trong monorepo (repo chứa nhiều app deploy độc lập). */
+export interface AiRepoApp {
+  name: string; // tên gợi ý, vd "backend", "web"
+  type: ProjectType;
+  rootDir: string;
+  buildCommand: string;
+  startCommand: string;
+  outputDir: string;
+  internalPort: number;
+}
+
 /** Cấu hình project do AI đề xuất từ việc đọc repo (nút "✨ Tự nhận diện"). */
 export interface AiProjectSuggestion {
   type: ProjectType;
@@ -82,6 +93,8 @@ export interface AiProjectSuggestion {
   envKeys: string[]; // biến môi trường app cần (đọc từ .env.example / code)
   reason: string; // giải thích ngắn vì sao đoán vậy (tiếng Việt)
   secretWarnings?: string[]; // cảnh báo secret lộ trong repo (quét regex, không phải AI)
+  // Monorepo: repo chứa NHIỀU app deploy độc lập → liệt kê hết ở đây (rỗng nếu 1 app).
+  apps?: AiRepoApp[];
 }
 
 /** Kết quả "Kiểm tra AI" trên project có sẵn: env thiếu + secret lộ. */
