@@ -1,11 +1,12 @@
 import { redirect } from 'next/navigation';
-import { isAdminRole, type UserRole } from '@deploybox/shared';
+import { isAdminRole, type AiConfigStatus, type UserRole } from '@deploybox/shared';
 import { getToken } from '@/lib/auth';
 import { authApi } from '@/lib/api';
 import { serverApi } from '@/lib/api-server';
 import { Card } from '@/components/ui/card';
 import { PlanToggle } from './plan-toggle';
 import { FeatureFlagsPanel, type Feature } from './feature-flags-panel';
+import { AiConfigPanel } from './ai-config-panel';
 
 interface AdminStats {
   users: number;
@@ -31,10 +32,11 @@ export default async function AdminPage() {
   const me = await authApi.me(token).catch(() => redirect('/login'));
   if (!isAdminRole(me.user.role)) redirect('/dashboard');
 
-  const [stats, users, features] = await Promise.all([
+  const [stats, users, features, aiConfig] = await Promise.all([
     serverApi<AdminStats>('/admin/stats').catch(() => ({ users: 0, teams: 0, projects: 0 })),
     serverApi<AdminUser[]>('/admin/users').catch(() => [] as AdminUser[]),
     serverApi<Feature[]>('/admin/features').catch(() => [] as Feature[]),
+    serverApi<AiConfigStatus>('/admin/ai').catch(() => null),
   ]);
 
   return (
@@ -68,6 +70,20 @@ export default async function AdminPage() {
         </p>
         <FeatureFlagsPanel features={features} />
       </Card>
+
+      {/* AI — nhà cung cấp & model */}
+      {aiConfig && (
+        <Card>
+          <h2 className="mb-1 text-sm font-semibold text-white/70">
+            AI — nhà cung cấp &amp; model
+          </h2>
+          <p className="mb-4 text-xs text-white/40">
+            Chọn Claude / ChatGPT / Gemini và model dùng cho tính năng AI (bác sĩ lỗi
+            deploy) trên toàn hệ thống. Đổi lúc nào cũng được.
+          </p>
+          <AiConfigPanel config={aiConfig} />
+        </Card>
+      )}
 
       {/* Users list */}
       <Card>

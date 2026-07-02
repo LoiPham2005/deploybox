@@ -52,6 +52,21 @@ export interface ProjectSummary {
   };
 }
 
+/** Nhà cung cấp AI được hỗ trợ. */
+export type AiProviderId = 'anthropic' | 'openai' | 'gemini';
+
+/** Trạng thái cấu hình AI (cho trang Admin chọn provider + model). */
+export interface AiConfigStatus {
+  provider: AiProviderId; // provider đang chọn dùng toàn app
+  model: string; // model đang chọn
+  providers: Array<{
+    id: AiProviderId;
+    label: string; // "Claude", "ChatGPT", "Gemini"
+    configured: boolean; // đã có API key trong .env chưa
+    suggestedModels: string[]; // gợi ý model (vẫn cho gõ tự do)
+  }>;
+}
+
 /** Kết quả AI "bác sĩ lỗi deploy" — đọc log thất bại, chỉ nguyên nhân + cách sửa. */
 export interface AiDiagnosis {
   cause: string; // Nguyên nhân gốc (tiếng Việt)
@@ -65,6 +80,7 @@ export interface AiDiagnosis {
     | 'outputDir'
     | 'internalPort'
     | 'rootDir'
+    | 'artifactPath'
     | 'none';
   configValue: string; // Giá trị đề xuất cho configField ('' nếu none)
   confidence: 'cao' | 'trung bình' | 'thấp';

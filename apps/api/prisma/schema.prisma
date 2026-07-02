@@ -300,3 +300,10 @@ model FeatureFlag {
   description String?
   updatedAt   DateTime @updatedAt
 }
+
+// Cấu hình dạng key/value do admin chỉnh (vd ai_provider, ai_model). Linh hoạt, thêm sau dễ.
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}

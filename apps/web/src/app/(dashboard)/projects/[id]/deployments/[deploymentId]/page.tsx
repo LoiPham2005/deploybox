@@ -102,6 +102,7 @@ export default async function DeploymentPage({
 
       {deployment.status === 'FAILED' && (
         <AiDiagnosis
+          projectId={project.id}
           deploymentId={deployment.id}
           initial={deployment.aiDiagnosis ?? null}
         />

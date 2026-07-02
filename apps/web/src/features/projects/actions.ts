@@ -162,6 +162,62 @@ export async function rollbackAction(
   }
 }
 
+/**
+ * Áp dụng cách sửa AI đề xuất: PATCH đúng 1 trường cấu hình rồi deploy lại luôn.
+ * Trả về deployment mới để UI điều hướng sang theo dõi build.
+ */
+export async function applyAiFixAction(
+  projectId: string,
+  configField: string,
+  configValue: string,
+): Promise<ActionResult<DeploymentDetail>> {
+  const ALLOWED = [
+    'installCommand',
+    'buildCommand',
+    'startCommand',
+    'outputDir',
+    'internalPort',
+    'rootDir',
+    'artifactPath',
+  ] as const;
+  if (!(ALLOWED as readonly string[]).includes(configField)) {
+    return { ok: false, error: 'Trường cấu hình không hợp lệ' };
+  }
+
+  // internalPort là number — các trường còn lại là string
+  let value: string | number = configValue;
+  if (configField === 'internalPort') {
+    const port = parseInt(configValue, 10);
+    if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+      return { ok: false, error: `Port AI đề xuất không hợp lệ: "${configValue}"` };
+    }
+    value = port;
+  }
+
+  const parsed = updateProjectSchema.safeParse({ [configField]: value });
+  if (!parsed.success) {
+    return { ok: false, error: 'Giá trị AI đề xuất không hợp lệ' };
+  }
+
+  try {
+    await serverApi(`/projects/${projectId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(parsed.data),
+    });
+    const deployment = await serverApi<DeploymentDetail>(
+      `/projects/${projectId}/deploy`,
+      { method: 'POST' },
+    );
+    revalidatePath(`/projects/${projectId}`);
+    return { ok: true, data: deployment };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : 'Áp dụng cách sửa thất bại',
+    };
+  }
+}
+
 export async function diagnoseDeploymentAction(
   deploymentId: string,
 ): Promise<ActionResult<AiDiagnosis>> {

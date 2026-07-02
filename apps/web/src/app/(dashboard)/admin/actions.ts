@@ -22,6 +22,23 @@ export async function setPlanAction(
   }
 }
 
+/** Admin đổi nhà cung cấp AI + model dùng cho toàn app. */
+export async function setAiConfigAction(
+  provider: string,
+  model: string,
+): Promise<Result> {
+  try {
+    await serverApi('/admin/ai', {
+      method: 'PUT',
+      body: JSON.stringify({ provider, model }),
+    });
+    revalidatePath('/admin');
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Đổi cấu hình AI thất bại' };
+  }
+}
+
 /** Admin bật/tắt 1 tính năng hệ thống. */
 export async function toggleFeatureAction(
   key: string,

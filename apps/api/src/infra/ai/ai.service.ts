@@ -1,8 +1,12 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import Anthropic from '@anthropic-ai/sdk';
-import type { AiDiagnosis } from '@deploybox/shared';
+import type { AiConfigStatus, AiDiagnosis, AiProviderId } from '@deploybox/shared';
+import { PrismaService } from '../prisma/prisma.service';
 import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
+import type { LlmProvider } from './providers/llm-provider';
+import { AnthropicProvider } from './providers/anthropic.provider';
+import { OpenaiProvider } from './providers/openai.provider';
+import { GeminiProvider } from './providers/gemini.provider';
 
 const CONFIG_FIELDS = [
   'installCommand',
@@ -11,6 +15,7 @@ const CONFIG_FIELDS = [
   'outputDir',
   'internalPort',
   'rootDir',
+  'artifactPath',
   'none',
 ] as const;
 type ConfigField = (typeof CONFIG_FIELDS)[number];
@@ -84,22 +89,25 @@ Quy tắc:
 - Nếu lỗi sửa bằng cách đổi một trường cấu hình project, đặt configField + configValue tương ứng.`;
 
 /**
- * "Bác sĩ lỗi deploy": đọc log thất bại → nguyên nhân + cách sửa (structured output).
- * Gọi Claude qua @anthropic-ai/sdk. Bật/tắt bằng feature flag `ai_features` + có ANTHROPIC_API_KEY.
+ * AI "bác sĩ lỗi deploy" đa nhà cung cấp (Claude / ChatGPT / Gemini).
+ * Provider + model dùng toàn app được lưu trong DB (bảng Setting) — admin đổi bất cứ lúc nào.
+ * Bật/tắt tổng bằng feature flag `ai_features`.
  */
 @Injectable()
 export class AiService {
   private readonly logger = new Logger(AiService.name);
-  private client: Anthropic | null = null;
+  private readonly providers: Record<AiProviderId, LlmProvider>;
+  private cfgCache: { provider: AiProviderId; model: string } | null = null;
 
   constructor(
     private readonly config: ConfigService,
+    private readonly prisma: PrismaService,
     private readonly flags: FeatureFlagsService,
-  ) {}
-
-  /** Đã có API key chưa. */
-  isConfigured(): boolean {
-    return !!(this.config.get<string>('ANTHROPIC_API_KEY') ?? '').trim();
+    anthropic: AnthropicProvider,
+    openai: OpenaiProvider,
+    gemini: GeminiProvider,
+  ) {
+    this.providers = { anthropic, openai, gemini };
   }
 
   /** Admin có bật tính năng AI không. */
@@ -107,13 +115,69 @@ export class AiService {
     return this.flags.isEnabled('ai_features');
   }
 
-  private getClient(): Anthropic {
-    if (!this.client) {
-      this.client = new Anthropic({
-        apiKey: this.config.get<string>('ANTHROPIC_API_KEY'),
-      });
+  private normProvider(v?: string): AiProviderId {
+    return v === 'openai' || v === 'gemini' || v === 'anthropic' ? v : 'anthropic';
+  }
+
+  private defaultModelFor(provider: AiProviderId): string {
+    if (provider === 'anthropic') {
+      return this.config.get<string>('AI_MODEL', 'claude-opus-4-8');
     }
-    return this.client;
+    return this.providers[provider].suggestedModels[0];
+  }
+
+  /** Provider + model đang chọn (đọc DB, cache RAM). */
+  async getConfig(): Promise<{ provider: AiProviderId; model: string }> {
+    if (this.cfgCache) return this.cfgCache;
+    const rows = await this.prisma.setting.findMany({
+      where: { key: { in: ['ai_provider', 'ai_model'] } },
+    });
+    const map = new Map(rows.map((r) => [r.key, r.value]));
+    const provider = this.normProvider(map.get('ai_provider'));
+    const model = (map.get('ai_model') ?? '').trim() || this.defaultModelFor(provider);
+    this.cfgCache = { provider, model };
+    return this.cfgCache;
+  }
+
+  /** Admin đổi provider + model dùng toàn app. */
+  async setConfig(provider: string, model: string): Promise<AiConfigStatus> {
+    const p = this.normProvider(provider);
+    if (provider !== p) {
+      throw new BadRequestException('Nhà cung cấp AI không hợp lệ');
+    }
+    const m = (model ?? '').trim() || this.defaultModelFor(p);
+    await this.prisma.$transaction([
+      this.prisma.setting.upsert({
+        where: { key: 'ai_provider' },
+        update: { value: p },
+        create: { key: 'ai_provider', value: p },
+      }),
+      this.prisma.setting.upsert({
+        where: { key: 'ai_model' },
+        update: { value: m },
+        create: { key: 'ai_model', value: m },
+      }),
+    ]);
+    this.cfgCache = { provider: p, model: m };
+    return this.status();
+  }
+
+  /** Trạng thái cho trang Admin: provider/model đang chọn + danh sách nhà cung cấp. */
+  async status(): Promise<AiConfigStatus> {
+    const cfg = await this.getConfig();
+    return {
+      provider: cfg.provider,
+      model: cfg.model,
+      providers: (Object.keys(this.providers) as AiProviderId[]).map((id) => {
+        const p = this.providers[id];
+        return {
+          id: p.id,
+          label: p.label,
+          configured: p.isConfigured(),
+          suggestedModels: p.suggestedModels,
+        };
+      }),
+    };
   }
 
   /** Chẩn đoán lỗi deploy. Ném lỗi thân thiện nếu tắt / chưa cấu hình / gọi AI thất bại. */
@@ -123,49 +187,31 @@ export class AiService {
         'Tính năng AI chẩn đoán đang tắt. Admin bật lại ở tab Admin → Tính năng hệ thống.',
       );
     }
-    if (!this.isConfigured()) {
+    const cfg = await this.getConfig();
+    const provider = this.providers[cfg.provider];
+    if (!provider.isConfigured()) {
       throw new BadRequestException(
-        'Chưa cấu hình ANTHROPIC_API_KEY trên server nên chưa dùng được AI.',
+        `Chưa cấu hình API key cho ${provider.label} trên server. Thêm key vào .env rồi restart, hoặc chọn nhà cung cấp khác ở tab Admin.`,
       );
     }
 
-    const model = this.config.get<string>('AI_MODEL', 'claude-opus-4-8');
-
     try {
-      const res = await this.getClient().messages.create({
-        model,
-        max_tokens: 4096,
+      const raw = await provider.complete({
+        model: cfg.model,
         system: SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: this.buildUserContent(input) }],
-        output_config: { format: { type: 'json_schema', schema: DIAGNOSIS_SCHEMA } },
+        user: this.buildUserContent(input),
+        schema: DIAGNOSIS_SCHEMA,
       });
-
-      const raw = this.extractJson(res);
-      return { ...this.coerce(raw), model, createdAt: new Date().toISOString() };
+      return {
+        ...this.coerce(raw),
+        model: `${provider.label} · ${cfg.model}`,
+        createdAt: new Date().toISOString(),
+      };
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      this.logger.warn(`AI chẩn đoán thất bại: ${msg}`);
-      throw new BadRequestException(`Gọi AI thất bại: ${msg}`);
+      this.logger.warn(`AI (${provider.id}/${cfg.model}) chẩn đoán thất bại: ${msg}`);
+      throw new BadRequestException(`Gọi ${provider.label} thất bại: ${msg}`);
     }
-  }
-
-  /** Bản "best-effort": trả null thay vì ném lỗi (dùng khi chạy nền). */
-  async tryDiagnose(input: DiagnoseInput): Promise<AiDiagnosis | null> {
-    if (!this.isEnabled() || !this.isConfigured()) return null;
-    try {
-      return await this.diagnose(input);
-    } catch {
-      return null;
-    }
-  }
-
-  /** Lấy khối text đầu tiên (structured output đảm bảo là JSON hợp lệ) và parse. */
-  private extractJson(res: Anthropic.Message): Record<string, unknown> {
-    const text = res.content.find((b) => b.type === 'text');
-    if (!text || text.type !== 'text') {
-      throw new Error('AI không trả về nội dung');
-    }
-    return JSON.parse(text.text) as Record<string, unknown>;
   }
 
   /** Chuẩn hoá/khoá giá trị về đúng union (phòng khi AI lệch nhẹ). */
@@ -223,7 +269,11 @@ export class AiService {
       log,
       '```',
       '',
-      'Hãy chẩn đoán nguyên nhân và cách sửa theo schema JSON yêu cầu.',
+      // Hợp đồng JSON — đảm bảo mọi nhà cung cấp trả đúng khuôn (nhất là Gemini).
+      'Trả về DUY NHẤT một object JSON, không kèm chữ nào khác, với đúng các khoá:',
+      '- cause (string), fix (string), commands (mảng string)',
+      '- configField (một trong: installCommand, buildCommand, startCommand, outputDir, internalPort, rootDir, none)',
+      '- configValue (string), confidence (một trong: cao, trung bình, thấp)',
     ]
       .filter((l) => l !== '')
       .join('\n');

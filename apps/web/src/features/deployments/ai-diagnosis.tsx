@@ -1,10 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import type { AiDiagnosis as AiDiagnosisData } from '@deploybox/shared';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { diagnoseDeploymentAction } from '@/features/projects/actions';
+import {
+  applyAiFixAction,
+  diagnoseDeploymentAction,
+} from '@/features/projects/actions';
 
 // Nhớ deployment nào đã tự chẩn đoán trong phiên này → tránh gọi lại 2 lần
 // (React strict-mode dev remount, hoặc mở lại trang).
@@ -24,15 +28,20 @@ const CONFIDENCE: Record<
  * 1 lần khi mở trang; đã có thì hiện luôn (đã cache ở DB). Có nút "Chẩn đoán lại".
  */
 export function AiDiagnosis({
+  projectId,
   deploymentId,
   initial,
 }: {
+  projectId: string;
   deploymentId: string;
   initial: AiDiagnosisData | null;
 }) {
+  const router = useRouter();
   const [diag, setDiag] = useState<AiDiagnosisData | null>(initial);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [applying, setApplying] = useState(false);
+  const [applyError, setApplyError] = useState<string | null>(null);
 
   async function run() {
     setLoading(true);
@@ -41,6 +50,26 @@ export function AiDiagnosis({
     setLoading(false);
     if (res.ok && res.data) setDiag(res.data);
     else if (!res.ok) setError(res.error);
+  }
+
+  async function applyFix() {
+    if (!diag || diag.configField === 'none') return;
+    if (
+      !confirm(
+        `Đổi ${diag.configField} thành:\n\n${diag.configValue}\n\nrồi deploy lại ngay?`,
+      )
+    )
+      return;
+    setApplying(true);
+    setApplyError(null);
+    const res = await applyAiFixAction(projectId, diag.configField, diag.configValue);
+    setApplying(false);
+    if (res.ok && res.data) {
+      router.push(`/projects/${projectId}/deployments/${res.data.id}`);
+      router.refresh();
+    } else if (!res.ok) {
+      setApplyError(res.error);
+    }
   }
 
   useEffect(() => {
@@ -116,11 +145,26 @@ export function AiDiagnosis({
             </div>
           )}
           {diag.configField !== 'none' && diag.configValue && (
-            <p className="rounded-lg bg-white/5 p-2 text-xs text-white/70">
-              💡 Gợi ý sửa cấu hình:{' '}
-              <code className="text-sky-300">{diag.configField}</code> ={' '}
-              <code className="text-emerald-300">{diag.configValue}</code>
-            </p>
+            <div className="space-y-2 rounded-lg bg-white/5 p-3">
+              <p className="text-xs text-white/70">
+                💡 Gợi ý sửa cấu hình:{' '}
+                <code className="text-sky-300">{diag.configField}</code> ={' '}
+                <code className="text-emerald-300">{diag.configValue}</code>
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={applyFix}
+                  disabled={applying}
+                  className="px-3 py-1.5 text-xs"
+                >
+                  {applying ? 'Đang áp dụng…' : '⚡ Áp dụng & deploy lại'}
+                </Button>
+                <span className="text-[11px] text-white/30">
+                  Đổi cấu hình project rồi deploy lại ngay
+                </span>
+              </div>
+              {applyError && <p className="text-xs text-red-400">{applyError}</p>}
+            </div>
           )}
           <p className="text-[11px] text-white/30">Phân tích bởi {diag.model}</p>
         </div>
