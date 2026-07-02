@@ -77,11 +77,19 @@ export class CaddyService implements OnModuleInit {
     const logBlock = `\tlog {\n\t\toutput file ${accessLog}\n\t\tformat json\n\t}`;
 
     const blocks: string[] = [];
+    // Host đã cấp phát — chống khai trùng (Caddy gặp host trùng là từ chối CẢ config)
+    const taken = new Set<string>(tls ? [appDomain, `api.${appDomain}`] : []);
     for (const p of projects) {
-      const hosts = [
-        fmtHost(`${p.slug}.${appDomain}`),
-        ...p.domains.filter((d) => !d.isManaged).map((d) => fmtHost(d.hostname)),
-      ];
+      const custom = p.domains
+        .filter((d) => !d.isManaged)
+        .map((d) => d.hostname)
+        // Bỏ hostname đụng dashboard/api hoặc đã bị block khác dùng
+        .filter((h) => !taken.has(h));
+      const hostNames = [`${p.slug}.${appDomain}`, ...custom].filter(
+        (h, i, arr) => arr.indexOf(h) === i && (i === 0 || !taken.has(h)),
+      );
+      hostNames.forEach((h) => taken.add(h));
+      const hosts = hostNames.map((h) => fmtHost(h));
       const addr = hosts.join(', ');
       const sleeping = p.deployments[0]?.status === 'SLEEPING';
 
