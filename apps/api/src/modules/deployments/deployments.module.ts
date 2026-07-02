@@ -4,6 +4,7 @@ import { DeploymentsController } from './deployments.controller';
 import { DeploymentsService } from './deployments.service';
 import { BuildProcessor } from './build.processor';
 import { BuildRunnerService } from './build.runner.service';
+import { ReportService } from './report.service';
 import { HostStaticBuilder } from '../../infra/builder/host-static.builder';
 import { DockerBackendEngine } from '../../infra/builder/docker-backend.engine';
 import { HostBackendBuilder } from '../../infra/builder/host-backend.builder';
@@ -41,12 +42,13 @@ const USE_REDIS = !!(process.env.REDIS_URL ?? '');
     HostBackendBuilder,
     HostRunReconcilerService,
     NotifyService,
+    ReportService,
     MobileBuilder,
     CleanupService,
     SleepService,
     // Worker processor chỉ khởi tạo khi có Redis
     ...(USE_REDIS ? [BuildProcessor] : []),
   ],
-  exports: [DeploymentsService],
+  exports: [DeploymentsService, ReportService],
 })
 export class DeploymentsModule {}

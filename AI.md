@@ -12,7 +12,14 @@
   - Cùng 1 interface `LlmProvider.complete()` → trả JSON đúng schema (structured output)
   - Muốn thêm nhà mới (vd Grok, DeepSeek): viết 1 adapter + đăng ký vào `AiModule` là xong
 - **Admin chọn provider + model dùng toàn app** — lưu DB (bảng `Setting`, key `ai_provider`/`ai_model`), đổi lúc nào cũng được, không cần redeploy. UI: Admin → card "AI — nhà cung cấp & model"
-- **Bật/tắt tổng** bằng feature flag `ai_features` (Admin → Tính năng hệ thống)
+- **Bật/tắt từng tính năng + nút tổng** (Admin → Tính năng hệ thống):
+  - `ai_features` = **NÚT TỔNG** — tắt là tắt TOÀN BỘ AI (trạng thái nút con vẫn giữ)
+  - 11 nút con (mặc định BẬT): `ai_diagnosis` (bác sĩ lỗi + nút áp dụng) · `ai_auto_diagnosis`
+    (chẩn đoán tự động khi fail) · `ai_repo_analyze` (tự nhận diện) · `ai_env_check` ·
+    `ai_secret_scan` · `ai_log_summary` · `ai_watchdog_diagnosis` (watchdog vẫn luôn restart) ·
+    `ai_smoke_test` · `ai_auto_rollback` · `ai_telegram_qa` · `ai_daily_report`
+  - Code: `FeatureFlagsService.aiEnabled(key)` = tổng BẬT **và** con BẬT — tính năng AI mới
+    phải check qua hàm này
 - **API key** đặt trong `.env` (nhà nào có key thì dùng được nhà đó):
   ```
   ANTHROPIC_API_KEY=   # Claude    — console.anthropic.com   (sk-ant-api03-...)
@@ -78,6 +85,37 @@ project được cấp) → AI trả lời dựa trên trạng thái/lỗi/chẩ
 - Bảo mật: chưa nối tài khoản → từ chối; không lộ env/token; rate-limit 10s/câu/người
 - `AiService.answer()` — dùng chung provider đã chọn ở Admin
 
+### 9. 🚨 Quét secret lộ trong repo
+Quét regex (không tốn AI) khi "Tự nhận diện"/"Kiểm tra AI": phát hiện file `.env` thật bị
+commit, API key/token (Anthropic/OpenAI/Google/GitHub/GitLab/Slack/AWS/Telegram),
+private key, connection string có mật khẩu → cảnh báo đỏ kèm hướng xử lý.
+- `secret-scan.util.ts` — file `.env` thật CHỈ quét regex, KHÔNG đưa vào prompt AI
+- Bỏ qua `.env.example`/`.env.sample` (placeholder) — đã test 4 loại secret + skip example ✓
+
+### 10. ⚠️ Kiểm tra env trước deploy
+- Card "🔍 Kiểm tra AI" ở trang project: quét repo → env app cần (lưu `Project.requiredEnvKeys`)
+  → so với tab Env → báo **thiếu biến nào** + secret lộ. Endpoint `POST /git/projects/:id/check`
+- Tạo project bằng "✨ Tự nhận diện" → envKeys tự lưu luôn
+- Mỗi lần deploy: build log cảnh báo `⚠️ Thiếu N biến env app cần: …` (không chặn)
+- Đã test live repo thật: NestJS, đọc 30 envKeys, chỉ đúng 1 biến thiếu (GOOGle_CALLBACK_URL)
+
+### 11. ✨ Tóm tắt build log
+Nút "✨ Tóm tắt AI" cạnh Build log: log dài → 3–6 dòng tiếng Việt (diễn biến, thời gian
+đáng chú ý, lỗi/cảnh báo). Cache RAM theo deployment (log bất biến khi xong) — gọi lại ~0.4s.
+- Endpoint `POST /deployments/:id/summarize` · đã test live: tóm tắt chuẩn cả vụ smoke fail
+
+### 12. 📊 Báo cáo ngày/tuần qua Telegram
+Mỗi ngày sau 8h sáng: gửi báo cáo 24h (thứ 2 → báo cáo TUẦN 7 ngày): số deploy ✅/❌,
+crash/smoke fail, app đang chạy, breakdown theo project + AI nhận xét (best-effort).
+- Chống gửi trùng qua bảng `Setting` (`report_last_sent`); không có hoạt động → không nhắn
+- Admin xem trước: `GET /admin/report?days=1|7` · đã test live với số liệu thật
+
+### 13. ⏪ Rollback thông minh (Docker mode)
+Deploy Docker mới mà smoke test fail → tự tìm image ổn định gần nhất (bản cũ sạch lỗi)
+→ tự tạo deployment rollback + Telegram "⏪ TỰ ĐỘNG ROLLBACK". Flag `auto_rollback` (Admin tắt được).
+- Chống lặp: bản rollback không tự rollback tiếp; host-run không áp dụng (không lưu bản cũ)
+- Lưu ý: mới verify bằng typecheck + logic (app của bạn chạy host-run nên chưa có ca Docker thật)
+
 ### 8. 🩺 Smoke test sau deploy
 Deploy BACKEND báo "thành công" chưa chắc app sống — smoke test gọi thử app thật
 (tối đa 7 lần / ~20s) sau khi RUNNING:
@@ -90,23 +128,14 @@ Deploy BACKEND báo "thành công" chưa chắc app sống — smoke test gọi 
 
 ---
 
-## 🗺️ Lộ trình chính: ✅ ĐÃ XONG 8/8
-Việc tiếp theo lấy từ bảng xếp hạng bên dưới (đã GỘP Backlog cũ + ý tưởng vòng 2
-thành 1 danh sách — xếp theo **giá trị ÷ công sức**, làm từ trên xuống).
+## 🗺️ Lộ trình chính: ✅ ĐÃ XONG 13/13 (8 lộ trình gốc + trọn Đợt 1)
+Việc tiếp theo lấy từ bảng xếp hạng bên dưới (xếp theo **giá trị ÷ công sức**).
 
 ---
 
 ## 🎯 Việc tiếp theo — xếp hạng chung
 
-### Đợt 1 — đáng làm ngay (giá trị cao, công nhỏ–vừa)
-
-| # | Tính năng | Mô tả | Cỡ | Vì sao xếp cao |
-|---|---|---|---|---|
-| 1 | **Báo cáo tuần/ngày qua Telegram** | Cron tổng hợp: số deploy, tỉ lệ fail, app crash mấy lần (watchdog đếm sẵn) + AI viết nhận xét/gợi ý | Vừa | Giá trị lặp lại hằng ngày, dữ liệu có sẵn hết |
-| 2 | **Tóm tắt build log dài** | Nút "Tóm tắt" trên trang deployment: 2000 dòng → 5 dòng (model rẻ: gemini-flash/Haiku) | Nhỏ | 2 giờ là xong, dùng thường xuyên |
-| 3 | **Kiểm tra env trước deploy** | So env đã khai vs `envKeys` AI đọc được từ repo (tính năng 5) → báo thiếu TRƯỚC khi deploy | Nhỏ | Chặn fail từ gốc, tận dụng đồ có sẵn |
-| 4 | **Quét secret lộ** | Lúc analyze/deploy: phát hiện `.env` commit nhầm, key/token trong code → cảnh báo đỏ | Nhỏ | Bài học thật (bot token từng lộ) |
-| 5 | **Rollback thông minh** | Watchdog crash-loop / smoke fail → tự đề xuất (hoặc tự động) rollback về bản ổn định gần nhất | Vừa | Khép chuỗi: smoke báo bệnh → watchdog cấp cứu → rollback chữa |
+### ~~Đợt 1~~ — ✅ ĐÃ LÀM XONG TẤT CẢ (xem mục 9–13 phần "Đã làm")
 
 ### Đợt 2 — làm khi chạm đến ngữ cảnh đó
 

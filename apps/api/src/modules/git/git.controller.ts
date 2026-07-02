@@ -1,7 +1,8 @@
-import { Body, Controller, Param, Post, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Param, Post, UseGuards } from '@nestjs/common';
 import type { AiProjectSuggestion } from '@deploybox/shared';
 import { GitService, type RemoteBranch } from './git.service';
 import { AiService } from '../../infra/ai/ai.service';
+import { FeatureFlagsService } from '../../infra/feature-flags/feature-flags.service';
 import {
   JwtAuthGuard,
   type JwtPayload,
@@ -14,6 +15,7 @@ export class GitController {
   constructor(
     private readonly git: GitService,
     private readonly ai: AiService,
+    private readonly flags: FeatureFlagsService,
   ) {}
 
   /** ✨ Tự nhận diện cấu hình: clone nông repo → AI đọc → đề xuất config. */
@@ -28,6 +30,9 @@ export class GitController {
       gitUsername?: string;
     },
   ): Promise<AiProjectSuggestion> {
+    if (!this.flags.aiEnabled('ai_repo_analyze')) {
+      throw new BadRequestException('Tính năng "Tự nhận diện cấu hình" đang tắt (Admin → Tính năng hệ thống).');
+    }
     const snapshot = await this.git.snapshotRepo(
       body.repoUrl,
       body.gitToken,
@@ -35,12 +40,22 @@ export class GitController {
       (body.authMode as any) ?? 'auto',
       body.gitUsername,
     );
-    return this.ai.analyzeRepo({
+    const suggestion = await this.ai.analyzeRepo({
       repoUrl: body.repoUrl,
       branch: body.branch,
       tree: snapshot.tree,
       files: snapshot.files,
     });
+    return { ...suggestion, secretWarnings: snapshot.secretWarnings };
+  }
+
+  /** "Kiểm tra AI" project có sẵn: env thiếu + secret lộ (dùng token đã lưu). */
+  @Post('projects/:projectId/check')
+  check(
+    @CurrentUser() user: JwtPayload,
+    @Param('projectId') projectId: string,
+  ) {
+    return this.git.checkProjectConfig(projectId, user.sub);
   }
 
   // Lấy branches khi TẠO project mới — token nhập trực tiếp trong body

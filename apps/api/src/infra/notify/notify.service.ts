@@ -78,6 +78,31 @@ export class NotifyService {
     for (const chatId of recipients) await this.telegram(chatId, text);
   }
 
+  /** Gửi 1 tin HTML tới global chat + danh sách chat_id (dedupe, tôn trọng flag). */
+  async broadcast(textHtml: string, extraRecipients: string[] = []): Promise<void> {
+    if (!this.flags.isEnabled('telegram_notifications')) return;
+    const global = this.config.get<string>('TELEGRAM_CHAT_ID') ?? '';
+    const recipients = [...new Set([global, ...extraRecipients].filter(Boolean))];
+    for (const chatId of recipients) await this.telegram(chatId, textHtml.slice(0, 4000));
+  }
+
+  /** ⏪ Đã tự động rollback (smoke test fail trên bản Docker mới). */
+  async autoRollback(
+    opts: { projectName: string; targetShort: string; reason: string },
+    extraRecipients: string[] = [],
+  ): Promise<void> {
+    if (!this.flags.isEnabled('telegram_notifications')) return;
+    const global = this.config.get<string>('TELEGRAM_CHAT_ID') ?? '';
+    const recipients = [...new Set([global, ...extraRecipients].filter(Boolean))];
+    if (!recipients.length) return;
+    const text = [
+      `⏪ <b>TỰ ĐỘNG ROLLBACK</b> · 📦 <b>${esc(opts.projectName)}</b>`,
+      `Lý do: ${esc(opts.reason)}`,
+      `Đang quay về bản ổn định <code>${esc(opts.targetShort)}</code>…`,
+    ].join('\n');
+    for (const chatId of recipients) await this.telegram(chatId, text);
+  }
+
   /**
    * Smoke test sau deploy THẤT BẠI: deploy báo thành công nhưng app không
    * trả lời / trả 5xx. Gửi cảnh báo + chẩn đoán AI nếu có.

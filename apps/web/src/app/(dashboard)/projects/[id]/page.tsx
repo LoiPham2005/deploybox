@@ -15,6 +15,7 @@ import { RollbackButton } from '@/features/deployments/rollback-button';
 import { WebhookHistory } from '@/features/projects/webhook-history';
 import { DeployApiSnippet } from '@/features/projects/deploy-api-snippet';
 import { WebhookGuide } from '@/features/projects/webhook-guide';
+import { AiCheckPanel } from '@/features/projects/ai-check-panel';
 
 export default async function ProjectDetailPage({
   params,
@@ -105,6 +106,15 @@ export default async function ProjectDetailPage({
             </>
           )}
         </dl>
+      </Card>
+
+      <Card className="border-sky-500/15">
+        <AiCheckPanel
+          projectId={project.id}
+          requiredEnvKeys={project.requiredEnvKeys ?? []}
+          envVars={env}
+          hasRepo={!!project.gitRepoUrl}
+        />
       </Card>
 
       <Card>

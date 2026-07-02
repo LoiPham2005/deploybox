@@ -112,6 +112,15 @@ export class DeploymentsController {
     return this.deployments.diagnose(user.sub, deploymentId);
   }
 
+  /** AI tóm tắt build log dài thành vài dòng. */
+  @Post('deployments/:deploymentId/summarize')
+  summarize(
+    @CurrentUser() user: JwtPayload,
+    @Param('deploymentId') deploymentId: string,
+  ) {
+    return this.deployments.summarize(user.sub, deploymentId);
+  }
+
   /** SSE: stream build log realtime. Replay file trước, rồi stream live. */
   @Get('deployments/:deploymentId/logs/stream')
   async streamBuildLogs(

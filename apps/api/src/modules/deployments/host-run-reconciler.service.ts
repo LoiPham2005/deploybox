@@ -13,6 +13,7 @@ import { EnvService } from '../env/env.service';
 import { HostBackendBuilder } from '../../infra/builder/host-backend.builder';
 import { AiService } from '../../infra/ai/ai.service';
 import { NotifyService } from '../../infra/notify/notify.service';
+import { FeatureFlagsService } from '../../infra/feature-flags/feature-flags.service';
 
 // Quét mỗi 60s; crash quá N lần trong CỬA SỔ 10 phút → dừng hẳn (chống crash-loop)
 const SWEEP_MS = 60_000;
@@ -63,6 +64,7 @@ export class HostRunReconcilerService
     private readonly hostBackend: HostBackendBuilder,
     private readonly ai: AiService,
     private readonly notify: NotifyService,
+    private readonly flags: FeatureFlagsService,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -187,6 +189,8 @@ export class HostRunReconcilerService
     action: 'restarted' | 'stopped',
     crashCount: number,
   ): Promise<void> {
+    // Tắt flag → không AI, không nhắn (watchdog vẫn restart app như thường)
+    if (!this.flags.aiEnabled('ai_watchdog_diagnosis')) return;
     // Chữ ký lỗi = 400 ký tự cuối log (bỏ khoảng trắng) — giống lần trước thì không gọi AI lại
     const sig = crashLog.replace(/\s+/g, ' ').trim().slice(-400);
     let diagnosis = null;

@@ -16,6 +16,8 @@ export const createProjectSchema = z.object({
   notifyUrl: z.string().url().optional(),
   serverId: z.string().optional(),
   useDocker: z.boolean().optional(),
+  // Biến env app cần (AI đọc từ repo lúc "Tự nhận diện") — để cảnh báo thiếu env
+  requiredEnvKeys: z.array(z.string().max(100)).max(30).optional(),
 });
 export type CreateProjectDto = z.infer<typeof createProjectSchema>;
 

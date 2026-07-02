@@ -81,6 +81,16 @@ export interface AiProjectSuggestion {
   artifactPath: string; // chỉ MOBILE
   envKeys: string[]; // biến môi trường app cần (đọc từ .env.example / code)
   reason: string; // giải thích ngắn vì sao đoán vậy (tiếng Việt)
+  secretWarnings?: string[]; // cảnh báo secret lộ trong repo (quét regex, không phải AI)
+}
+
+/** Kết quả "Kiểm tra AI" trên project có sẵn: env thiếu + secret lộ. */
+export interface ProjectCheckResult {
+  envKeys: string[]; // biến env app cần (AI đọc từ repo, đã lưu vào project)
+  missingEnv: string[]; // biến cần nhưng CHƯA khai trong DeployBox
+  secretWarnings: string[]; // secret lộ trong repo (quét regex)
+  framework: string;
+  reason: string;
 }
 
 /** Kết quả AI "bác sĩ lỗi deploy" — đọc log thất bại, chỉ nguyên nhân + cách sửa. */
@@ -166,6 +176,7 @@ export interface ProjectDetailDto {
   cpuLimit: number;
   notifyUrl?: string | null;
   serverId?: string | null;
+  requiredEnvKeys?: string[];
   domains: ProjectDomainDto[];
   deployments: DeploymentDetail[];
   webhookUrl: string;

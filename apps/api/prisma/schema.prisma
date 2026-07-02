@@ -180,6 +180,9 @@ model Project {
   // Cách chạy BACKEND: true = build Docker (cần Dockerfile); false = chạy node thẳng trên máy
   useDocker      Boolean      @default(true)
 
+  // Biến env app CẦN (AI đọc từ repo — .env.example/config). Dùng cảnh báo thiếu env trước deploy.
+  requiredEnvKeys String[]    @default([])
+
   // Vận hành / quota
   sleepEnabled   Boolean      @default(false)
   memoryMb       Int          @default(512)

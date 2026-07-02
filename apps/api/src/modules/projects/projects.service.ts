@@ -184,6 +184,7 @@ export class ProjectsService {
         notifyUrl: dto.notifyUrl || null,
         serverId: dto.serverId || null,
         useDocker: dto.useDocker ?? true,
+        requiredEnvKeys: dto.requiredEnvKeys ?? [],
         webhookSecret: randomBytes(16).toString('hex'),
         // mỗi project có sẵn một subdomain managed mặc định
         domains: {
@@ -330,6 +331,7 @@ export class ProjectsService {
       cpuLimit: p.cpuLimit,
       notifyUrl: p.notifyUrl,
       serverId: (p as any).serverId ?? null,
+      requiredEnvKeys: (p as { requiredEnvKeys?: string[] }).requiredEnvKeys ?? [],
       domains: (p.domains ?? []).map((d) => ({
         id: d.id,
         hostname: d.hostname,

@@ -13,6 +13,7 @@ import { CleanupService } from '../../infra/cleanup/cleanup.service';
 import { NotifyService } from '../../infra/notify/notify.service';
 import { AiService } from '../../infra/ai/ai.service';
 import { DockerService } from '../../infra/docker/docker.service';
+import { FeatureFlagsService } from '../../infra/feature-flags/feature-flags.service';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 import { LogBroadcastService } from '../../infra/log-broadcast/log-broadcast.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
@@ -45,6 +46,7 @@ export class BuildRunnerService {
     private readonly notify: NotifyService,
     private readonly ai: AiService,
     private readonly docker: DockerService,
+    private readonly flags: FeatureFlagsService,
   ) {}
 
   /** chat_id Telegram của các thành viên team đã nối (để gửi thông báo deploy). */
@@ -109,6 +111,23 @@ export class BuildRunnerService {
         data: { status: 'BUILDING', startedAt: new Date() },
       });
       log('=== BẮT ĐẦU BUILD ===', 'stdout');
+
+      // ⚠️ Cảnh báo env thiếu (requiredEnvKeys do AI đọc từ repo) — chỉ báo, không chặn
+      const requiredKeys = (project as { requiredEnvKeys?: string[] }).requiredEnvKeys ?? [];
+      if (requiredKeys.length && !rollbackOf && this.flags.aiEnabled('ai_env_check')) {
+        const declared = await this.prisma.envVar.findMany({
+          where: { projectId: project.id },
+          select: { key: true },
+        });
+        const have = new Set(declared.map((v) => v.key));
+        const missing = requiredKeys.filter((k) => !have.has(k));
+        if (missing.length) {
+          log(
+            `⚠️ Thiếu ${missing.length} biến env app cần: ${missing.join(', ')} — app có thể lỗi lúc chạy. Thêm ở tab Env.`,
+            'stderr',
+          );
+        }
+      }
 
       // Server REMOTE → chạy qua SSH. Server LOCAL → build ngay trên máy chủ DeployBox
       // (LOCAL không có SSH key, host=localhost — không được SSH vào chính mình).
@@ -265,8 +284,8 @@ export class BuildRunnerService {
         await this.telegramRecipients(project.teamId),
       );
       // 🩺 Smoke test NỀN (BACKEND): gọi thử app thật — bắt ca "deploy xong nhưng app hỏng"
-      if (project.type === 'BACKEND') {
-        void this.smokeTest(deploymentId, project, dataDir, log).catch((e) =>
+      if (project.type === 'BACKEND' && this.flags.aiEnabled('ai_smoke_test')) {
+        void this.smokeTest(deploymentId, project, dataDir, log, !!rollbackOf).catch((e) =>
           this.logger.warn(`Smoke test lỗi: ${e instanceof Error ? e.message : e}`),
         );
       }
@@ -321,6 +340,7 @@ export class BuildRunnerService {
     project: Project,
     dataDir: string,
     log: BuildLogger,
+    isRollback = false,
   ): Promise<void> {
     const url = `http://127.0.0.1:${project.internalPort}/`;
     const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -383,6 +403,50 @@ export class BuildRunnerService {
       { projectName: project.name, detail, diagnosis },
       await this.telegramRecipients(project.teamId).catch(() => []),
     );
+
+    // ⏪ Rollback thông minh: bản Docker mới hỏng → tự quay về image ổn định gần nhất.
+    // Không áp dụng cho: bản rollback (tránh lặp vô hạn), host-run (không lưu bản cũ).
+    if (
+      !isRollback &&
+      project.useDocker !== false &&
+      this.flags.aiEnabled('ai_auto_rollback')
+    ) {
+      const prev = await this.prisma.deployment.findFirst({
+        where: {
+          projectId: project.id,
+          id: { not: deploymentId },
+          imageTag: { not: null },
+          errorMessage: null, // bản cũ sạch (không smoke fail / crash)
+        },
+        orderBy: { queuedAt: 'desc' },
+        select: { id: true },
+      });
+      if (prev) {
+        log(`⏪ Auto-rollback: quay về bản ${prev.id.slice(0, 8)} (image ổn định gần nhất)`, 'stderr');
+        const rb = await this.prisma.deployment.create({
+          data: {
+            projectId: project.id,
+            status: 'QUEUED',
+            trigger: 'REDEPLOY',
+            createdBy: 'auto-rollback',
+            commitMsg: `Auto-rollback về ${prev.id.slice(0, 8)} — smoke test thất bại`,
+          },
+        });
+        await this.notify.autoRollback(
+          {
+            projectName: project.name,
+            targetShort: prev.id.slice(0, 8),
+            reason: detail,
+          },
+          await this.telegramRecipients(project.teamId).catch(() => []),
+        );
+        setImmediate(() =>
+          this.run({ deploymentId: rb.id, rollbackOf: prev.id }).catch((e) =>
+            this.logger.error(e),
+          ),
+        );
+      }
+    }
   }
 
   /**
@@ -396,6 +460,7 @@ export class BuildRunnerService {
     errorMessage: string,
     logFile: string,
   ): Promise<void> {
+    if (!this.flags.aiEnabled('ai_auto_diagnosis')) return;
     const log = await readFile(logFile, 'utf8').catch(() => '');
     if (!log && !errorMessage) return;
 

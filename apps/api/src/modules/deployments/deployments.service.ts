@@ -21,6 +21,7 @@ import { CaddyService } from '../../infra/caddy/caddy.service';
 import { SleepService } from '../../infra/sleep/sleep.service';
 import { BuildRunnerService } from './build.runner.service';
 import { AiService } from '../../infra/ai/ai.service';
+import { FeatureFlagsService } from '../../infra/feature-flags/feature-flags.service';
 import { BUILD_QUEUE, type BuildJobData } from './queue.constants';
 
 @Injectable()
@@ -36,6 +37,7 @@ export class DeploymentsService {
     private readonly runner: BuildRunnerService,
     private readonly hostBackend: HostBackendBuilder,
     private readonly ai: AiService,
+    private readonly flags: FeatureFlagsService,
     @Optional() @InjectQueue(BUILD_QUEUE) private readonly buildQueue: Queue<BuildJobData> | null,
   ) {
     if (buildQueue) {
@@ -340,11 +342,47 @@ export class DeploymentsService {
     };
   }
 
+  /** Cache tóm tắt log theo deployment (log bất biến khi deploy đã kết thúc). */
+  private summaryCache = new Map<string, string>();
+
+  /** AI tóm tắt build log của 1 deployment (cache RAM). */
+  async summarize(userId: string, deploymentId: string): Promise<{ summary: string }> {
+    if (!this.flags.aiEnabled('ai_log_summary')) {
+      throw new BadRequestException('Tính năng "Tóm tắt build log" đang tắt (Admin → Tính năng hệ thống).');
+    }
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      include: { project: true },
+    });
+    if (!deployment) throw new NotFoundException('Không tìm thấy deployment');
+    await this.assertProjectAccess(userId, deployment.project);
+
+    const cached = this.summaryCache.get(deploymentId);
+    if (cached) return { summary: cached };
+
+    const log = await this.readLogs(deploymentId);
+    if (!log.trim()) throw new BadRequestException('Deployment này chưa có log');
+
+    const summary = await this.ai.summarizeLog(deployment.project.name, log);
+    // Chỉ cache khi deploy đã kết thúc (log không đổi nữa)
+    if (['RUNNING', 'FAILED', 'STOPPED', 'CANCELLED', 'SLEEPING'].includes(deployment.status)) {
+      this.summaryCache.set(deploymentId, summary);
+      if (this.summaryCache.size > 200) {
+        const first = this.summaryCache.keys().next().value;
+        if (first) this.summaryCache.delete(first);
+      }
+    }
+    return { summary };
+  }
+
   /**
    * AI "bác sĩ lỗi deploy": đọc log bản deploy này → nguyên nhân + cách sửa.
    * Lưu kết quả vào deployment.aiDiagnosis (cache) để lần sau không gọi lại.
    */
   async diagnose(userId: string, deploymentId: string): Promise<DeploymentDetail> {
+    if (!this.flags.aiEnabled('ai_diagnosis')) {
+      throw new BadRequestException('Tính năng "Bác sĩ lỗi deploy" đang tắt (Admin → Tính năng hệ thống).');
+    }
     const deployment = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
       include: { project: true },

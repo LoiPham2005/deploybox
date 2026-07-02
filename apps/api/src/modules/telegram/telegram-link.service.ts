@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 import { AiService } from '../../infra/ai/ai.service';
+import { FeatureFlagsService } from '../../infra/feature-flags/feature-flags.service';
 
 const TG = 'https://api.telegram.org';
 
@@ -35,6 +36,7 @@ export class TelegramLinkService implements OnApplicationBootstrap, OnModuleDest
     private readonly config: ConfigService,
     private readonly prisma: PrismaService,
     private readonly ai: AiService,
+    private readonly flags: FeatureFlagsService,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
@@ -176,6 +178,12 @@ export class TelegramLinkService implements OnApplicationBootstrap, OnModuleDest
 
     if (/^\/status/i.test(question)) {
       await this.send(chatId, ctx.statusText); // không tốn AI
+      return;
+    }
+
+    // Hỏi đáp AI — tôn trọng công tắc riêng + nút tổng ở Admin
+    if (!this.flags.aiEnabled('ai_telegram_qa')) {
+      await this.send(chatId, '💤 Tính năng hỏi đáp AI đang tắt. /status vẫn dùng được nhé.');
       return;
     }
 

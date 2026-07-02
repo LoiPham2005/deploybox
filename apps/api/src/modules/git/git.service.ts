@@ -10,9 +10,13 @@ import { promisify } from 'util';
 import { mkdtemp, readdir, readFile, rm, stat } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
+import type { ProjectCheckResult } from '@deploybox/shared';
 import { buildGitAuthUrl, type GitAuthMode } from '../../common/git-auth.util';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
+import { AiService } from '../../infra/ai/ai.service';
+import { FeatureFlagsService } from '../../infra/feature-flags/feature-flags.service';
+import { scanForSecrets } from './secret-scan.util';
 
 const execFileAsync = promisify(execFile);
 
@@ -31,6 +35,7 @@ export interface RemoteBranch {
 export interface RepoSnapshot {
   tree: string; // danh sách đường dẫn (tối đa 3 cấp, có giới hạn)
   files: Record<string, string>; // path → nội dung (đã cắt bớt)
+  secretWarnings: string[]; // cảnh báo secret lộ (quét regex)
 }
 
 // File "chìa khóa" giúp nhận diện framework/config — đọc nếu tồn tại (mọi cấp tới depth 2)
@@ -54,7 +59,62 @@ export class GitService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly crypto: CryptoService,
+    private readonly ai: AiService,
+    private readonly flags: FeatureFlagsService,
   ) {}
+
+  /**
+   * "Kiểm tra AI" trên project có sẵn: clone (token đã lưu) → quét secret + AI đọc
+   * env app cần → lưu requiredEnvKeys → trả về danh sách env THIẾU + cảnh báo secret.
+   */
+  async checkProjectConfig(projectId: string, userId: string): Promise<ProjectCheckResult> {
+    if (!this.flags.aiEnabled('ai_env_check')) {
+      throw new BadRequestException('Tính năng "Kiểm tra env" đang tắt (Admin → Tính năng hệ thống).');
+    }
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      include: { envVars: { select: { key: true } } },
+    });
+    if (!project) throw new NotFoundException('Không tìm thấy project');
+    const member = await this.prisma.teamMember.findUnique({
+      where: { teamId_userId: { teamId: project.teamId, userId } },
+    });
+    if (!member) throw new ForbiddenException('Bạn không thuộc team này');
+    if (!project.gitRepoUrl) {
+      throw new BadRequestException('Project chưa có Git repo URL');
+    }
+
+    const token = project.gitToken
+      ? (() => { try { return this.crypto.decrypt(project.gitToken!); } catch { return undefined; } })()
+      : undefined;
+
+    const snapshot = await this.snapshotRepo(
+      project.gitRepoUrl, token, project.gitBranch, 'auto',
+    );
+    const suggestion = await this.ai.analyzeRepo({
+      repoUrl: project.gitRepoUrl,
+      branch: project.gitBranch,
+      tree: snapshot.tree,
+      files: snapshot.files,
+    });
+
+    const envKeys = suggestion.envKeys.slice(0, 30);
+    await this.prisma.project.update({
+      where: { id: projectId },
+      data: { requiredEnvKeys: envKeys },
+    });
+
+    const declared = new Set(project.envVars.map((v) => v.key));
+    const missingEnv = envKeys.filter((k) => !declared.has(k));
+
+    return {
+      envKeys,
+      missingEnv,
+      secretWarnings: snapshot.secretWarnings,
+      framework: suggestion.framework,
+      reason: suggestion.reason,
+    };
+  }
 
   /**
    * Lấy branches cho project đã tồn tại — dùng token đã lưu (mã hóa) của project,
@@ -188,6 +248,8 @@ export class GitService {
 
       const tree: string[] = [];
       const files: Record<string, string> = {};
+      // File .env THẬT: chỉ quét secret bằng regex, KHÔNG đưa vào prompt AI
+      const scanOnly: Record<string, string> = {};
 
       const walk = async (dir: string, rel: string, depth: number): Promise<void> => {
         if (depth > 3 || tree.length >= 200) return;
@@ -208,13 +270,21 @@ export class GitService {
             if (KEY_FILES.has(name) && st.size < 200_000) {
               const content = await readFile(abs, 'utf8').catch(() => '');
               if (content) files[relPath] = content.slice(0, 4_000);
+            } else if (name.startsWith('.env') && st.size < 200_000) {
+              // .env thật → chỉ để quét secret, không đưa AI
+              const content = await readFile(abs, 'utf8').catch(() => '');
+              if (content) scanOnly[relPath] = content.slice(0, 8_000);
             }
           }
         }
       };
       await walk(tmp, '', 1);
 
-      return { tree: tree.join('\n'), files };
+      const treeText = tree.join('\n');
+      const secretWarnings = this.flags.aiEnabled('ai_secret_scan')
+        ? scanForSecrets(treeText, { ...files, ...scanOnly })
+        : [];
+      return { tree: treeText, files, secretWarnings };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       throw this.friendly(msg);

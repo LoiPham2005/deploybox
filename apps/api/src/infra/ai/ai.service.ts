@@ -373,6 +373,49 @@ export class AiService {
     };
   }
 
+  /** Tóm tắt build log dài thành vài dòng tiếng Việt (dùng cho nút "Tóm tắt"). */
+  async summarizeLog(projectName: string, logText: string): Promise<string> {
+    if (!this.isEnabled()) {
+      throw new BadRequestException('Tính năng AI đang tắt (Admin → Tính năng hệ thống).');
+    }
+    const cfg = await this.getConfig();
+    const provider = this.providers[cfg.provider];
+    if (!provider.isConfigured()) {
+      throw new BadRequestException(
+        `Server chưa có API key cho ${provider.label} — admin thêm key hoặc đổi nhà cung cấp.`,
+      );
+    }
+    const MAX = 20_000;
+    const log =
+      logText.length > MAX
+        ? logText.slice(0, 6_000) + '\n...(lược bớt giữa)...\n' + logText.slice(-14_000)
+        : logText;
+    try {
+      const raw = await provider.complete({
+        model: cfg.model,
+        system:
+          'Bạn là kỹ sư DevOps. Tóm tắt build/deploy log thành 3–6 dòng tiếng Việt, plain text: ' +
+          'diễn biến chính theo thứ tự, thời điểm đáng chú ý (cài đặt, build, chạy), cảnh báo/lỗi nếu có. Không bịa.',
+        user: `Project: ${projectName}\n\nLOG:\n${log}\n\nTóm tắt theo schema JSON.`,
+        schema: {
+          type: 'object',
+          properties: {
+            summary: { type: 'string', description: 'Tóm tắt 3–6 dòng tiếng Việt, plain text.' },
+          },
+          required: ['summary'],
+          additionalProperties: false,
+        },
+      });
+      const summary = String(raw.summary ?? '').trim();
+      if (!summary) throw new Error('AI không trả về tóm tắt');
+      return summary;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      this.logger.warn(`AI tóm tắt log thất bại: ${msg}`);
+      throw new BadRequestException(`Gọi ${provider.label} thất bại: ${msg}`);
+    }
+  }
+
   /** Hỏi đáp tự do (Telegram bot): trả lời dựa trên dữ liệu project của user. */
   async answer(question: string, context: string): Promise<string> {
     if (!this.isEnabled()) {

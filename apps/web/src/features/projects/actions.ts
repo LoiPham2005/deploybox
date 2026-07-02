@@ -8,6 +8,7 @@ import {
   type AddDomainResponse,
   type AiDiagnosis,
   type AiProjectSuggestion,
+  type ProjectCheckResult,
   type CreateProjectDto,
   type DeploymentDetail,
   type ProjectSummary,
@@ -315,6 +316,37 @@ export async function deleteDomainAction(
       ok: false,
       error: e instanceof Error ? e.message : 'Xóa domain thất bại',
     };
+  }
+}
+
+/** AI tóm tắt build log của 1 deployment. */
+export async function summarizeDeploymentAction(
+  deploymentId: string,
+): Promise<ActionResult<{ summary: string }>> {
+  try {
+    const res = await serverApi<{ summary: string }>(
+      `/deployments/${deploymentId}/summarize`,
+      { method: 'POST' },
+    );
+    return { ok: true, data: res };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Tóm tắt thất bại' };
+  }
+}
+
+/** 🔍 Kiểm tra AI trên project có sẵn: env thiếu + secret lộ (clone bằng token đã lưu). */
+export async function aiCheckProjectAction(
+  projectId: string,
+): Promise<ActionResult<ProjectCheckResult>> {
+  try {
+    const res = await serverApi<ProjectCheckResult>(
+      `/git/projects/${projectId}/check`,
+      { method: 'POST' },
+    );
+    revalidatePath(`/projects/${projectId}`);
+    return { ok: true, data: res };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Kiểm tra thất bại' };
   }
 }
 

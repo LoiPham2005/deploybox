@@ -197,6 +197,8 @@ export function NewProjectForm({
       buildImage: type === 'MOBILE' ? str('buildImage') : undefined,
       artifactPath: type === 'MOBILE' ? str('artifactPath') : undefined,
       serverId: serverId || undefined,
+      // Lưu env app cần (AI đọc từ repo) → cảnh báo thiếu env trước mỗi deploy
+      requiredEnvKeys: aiSuggestion?.envKeys?.length ? aiSuggestion.envKeys : undefined,
     };
 
     setLoading(true);
@@ -327,6 +329,16 @@ export function NewProjectForm({
                     <code>{aiSuggestion.envKeys.join(', ')}</code> — thêm ở tab Env sau
                     khi tạo.
                   </p>
+                )}
+                {(aiSuggestion.secretWarnings?.length ?? 0) > 0 && (
+                  <div className="mt-2 rounded-md border border-red-500/30 bg-red-500/10 p-2">
+                    <p className="font-medium text-red-300">🚨 Secret bị lộ trong repo:</p>
+                    <ul className="mt-1 list-inside list-disc space-y-0.5 text-red-200/80">
+                      {aiSuggestion.secretWarnings!.map((s) => (
+                        <li key={s}>{s}</li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
               </div>
             )}

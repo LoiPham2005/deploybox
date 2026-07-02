@@ -10,6 +10,7 @@ import { RollbackButton } from '@/features/deployments/rollback-button';
 import { LogStream } from '@/features/deployments/log-stream';
 import { RuntimeLog } from '@/features/deployments/runtime-log';
 import { AiDiagnosis } from '@/features/deployments/ai-diagnosis';
+import { LogSummary } from '@/features/deployments/log-summary';
 
 const TERMINAL = ['RUNNING', 'FAILED', 'STOPPED', 'CANCELLED'];
 
@@ -109,7 +110,9 @@ export default async function DeploymentPage({
       )}
 
       <Card>
-        <h2 className="mb-3 text-sm font-semibold text-white/70">Build log</h2>
+        <div className="mb-3">
+          <LogSummary deploymentId={deployment.id} />
+        </div>
         <LogStream
           deploymentId={deployment.id}
           initialLogs={logs}
