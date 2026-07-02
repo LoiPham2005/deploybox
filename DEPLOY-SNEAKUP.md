@@ -143,9 +143,13 @@ ANTHROPIC_API_KEY=
 OPENAI_API_KEY=
 ```
 
-Ctrl+O, Enter, Ctrl+X → rồi chạy:
+Ctrl+O, Enter, Ctrl+X.
 
-> `NEXT_PUBLIC_API_URL` bị **nướng vào web lúc build** → set xong MỚI build (Bước 5).
+> ⚠️ **BẮT BUỘC** — Next.js KHÔNG đọc `.env` ở gốc repo lúc build. Phải tạo thêm file env
+> riêng cho web, không thì nút Đăng nhập sẽ gọi nhầm `localhost:4000`:
+> ```bash
+> echo 'NEXT_PUBLIC_API_URL=https://api.sneakup.io.vn' > /opt/deploybox/apps/web/.env.production
+> ```
 
 Chuẩn bị DB client (DB đã có sẵn dữ liệu — **KHÔNG chạy seed** kẻo tạo lại account mẫu):
 ```bash
@@ -231,7 +235,7 @@ ssh root@14.225.204.227 'cd /opt/deploybox && git pull && pnpm install && make d
 | Triệu chứng | Xử lý |
 |---|---|
 | `https://sneakup.io.vn` không lên / cert lỗi | `dig +short sneakup.io.vn` phải ra IP VPS; cổng 80/443 không bị ai chiếm; `journalctl -u deploybox-caddy` |
-| Web trắng / gọi API fail | `NEXT_PUBLIC_API_URL=https://api.sneakup.io.vn` đặt TRƯỚC khi build web — sai thì sửa `.env` rồi `make deploy-web` |
+| Đăng nhập "Failed to fetch" / web gọi `localhost:4000` | Next KHÔNG đọc `.env` gốc lúc build → tạo `apps/web/.env.production` chứa `NEXT_PUBLIC_API_URL=https://api.sneakup.io.vn` rồi `make deploy-web` |
 | Project cũ vẫn hiện domain `.localhost` | Domain managed sinh lúc tạo project. Thêm domain mới `<slug>.sneakup.io.vn` ở card Domains rồi đặt làm chính |
 | Đăng nhập bị văng liên tục | JWT_SECRET trên VPS khác local → bình thường, đăng nhập lại là xong |
 | Project private không clone được | ENCRYPTION_KEY trên VPS KHÁC local → git token trong DB giải mã fail. Copy đúng key local sang |
