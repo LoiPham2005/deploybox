@@ -121,6 +121,30 @@ export interface AnalyzeRepoInput {
   files: Record<string, string>;
 }
 
+/** Schema cho hỏi đáp tự do (Telegram bot). */
+const ANSWER_SCHEMA: Record<string, unknown> = {
+  type: 'object',
+  properties: {
+    answer: {
+      type: 'string',
+      description: 'Câu trả lời tiếng Việt, ngắn gọn, plain text (không markdown).',
+    },
+  },
+  required: ['answer'],
+  additionalProperties: false,
+};
+
+const ANSWER_SYSTEM_PROMPT = `Bạn là trợ lý DeployBox (nền tảng tự deploy) trả lời người dùng qua Telegram.
+Người dùng hỏi về project/deploy của HỌ. Bạn được cấp DỮ LIỆU THẬT về các project họ có quyền xem
+(tên, trạng thái, lỗi gần nhất, chẩn đoán AI nếu có).
+
+Quy tắc:
+- CHỈ dựa vào dữ liệu được cấp. Không bịa. Thiếu dữ liệu → nói thẳng và gợi ý mở trang deployment xem log.
+- Trả lời NGẮN GỌN (tối đa ~10 dòng), tiếng Việt, thân thiện, plain text (KHÔNG markdown, không backtick).
+- Hỏi về lỗi deploy → dùng errorMessage + chẩn đoán AI có sẵn trong dữ liệu.
+- Không bao giờ tiết lộ giá trị biến môi trường, token, mật khẩu.
+- Câu hỏi ngoài phạm vi DeployBox/deploy → từ chối nhẹ nhàng, nói bạn chỉ hỗ trợ về deploy.`;
+
 export interface DiagnoseInput {
   projectName: string;
   projectType: string; // STATIC | BACKEND | MOBILE
@@ -347,6 +371,40 @@ export class AiService {
         : [],
       reason: str(raw.reason),
     };
+  }
+
+  /** Hỏi đáp tự do (Telegram bot): trả lời dựa trên dữ liệu project của user. */
+  async answer(question: string, context: string): Promise<string> {
+    if (!this.isEnabled()) {
+      throw new BadRequestException('Tính năng AI đang tắt (Admin → Tính năng hệ thống).');
+    }
+    const cfg = await this.getConfig();
+    const provider = this.providers[cfg.provider];
+    if (!provider.isConfigured()) {
+      throw new BadRequestException(
+        `Server chưa có API key cho ${provider.label} — admin thêm key hoặc đổi nhà cung cấp.`,
+      );
+    }
+    try {
+      const raw = await provider.complete({
+        model: cfg.model,
+        system: ANSWER_SYSTEM_PROMPT,
+        user: [
+          'DỮ LIỆU PROJECT CỦA NGƯỜI DÙNG:',
+          context,
+          '',
+          `CÂU HỎI: ${question}`,
+        ].join('\n'),
+        schema: ANSWER_SCHEMA,
+      });
+      const answer = String(raw.answer ?? '').trim();
+      if (!answer) throw new Error('AI không trả về câu trả lời');
+      return answer;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      this.logger.warn(`AI (${cfg.provider}/${cfg.model}) trả lời thất bại: ${msg}`);
+      throw new BadRequestException(`Gọi ${provider.label} thất bại: ${msg}`);
+    }
   }
 
   /** Bản "best-effort": trả null thay vì ném lỗi (dùng ở đường nền — notify, webhook). */

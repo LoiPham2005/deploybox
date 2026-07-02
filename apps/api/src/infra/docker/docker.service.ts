@@ -92,6 +92,14 @@ export class DockerService {
     await capture('docker', ['start', name]);
   }
 
+  /** Đuôi log container (một lần, không stream) — cho AI chẩn đoán. */
+  async logsTail(name: string, lines = 200): Promise<string> {
+    const { stdout, stderr } = await capture('docker', [
+      'logs', '--tail', String(lines), name,
+    ]);
+    return [stdout, stderr].filter(Boolean).join('\n');
+  }
+
   /** Stream docker logs -f; trả về hàm cleanup để kill process khi client ngắt. */
   streamLogs(name: string, onLine: (line: string) => void): () => void {
     const child = spawn('docker', ['logs', '-f', '--tail', '300', name]);

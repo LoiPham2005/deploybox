@@ -79,6 +79,37 @@ export class NotifyService {
   }
 
   /**
+   * Smoke test sau deploy THẤT BẠI: deploy báo thành công nhưng app không
+   * trả lời / trả 5xx. Gửi cảnh báo + chẩn đoán AI nếu có.
+   */
+  async smokeTestFailed(
+    opts: {
+      projectName: string;
+      detail: string; // vd "không trả lời sau 20s" / "trả HTTP 500"
+      diagnosis?: AiDiagnosis | null;
+    },
+    extraRecipients: string[] = [],
+  ): Promise<void> {
+    if (!this.flags.isEnabled('telegram_notifications')) return;
+
+    const global = this.config.get<string>('TELEGRAM_CHAT_ID') ?? '';
+    const recipients = [...new Set([global, ...extraRecipients].filter(Boolean))];
+    if (!recipients.length) return;
+
+    const lines = [
+      `🩺 <b>Smoke test THẤT BẠI</b> · 📦 <b>${esc(opts.projectName)}</b>`,
+      `Deploy báo thành công nhưng ${esc(opts.detail)} — app có thể đang hỏng.`,
+    ];
+    const d = opts.diagnosis;
+    if (d) {
+      lines.push(`🔍 <b>Nguyên nhân:</b> ${esc(d.cause.slice(0, 500))}`);
+      lines.push(`🛠 <b>Cách sửa:</b> ${esc(d.fix.slice(0, 700))}`);
+    }
+    const text = lines.join('\n');
+    for (const chatId of recipients) await this.telegram(chatId, text);
+  }
+
+  /**
    * App đang chạy bị CRASH (watchdog phát hiện): báo trạng thái xử lý
    * (đã tự khởi động lại / đã dừng vì crash liên tục) + chẩn đoán AI nếu có.
    */

@@ -70,14 +70,29 @@ cho app host-run (useDocker=false):
 - Đã test live: kill -9 process thật → watchdog bắt trong ≤60s, restart OK, đếm crash
   đúng (lần 2/3), aiDiagnosis lưu vào DB, tin Telegram đi không lỗi
 
+### 8. 🩺 Smoke test sau deploy
+Deploy BACKEND báo "thành công" chưa chắc app sống — smoke test gọi thử app thật
+(tối đa 7 lần / ~20s) sau khi RUNNING:
+- App trả lời (HTTP < 500, kể cả 404) → ghi "🩺 Smoke test OK" vào build log
+- Trả 5xx / không trả lời → lấy runtime log (host file / `docker logs`) → AI chẩn đoán
+  → lưu `errorMessage` + `aiDiagnosis` vào deployment + gửi Telegram 🩺 cảnh báo
+- Chạy nền best-effort, không ảnh hưởng kết quả deploy; kết hợp watchdog tự cứu app
+- Đã test live cả 2 đường: deploy thật → "Smoke test OK (HTTP 404)"; kill app ngay sau
+  RUNNING → phát hiện "KHÔNG trả lời sau ~20s", AI chẩn đoán + Telegram + watchdog cứu lại
+
+### 7. 💬 Hỏi đáp AI qua Telegram
+Nhắn bot `@loipham_deploybox_bot` (chat riêng, hoặc nhắc @bot trong nhóm) → bot nhận diện
+qua chat_id đã nối → lấy dữ liệu project **user có quyền xem** (OWNER: tất cả; MEMBER:
+project được cấp) → AI trả lời dựa trên trạng thái/lỗi/chẩn đoán thật.
+- Lệnh: `/status` (trạng thái project, không tốn AI), `/help`; còn lại là hỏi tự do
+- Bảo mật: chưa nối tài khoản → từ chối; không lộ env/token; rate-limit 10s/câu/người
+- `AiService.answer()` — dùng chung provider đã chọn ở Admin
+
 ---
 
-## 🗺️ Lộ trình tiếp theo (xếp theo ưu tiên)
-
-### Ưu tiên 5 — Hỏi đáp AI qua Telegram
-Bot `@loipham_deploybox_bot` đang long-poll sẵn (`telegram-link.service.ts`).
-- Nhắn bot *"vì sao sports-booking-web fail?"* → bot tìm deployment gần nhất của user (đã link chat_id) → trả lời bằng chẩn đoán
-- Cần: map chat_id → user → project được phép xem (bảo mật theo đúng quyền hiện có)
+## 🗺️ Lộ trình chính: ✅ ĐÃ XONG 8/8
+Việc tiếp theo lấy từ Backlog + Ý tưởng vòng 2 bên dưới.
+Gợi ý thứ tự: Báo cáo tuần → Tóm tắt log → Sinh Dockerfile → Rollback thông minh.
 
 ---
 
@@ -92,6 +107,42 @@ Bot `@loipham_deploybox_bot` đang long-poll sẵn (`telegram-link.service.ts`).
 | Copilot chat trong dashboard | Chat hỏi về project của mình, AI gọi API nội bộ (tool use) để trả lời/thao tác | Lớn |
 | Release notes tự động | Tóm tắt commit giữa 2 bản deploy thành changelog | Nhỏ |
 | Gợi ý tối ưu vận hành | "App restart 5 lần → có thể thiếu RAM, tăng memoryMb" | Vừa |
+
+---
+
+## 💡 Ý tưởng vòng 2 (brainstorm — chưa cam kết làm)
+
+### Chất lượng deploy
+| Ý tưởng | Mô tả | Cỡ |
+|---|---|---|
+| ~~Smoke test sau deploy~~ | ✅ ĐÃ LÀM — xem mục 8 phần "Đã làm" | — |
+| **Rollback thông minh** 🌟 | Bản mới crash liên tục (watchdog đã đếm) / smoke fail → AI so với bản trước → đề xuất (hoặc tự động) rollback về bản ổn định gần nhất, báo Telegram | Vừa |
+| **Gác cổng migration nguy hiểm** | Phát hiện lệnh phá dữ liệu trong build (`prisma migrate reset`, `--force`, `DROP TABLE`…) → chặn lại hỏi xác nhận trước khi chạy | Nhỏ |
+| **Auto-deploy có não** | Webhook git push → AI đọc commit/diff: chỉ đổi docs/README → bỏ qua không deploy; đổi schema DB → cảnh báo trước khi deploy | Nhỏ |
+
+### Bảo mật (bài học thật: bot token từng bị lộ)
+| Ý tưởng | Mô tả | Cỡ |
+|---|---|---|
+| **Quét secret lộ** 🌟 | Lúc analyze/deploy: quét repo phát hiện `.env` commit nhầm, API key/token nằm trong code → cảnh báo đỏ ngay | Nhỏ |
+| **Kiểm tra env trước deploy** | So env đã khai trong DeployBox vs env app cần (Ưu tiên 3 đã đọc được `envKeys`) → thiếu biến nào báo TRƯỚC khi deploy thay vì để fail | Nhỏ |
+| **Che secret trong log** | Phát hiện + tự che token/password lỡ in ra build log trước khi hiện/gửi AI | Nhỏ |
+
+### Vận hành & giám sát
+| Ý tưởng | Mô tả | Cỡ |
+|---|---|---|
+| **Cảnh báo sớm trước khi crash** | Theo dõi runtime log realtime: tần suất dòng error tăng vọt / OOM warning → báo Telegram TRƯỚC khi app chết hẳn | Vừa |
+| **Gợi ý giờ ngủ/thức** | Phân tích lịch sử wake của SleepService → gợi ý bật sleep app nào, giờ nào (tiết kiệm RAM máy) | Nhỏ |
+| **Chọn server phù hợp** | Nhiều server: AI gợi ý deploy app mới lên server nào dựa trên tải hiện tại | Nhỏ |
+
+### Trải nghiệm
+| Ý tưởng | Mô tả | Cỡ |
+|---|---|---|
+| **Gửi ảnh lỗi cho bot Telegram** | Chụp màn hình lỗi gửi bot → AI đọc ảnh (multimodal) chẩn đoán luôn — hợp khi đang ngoài đường không mở được máy | Vừa |
+| **Chế độ "giải thích cho người mới"** | Toggle: chẩn đoán lỗi viết kiểu kỹ sư ⇄ kiểu dễ hiểu cho người không rành backend | Nhỏ |
+| **AI sinh file CI** | Sinh sẵn GitHub Actions workflow gọi webhook deploy của project (copy-paste là chạy) | Nhỏ |
+| **Onboarding bằng chat** | User mới được AI dẫn từng bước: nối repo → config → deploy đầu tiên | Lớn |
+
+> 🌟 = đáng làm nhất trong nhóm. Ý tưởng nào "lên lịch" thì chuyển sang Backlog / lộ trình.
 
 ---
 

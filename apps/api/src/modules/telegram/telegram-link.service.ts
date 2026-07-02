@@ -2,13 +2,23 @@ import { Injectable, Logger, OnApplicationBootstrap, OnModuleDestroy } from '@ne
 import { ConfigService } from '@nestjs/config';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../../infra/prisma/prisma.service';
+import { AiService } from '../../infra/ai/ai.service';
 
 const TG = 'https://api.telegram.org';
 
+const HELP_TEXT = [
+  '🤖 DeployBox bot — bạn có thể:',
+  '• Hỏi tự do: "vì sao app tôi deploy fail?", "app nào đang chạy?"…',
+  '• /status — trạng thái các project của bạn',
+  '• /help — tin nhắn này',
+  '',
+  'Trong nhóm: nhắc @bot để hỏi. Chat riêng: nhắn thẳng.',
+].join('\n');
+
 /**
- * Kết nối Telegram per-user bằng deep-link (1 bot chung của instance):
- *  - Sinh mã link → user bấm link `t.me/<bot>?start=<mã>` → Telegram gửi `/start <mã>` cho bot.
- *  - Service POLL getUpdates, bắt `/start <mã>`, khớp mã → lưu chat_id vào user đó.
+ * Bot Telegram của instance (1 bot chung):
+ *  1. KẾT NỐI tài khoản qua deep-link: `t.me/<bot>?start=<mã>` → bắt `/start <mã>` → lưu chat_id.
+ *  2. HỎI ĐÁP AI: user đã nối nhắn câu hỏi → lấy dữ liệu project HỌ CÓ QUYỀN XEM → AI trả lời.
  * Poller là consumer DUY NHẤT của getUpdates (đừng gọi getUpdates thủ công nơi khác).
  */
 @Injectable()
@@ -18,10 +28,13 @@ export class TelegramLinkService implements OnApplicationBootstrap, OnModuleDest
   private botUsername: string | null = null;
   private offset = 0;
   private running = false;
+  /** telegram from.id → mốc lần hỏi AI gần nhất (rate-limit 10s/lần) */
+  private lastAsk = new Map<string, number>();
 
   constructor(
     private readonly config: ConfigService,
     private readonly prisma: PrismaService,
+    private readonly ai: AiService,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
@@ -94,21 +107,177 @@ export class TelegramLinkService implements OnApplicationBootstrap, OnModuleDest
   private async handleUpdate(u: any): Promise<void> {
     const m = u.message;
     if (!m || typeof m.text !== 'string' || !m.chat) return;
-    // Bắt "/start <code>" (có thể kèm @botname)
-    const match = m.text.match(/^\/start(?:@\w+)?\s+(\S+)/);
-    if (!match) return;
-    const code = match[1];
-
-    const user = await this.prisma.user.findUnique({ where: { telegramLinkCode: code } });
-    if (!user) return; // mã sai/hết hạn
-
+    const text: string = m.text.trim();
     const chatId = String(m.chat.id);
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: { telegramChatId: chatId, telegramLinkCode: null },
+
+    // 1) "/start <code>" — kết nối tài khoản (deep-link)
+    const match = text.match(/^\/start(?:@\w+)?\s+(\S+)/);
+    if (match) {
+      const user = await this.prisma.user.findUnique({
+        where: { telegramLinkCode: match[1] },
+      });
+      if (!user) return; // mã sai/hết hạn
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { telegramChatId: chatId, telegramLinkCode: null },
+      });
+      this.logger.log(`User ${user.email} đã nối Telegram (chat ${chatId}).`);
+      await this.send(
+        chatId,
+        `✅ Đã kết nối DeployBox!\nTừ giờ bạn nhận thông báo deploy ở đây — và có thể HỎI trực tiếp:\n"vì sao app tôi fail?", /status, /help`,
+      );
+      return;
+    }
+
+    // 2) "/start" trơn — chào + hướng dẫn
+    if (/^\/start(?:@\w+)?$/.test(text)) {
+      await this.send(chatId, HELP_TEXT);
+      return;
+    }
+
+    // 3) Hỏi đáp — trong nhóm chỉ trả lời khi nhắc @bot hoặc reply tin của bot
+    const isGroup = m.chat.type !== 'private';
+    if (isGroup) {
+      const mentioned =
+        !!this.botUsername &&
+        text.toLowerCase().includes(`@${this.botUsername.toLowerCase()}`);
+      const repliedToBot =
+        m.reply_to_message?.from?.username &&
+        m.reply_to_message.from.username === this.botUsername;
+      if (!mentioned && !repliedToBot) return;
+    }
+
+    // Nhận diện người hỏi: chat riêng thì chat_id == from.id (đã lưu khi nối)
+    const fromId = String(m.from?.id ?? '');
+    if (!fromId) return;
+    const user = await this.prisma.user.findFirst({
+      where: { telegramChatId: fromId },
+      select: { id: true, email: true },
     });
-    this.logger.log(`User ${user.email} đã nối Telegram (chat ${chatId}).`);
-    await this.send(chatId, `✅ Đã kết nối DeployBox!\nTừ giờ bạn sẽ nhận thông báo deploy ở đây.`);
+    if (!user) {
+      await this.send(
+        chatId,
+        '❗ Bạn chưa kết nối tài khoản DeployBox.\nVào web → Tài khoản → "Kết nối Telegram" rồi thử lại.',
+      );
+      return;
+    }
+
+    // Bỏ phần nhắc @bot khỏi câu hỏi
+    const question = this.botUsername
+      ? text.replace(new RegExp(`@${this.botUsername}`, 'ig'), '').trim()
+      : text;
+
+    if (/^\/help/i.test(question)) {
+      await this.send(chatId, HELP_TEXT);
+      return;
+    }
+
+    const ctx = await this.buildProjectContext(user.id);
+
+    if (/^\/status/i.test(question)) {
+      await this.send(chatId, ctx.statusText); // không tốn AI
+      return;
+    }
+
+    // Rate-limit hỏi AI: 10s/lần mỗi người
+    const now = Date.now();
+    if ((this.lastAsk.get(fromId) ?? 0) + 10_000 > now) {
+      await this.send(chatId, '⏳ Từ từ nhé — 10 giây mới hỏi được 1 câu.');
+      return;
+    }
+    this.lastAsk.set(fromId, now);
+
+    await this.sendChatAction(chatId, 'typing');
+    try {
+      const answer = await this.ai.answer(question, ctx.aiContext);
+      await this.send(chatId, `🤖 ${answer}`.slice(0, 3500));
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      await this.send(chatId, `⚠️ ${msg}`.slice(0, 500));
+    }
+  }
+
+  /**
+   * Dữ liệu project user CÓ QUYỀN XEM (OWNER team → tất cả; MEMBER → project được cấp).
+   * Trả về statusText (cho /status) + aiContext (cho AI).
+   */
+  private async buildProjectContext(
+    userId: string,
+  ): Promise<{ statusText: string; aiContext: string }> {
+    const memberships = await this.prisma.teamMember.findMany({
+      where: { userId },
+      select: { teamId: true, role: true },
+    });
+    const ownerTeams = memberships.filter((m) => m.role === 'OWNER').map((m) => m.teamId);
+    const memberTeams = memberships.filter((m) => m.role !== 'OWNER').map((m) => m.teamId);
+
+    const projects = await this.prisma.project.findMany({
+      where: {
+        OR: [
+          { teamId: { in: ownerTeams } },
+          { teamId: { in: memberTeams }, members: { some: { userId } } },
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 15,
+      select: {
+        name: true, slug: true, type: true, useDocker: true,
+        gitBranch: true, internalPort: true,
+        deployments: {
+          orderBy: { queuedAt: 'desc' },
+          take: 1,
+          select: {
+            status: true, queuedAt: true, finishedAt: true,
+            errorMessage: true, aiDiagnosis: true,
+          },
+        },
+      },
+    });
+
+    if (!projects.length) {
+      const empty = 'Bạn chưa có project nào.';
+      return { statusText: empty, aiContext: empty };
+    }
+
+    const STATUS_ICON: Record<string, string> = {
+      RUNNING: '🟢', FAILED: '🔴', STOPPED: '⚪', BUILDING: '🟡',
+      QUEUED: '🟡', DEPLOYING: '🟡', SLEEPING: '💤', CANCELLED: '⚪',
+    };
+    const statusLines = projects.map((p) => {
+      const d = p.deployments[0];
+      const st = d?.status ?? 'CHƯA DEPLOY';
+      return `${STATUS_ICON[st] ?? '⚪'} ${p.name} — ${st}`;
+    });
+    const statusText = `📦 Project của bạn:\n${statusLines.join('\n')}`;
+
+    const ctxBlocks = projects.map((p) => {
+      const d = p.deployments[0];
+      const diag = d?.aiDiagnosis as { cause?: string; fix?: string } | null;
+      return [
+        `• ${p.name} (slug: ${p.slug}, loại ${p.type}, nhánh ${p.gitBranch}, port ${p.internalPort}, ${p.useDocker ? 'Docker' : 'chạy host'})`,
+        `  Deploy gần nhất: ${d ? `${d.status} lúc ${(d.finishedAt ?? d.queuedAt).toISOString()}` : 'chưa có'}`,
+        d?.errorMessage ? `  Lỗi: ${d.errorMessage.slice(0, 300)}` : null,
+        diag?.cause ? `  AI chẩn đoán: ${diag.cause.slice(0, 300)}` : null,
+        diag?.fix ? `  Cách sửa: ${diag.fix.slice(0, 300)}` : null,
+      ]
+        .filter(Boolean)
+        .join('\n');
+    });
+    return { statusText, aiContext: ctxBlocks.join('\n\n') };
+  }
+
+  /** Hiện "đang gõ…" cho mượt trong lúc chờ AI. */
+  private async sendChatAction(chatId: string, action: string): Promise<void> {
+    try {
+      await fetch(`${TG}/bot${this.token}/sendChatAction`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, action }),
+        signal: AbortSignal.timeout(5_000),
+      });
+    } catch {
+      /* im lặng */
+    }
   }
 
   private async send(chatId: string, text: string): Promise<void> {

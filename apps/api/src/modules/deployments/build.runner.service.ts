@@ -12,6 +12,7 @@ import { CaddyService } from '../../infra/caddy/caddy.service';
 import { CleanupService } from '../../infra/cleanup/cleanup.service';
 import { NotifyService } from '../../infra/notify/notify.service';
 import { AiService } from '../../infra/ai/ai.service';
+import { DockerService } from '../../infra/docker/docker.service';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 import { LogBroadcastService } from '../../infra/log-broadcast/log-broadcast.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
@@ -43,6 +44,7 @@ export class BuildRunnerService {
     private readonly ssh: SshService,
     private readonly notify: NotifyService,
     private readonly ai: AiService,
+    private readonly docker: DockerService,
   ) {}
 
   /** chat_id Telegram của các thành viên team đã nối (để gửi thông báo deploy). */
@@ -262,6 +264,12 @@ export class BuildRunnerService {
         { ok: true, projectName: project.name, branch: project.gitBranch },
         await this.telegramRecipients(project.teamId),
       );
+      // 🩺 Smoke test NỀN (BACKEND): gọi thử app thật — bắt ca "deploy xong nhưng app hỏng"
+      if (project.type === 'BACKEND') {
+        void this.smokeTest(deploymentId, project, dataDir, log).catch((e) =>
+          this.logger.warn(`Smoke test lỗi: ${e instanceof Error ? e.message : e}`),
+        );
+      }
       await this.cleanup
         .pruneProject(project, dataDir)
         .catch((e) => this.logger.warn(`Dọn dẹp lỗi: ${e}`));
@@ -300,6 +308,81 @@ export class BuildRunnerService {
       clearTimeout(tid);
       this.broadcast.end(deploymentId);
     }
+  }
+
+  /**
+   * 🩺 Smoke test sau deploy (BACKEND): gọi thử app tối đa ~20s.
+   * - App trả lời (HTTP < 500, kể cả 404) → PASS, ghi log.
+   * - Trả 5xx hoặc không trả lời → lấy runtime log → AI chẩn đoán → lưu DB + Telegram.
+   * Chạy nền, best-effort — không ảnh hưởng kết quả deploy.
+   */
+  private async smokeTest(
+    deploymentId: string,
+    project: Project,
+    dataDir: string,
+    log: BuildLogger,
+  ): Promise<void> {
+    const url = `http://127.0.0.1:${project.internalPort}/`;
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+    let lastStatus: number | null = null;
+    for (let attempt = 1; attempt <= 7; attempt++) {
+      await sleep(3_000);
+      try {
+        const res = await fetch(url, {
+          signal: AbortSignal.timeout(3_000),
+          redirect: 'manual',
+        });
+        lastStatus = res.status;
+        if (res.status < 500) {
+          log(`🩺 Smoke test OK — app trả lời HTTP ${res.status} tại port ${project.internalPort}`, 'stdout');
+          return;
+        }
+      } catch {
+        lastStatus = null; // không kết nối được / timeout
+      }
+    }
+
+    const detail =
+      lastStatus !== null
+        ? `app trả HTTP ${lastStatus} tại port ${project.internalPort}`
+        : `app KHÔNG trả lời tại port ${project.internalPort} sau ~20 giây`;
+    log(`🩺 Smoke test THẤT BẠI — ${detail}`, 'stderr');
+
+    // Lấy runtime log theo chế độ chạy để AI chẩn đoán
+    const runtimeLog =
+      project.useDocker === false
+        ? await readFile(this.hostBackend.runtimeLog(dataDir, project.slug), 'utf8').catch(() => '')
+        : await this.docker.logsTail(`deploybox-${project.slug}`, 200).catch(() => '');
+
+    const diagnosis = await this.ai.tryDiagnose({
+      projectName: project.name,
+      projectType: project.type,
+      useDocker: project.useDocker,
+      installCommand: project.installCommand,
+      buildCommand: project.buildCommand,
+      startCommand: project.startCommand,
+      outputDir: project.outputDir,
+      internalPort: project.internalPort,
+      rootDir: project.rootDir,
+      errorMessage: `Smoke test thất bại: ${detail}`,
+      log: `[RUNTIME LOG — deploy xong nhưng smoke test thất bại]\n${runtimeLog.slice(-12_000)}`,
+    });
+
+    await this.prisma.deployment.update({
+      where: { id: deploymentId },
+      data: {
+        errorMessage: `Smoke test: ${detail}`,
+        ...(diagnosis
+          ? { aiDiagnosis: diagnosis as unknown as Prisma.InputJsonValue }
+          : {}),
+      },
+    }).catch(() => undefined);
+
+    await this.notify.smokeTestFailed(
+      { projectName: project.name, detail, diagnosis },
+      await this.telegramRecipients(project.teamId).catch(() => []),
+    );
   }
 
   /**
