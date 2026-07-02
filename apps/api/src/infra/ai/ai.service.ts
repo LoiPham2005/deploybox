@@ -1,6 +1,11 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { AiConfigStatus, AiDiagnosis, AiProviderId } from '@deploybox/shared';
+import type {
+  AiConfigStatus,
+  AiDiagnosis,
+  AiProjectSuggestion,
+  AiProviderId,
+} from '@deploybox/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
 import type { LlmProvider } from './providers/llm-provider';
@@ -55,6 +60,66 @@ const DIAGNOSIS_SCHEMA: Record<string, unknown> = {
   required: ['cause', 'fix', 'commands', 'configField', 'configValue', 'confidence'],
   additionalProperties: false,
 };
+
+/** JSON schema cho "tự nhận diện cấu hình" từ repo. */
+const SUGGESTION_SCHEMA: Record<string, unknown> = {
+  type: 'object',
+  properties: {
+    type: {
+      type: 'string',
+      enum: ['STATIC', 'BACKEND', 'MOBILE'],
+      description:
+        'STATIC = web build ra file tĩnh; BACKEND = server chạy liên tục (API/SSR); MOBILE = app Flutter build APK/AAB.',
+    },
+    framework: { type: 'string', description: 'Tên framework: "Next.js", "NestJS", "Vite + React", "Flutter"…' },
+    rootDir: { type: 'string', description: 'Thư mục chứa project thật (nơi có package.json/pubspec.yaml). "." nếu ở gốc repo.' },
+    installCommand: { type: 'string', description: 'Lệnh cài dependency. "" nếu dùng mặc định (npm ci).' },
+    buildCommand: { type: 'string', description: 'Lệnh build. Nhớ thêm "npx prisma generate &&" nếu project dùng Prisma. "" nếu không cần build.' },
+    startCommand: { type: 'string', description: 'Chỉ BACKEND: lệnh chạy production (vd "node dist/main.js"). "" nếu không phải BACKEND.' },
+    outputDir: { type: 'string', description: 'Chỉ STATIC: thư mục chứa file build ra (dist, out…). "" nếu không phải STATIC.' },
+    internalPort: { type: 'integer', description: 'Chỉ BACKEND: cổng app lắng nghe (đọc từ code/config; mặc định framework nếu không rõ). 0 nếu không phải BACKEND.' },
+    buildImage: { type: 'string', description: 'Chỉ MOBILE: Docker image build (vd "cirrusci/flutter:stable"). "" nếu không phải MOBILE.' },
+    artifactPath: { type: 'string', description: 'Chỉ MOBILE: đường dẫn file APK/AAB sau build. "" nếu không phải MOBILE.' },
+    envKeys: {
+      type: 'array',
+      items: { type: 'string' },
+      description: 'Tên các biến môi trường app cần lúc chạy/build (đọc từ .env.example, code). Rỗng nếu không thấy.',
+    },
+    reason: { type: 'string', description: 'Giải thích ngắn gọn (1–2 câu, tiếng Việt) vì sao nhận diện như vậy.' },
+  },
+  required: [
+    'type', 'framework', 'rootDir', 'installCommand', 'buildCommand', 'startCommand',
+    'outputDir', 'internalPort', 'buildImage', 'artifactPath', 'envKeys', 'reason',
+  ],
+  additionalProperties: false,
+};
+
+const ANALYZE_SYSTEM_PROMPT = `Bạn là kỹ sư DevOps của DeployBox — nền tảng tự deploy.
+Nhiệm vụ: đọc CÂY FILE + nội dung file chìa khóa của một repo và đề xuất cấu hình deploy CHÍNH XÁC.
+
+Phân loại type:
+- STATIC: web build ra file tĩnh (Vite/CRA/Vue, Next.js có "output: export"…). Cần buildCommand + outputDir.
+- BACKEND: server chạy liên tục (NestJS/Express/FastAPI/Next.js SSR…). Cần buildCommand + startCommand + internalPort.
+- MOBILE: app Flutter build APK/AAB. Cần buildCommand + buildImage + artifactPath.
+
+Quy tắc QUAN TRỌNG:
+- Chỉ đưa giá trị CỤ THỂ đọc được từ repo. TUYỆT ĐỐI không dùng placeholder kiểu "[tên thư mục của bạn]".
+- rootDir: nếu package.json/pubspec.yaml nằm trong thư mục con, đặt rootDir = thư mục đó.
+- Dựa vào scripts trong package.json để chọn build/start (vd "start:prod", "build"). NestJS build ra dist/main.js (hoặc dist/src/main.js nếu tsconfig có rootDir src + include prisma).
+- Project dùng Prisma → buildCommand phải có "npx prisma generate && " đằng trước.
+- internalPort: tìm trong code/config (main.ts, .env.example PORT…); không rõ thì dùng mặc định framework (Next 3000, NestJS 3000, FastAPI 8000).
+- Next.js KHÔNG có "output: export" → BACKEND (SSR) với startCommand "npm run start" (hoặc "next start").
+- buildImage (MOBILE): CHỈ dùng image công khai CÓ THẬT trên registry, vd "ghcr.io/cirruslabs/flutter:stable" hoặc "cirrusci/flutter:stable". Không tự bịa tên image.
+- MOBILE có flavor (android/app/build.gradle có productFlavors) → buildCommand kèm --flavor và artifactPath đúng tên file flavor (vd app-prod-release.apk).
+- LUÔN điền framework (tên framework chính) và reason (1–2 câu tiếng Việt) — không để trống.
+- envKeys: liệt kê từ .env.example và những biến bắt buộc thấy trong config.`;
+
+export interface AnalyzeRepoInput {
+  repoUrl: string;
+  branch?: string;
+  tree: string;
+  files: Record<string, string>;
+}
 
 export interface DiagnoseInput {
   projectName: string;
@@ -211,6 +276,85 @@ export class AiService {
       const msg = e instanceof Error ? e.message : String(e);
       this.logger.warn(`AI (${provider.id}/${cfg.model}) chẩn đoán thất bại: ${msg}`);
       throw new BadRequestException(`Gọi ${provider.label} thất bại: ${msg}`);
+    }
+  }
+
+  /** "✨ Tự nhận diện": đọc snapshot repo → đề xuất cấu hình project. */
+  async analyzeRepo(input: AnalyzeRepoInput): Promise<AiProjectSuggestion> {
+    if (!this.isEnabled()) {
+      throw new BadRequestException(
+        'Tính năng AI đang tắt. Admin bật lại ở tab Admin → Tính năng hệ thống.',
+      );
+    }
+    const cfg = await this.getConfig();
+    const provider = this.providers[cfg.provider];
+    if (!provider.isConfigured()) {
+      throw new BadRequestException(
+        `Chưa cấu hình API key cho ${provider.label} trên server. Thêm key vào .env rồi restart, hoặc chọn nhà cung cấp khác ở tab Admin.`,
+      );
+    }
+
+    const fileBlocks = Object.entries(input.files)
+      .map(([path, content]) => `--- ${path} ---\n${content}`)
+      .join('\n\n');
+    const user = [
+      `Repo: ${input.repoUrl}${input.branch ? ` (nhánh ${input.branch})` : ''}`,
+      '',
+      'CÂY FILE:',
+      input.tree,
+      '',
+      'NỘI DUNG FILE CHÌA KHÓA:',
+      fileBlocks || '(không đọc được file nào)',
+      '',
+      'Hãy đề xuất cấu hình deploy theo schema JSON yêu cầu. Nhớ: không dùng placeholder,',
+      'chỉ dùng giá trị cụ thể đọc được từ repo.',
+    ].join('\n');
+
+    try {
+      const raw = await provider.complete({
+        model: cfg.model,
+        system: ANALYZE_SYSTEM_PROMPT,
+        user,
+        schema: SUGGESTION_SCHEMA,
+      });
+      return this.coerceSuggestion(raw);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      this.logger.warn(`AI (${provider.id}/${cfg.model}) phân tích repo thất bại: ${msg}`);
+      throw new BadRequestException(`Gọi ${provider.label} thất bại: ${msg}`);
+    }
+  }
+
+  private coerceSuggestion(raw: Record<string, unknown>): AiProjectSuggestion {
+    const type =
+      raw.type === 'BACKEND' || raw.type === 'MOBILE' ? raw.type : ('STATIC' as const);
+    const port = Number(raw.internalPort);
+    const str = (v: unknown) => String(v ?? '').trim();
+    return {
+      type,
+      framework: str(raw.framework),
+      rootDir: str(raw.rootDir) || '.',
+      installCommand: str(raw.installCommand),
+      buildCommand: str(raw.buildCommand),
+      startCommand: str(raw.startCommand),
+      outputDir: str(raw.outputDir),
+      internalPort:
+        Number.isInteger(port) && port > 0 && port <= 65535 ? port : 0,
+      buildImage: str(raw.buildImage),
+      artifactPath: str(raw.artifactPath),
+      envKeys: Array.isArray(raw.envKeys)
+        ? raw.envKeys.filter((k): k is string => typeof k === 'string').slice(0, 30)
+        : [],
+      reason: str(raw.reason),
+    };
+  }
+
+  /** Bản "best-effort": trả null thay vì ném lỗi (dùng ở đường nền — notify, webhook). */
+  async tryDiagnose(input: DiagnoseInput): Promise<AiDiagnosis | null> {
+    try {
+      return await this.diagnose(input);
+    } catch {
+      return null;
     }
   }
 

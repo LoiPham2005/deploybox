@@ -7,6 +7,7 @@ import {
   upsertEnvSchema,
   type AddDomainResponse,
   type AiDiagnosis,
+  type AiProjectSuggestion,
   type CreateProjectDto,
   type DeploymentDetail,
   type ProjectSummary,
@@ -313,6 +314,34 @@ export async function deleteDomainAction(
     return {
       ok: false,
       error: e instanceof Error ? e.message : 'Xóa domain thất bại',
+    };
+  }
+}
+
+/** ✨ AI đọc repo → đề xuất cấu hình deploy (type, build/start command, port…). */
+export async function analyzeRepoAction(
+  repoUrl: string,
+  gitToken?: string,
+  branch?: string,
+  authMode?: string,
+  gitUsername?: string,
+): Promise<ActionResult<AiProjectSuggestion>> {
+  try {
+    const suggestion = await serverApi<AiProjectSuggestion>('/git/analyze', {
+      method: 'POST',
+      body: JSON.stringify({
+        repoUrl,
+        gitToken: gitToken || undefined,
+        branch: branch || undefined,
+        authMode: authMode || 'auto',
+        gitUsername: gitUsername || undefined,
+      }),
+    });
+    return { ok: true, data: suggestion };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : 'AI phân tích repo thất bại',
     };
   }
 }

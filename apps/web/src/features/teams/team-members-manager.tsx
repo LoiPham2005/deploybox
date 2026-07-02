@@ -5,6 +5,7 @@ import { ChevronDown, ChevronRight, FolderOpen } from 'lucide-react';
 import type { TeamMemberDto, TeamDto } from '@deploybox/shared';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import {
   inviteMemberAction,
   removeMemberAction,
@@ -35,6 +36,7 @@ export function TeamMembersManager({
 }) {
   const [members, setMembers] = useState(initialMembers);
   const [inviteEmail, setInviteEmail] = useState('');
+  const { confirm, dialog } = useConfirm();
   const [inviting, setInviting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -71,7 +73,13 @@ export function TeamMembersManager({
   }
 
   async function remove(memberId: string) {
-    if (!confirm('Xoá thành viên này?')) return;
+    const ok = await confirm({
+      title: 'Xoá thành viên này?',
+      message: 'Thành viên sẽ mất quyền truy cập mọi project được cấp trong team.',
+      confirmText: 'Xoá thành viên',
+      danger: true,
+    });
+    if (!ok) return;
     setErr(null);
     const res = await removeMemberAction(teamId, memberId);
     if (res.ok) {
@@ -113,6 +121,7 @@ export function TeamMembersManager({
 
   return (
     <div className="space-y-4">
+      {dialog}
       <ul className="divide-y divide-white/5">
         {members.map((m) => {
           const isMemberRole = m.role !== 'OWNER';

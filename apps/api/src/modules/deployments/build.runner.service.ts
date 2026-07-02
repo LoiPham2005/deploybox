@@ -1,7 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { appendFileSync, mkdirSync } from 'fs';
+import { readFile } from 'fs/promises';
 import { join, resolve } from 'path';
+import type { Prisma, Project } from '../../generated/prisma';
 import { type BuildLogger, HostStaticBuilder } from '../../infra/builder/host-static.builder';
 import { DockerBackendEngine } from '../../infra/builder/docker-backend.engine';
 import { HostBackendBuilder } from '../../infra/builder/host-backend.builder';
@@ -9,6 +11,7 @@ import { MobileBuilder } from '../../infra/builder/mobile.builder';
 import { CaddyService } from '../../infra/caddy/caddy.service';
 import { CleanupService } from '../../infra/cleanup/cleanup.service';
 import { NotifyService } from '../../infra/notify/notify.service';
+import { AiService } from '../../infra/ai/ai.service';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 import { LogBroadcastService } from '../../infra/log-broadcast/log-broadcast.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
@@ -39,6 +42,7 @@ export class BuildRunnerService {
     private readonly crypto: CryptoService,
     private readonly ssh: SshService,
     private readonly notify: NotifyService,
+    private readonly ai: AiService,
   ) {}
 
   /** chat_id Telegram của các thành viên team đã nối (để gửi thông báo deploy). */
@@ -287,10 +291,54 @@ export class BuildRunnerService {
         { ok: false, projectName: project.name, branch: project.gitBranch, error: msg },
         await this.telegramRecipients(project.teamId).catch(() => []),
       );
+      // AI chẩn đoán NỀN (không chặn, không ném lỗi): lưu vào DB cho web +
+      // gửi tin Telegram bổ sung. Tin fail ở trên đã đi ngay, tin này theo sau ~5–15s.
+      void this.diagnoseInBackground(deploymentId, project, msg, logFile).catch((e) =>
+        this.logger.warn(`AI chẩn đoán nền lỗi: ${e instanceof Error ? e.message : e}`),
+      );
     } finally {
       clearTimeout(tid);
       this.broadcast.end(deploymentId);
     }
+  }
+
+  /**
+   * Deploy fail → AI đọc log chẩn đoán (best-effort), lưu Deployment.aiDiagnosis
+   * (web mở là có sẵn, không gọi AI lại) rồi gửi tin Telegram bổ sung.
+   * Tắt `ai_features` hoặc thiếu API key → tryDiagnose trả null, không làm gì.
+   */
+  private async diagnoseInBackground(
+    deploymentId: string,
+    project: Project,
+    errorMessage: string,
+    logFile: string,
+  ): Promise<void> {
+    const log = await readFile(logFile, 'utf8').catch(() => '');
+    if (!log && !errorMessage) return;
+
+    const diagnosis = await this.ai.tryDiagnose({
+      projectName: project.name,
+      projectType: project.type,
+      useDocker: project.useDocker,
+      installCommand: project.installCommand,
+      buildCommand: project.buildCommand,
+      startCommand: project.startCommand,
+      outputDir: project.outputDir,
+      internalPort: project.internalPort,
+      rootDir: project.rootDir,
+      errorMessage,
+      log,
+    });
+    if (!diagnosis) return;
+
+    await this.prisma.deployment.update({
+      where: { id: deploymentId },
+      data: { aiDiagnosis: diagnosis as unknown as Prisma.InputJsonValue },
+    });
+    await this.notify.deployDiagnosis(
+      { projectName: project.name, branch: project.gitBranch, diagnosis },
+      await this.telegramRecipients(project.teamId).catch(() => []),
+    );
   }
 
   // ─── REMOTE BUILD (SSH) ───────────────────────────────────────────────────

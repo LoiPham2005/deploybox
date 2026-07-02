@@ -2,8 +2,13 @@
 
 import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { ExternalLink } from 'lucide-react';
-import type { CreateProjectDto, ProjectType, ServerDto } from '@deploybox/shared';
+import { ExternalLink, Sparkles } from 'lucide-react';
+import type {
+  AiProjectSuggestion,
+  CreateProjectDto,
+  ProjectType,
+  ServerDto,
+} from '@deploybox/shared';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -94,6 +99,10 @@ export function NewProjectForm({
   const [selectedBranch, setSelectedBranch] = useState('main');
   const [fetchingBranches, setFetchingBranches] = useState(false);
   const [branchError, setBranchError] = useState<string | null>(null);
+  const [rootDir, setRootDir] = useState('.');
+  const [analyzing, setAnalyzing] = useState(false);
+  const [aiSuggestion, setAiSuggestion] = useState<AiProjectSuggestion | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   // Nhận diện provider từ URL để gợi ý
   const provider = /github\.com/i.test(gitRepoUrl)
@@ -124,6 +133,40 @@ export function NewProjectForm({
     } else if (!res.ok) {
       setBranchError(res.error);
     }
+  }
+
+  /** ✨ AI đọc repo → tự điền type + các ô cấu hình. */
+  async function analyzeRepo() {
+    if (!gitRepoUrl.trim()) return;
+    setAnalyzing(true);
+    setAiError(null);
+    setAiSuggestion(null);
+    const { analyzeRepoAction } = await import('./actions');
+    const res = await analyzeRepoAction(
+      gitRepoUrl.trim(),
+      gitToken.trim() || undefined,
+      branches ? selectedBranch : undefined, // chỉ gửi branch khi user đã chọn từ danh sách thật
+      authMode,
+      gitUsername.trim() || undefined,
+    );
+    setAnalyzing(false);
+    if (!res.ok) {
+      setAiError(res.error);
+      return;
+    }
+    const s = res.data!;
+    setAiSuggestion(s);
+    setType(s.type);
+    setRootDir(s.rootDir || '.');
+    setTemplateApplied(null);
+    setFields({
+      buildCommand: s.buildCommand,
+      outputDir: s.outputDir,
+      startCommand: s.startCommand,
+      internalPort: String(s.internalPort || 3000),
+      buildImage: s.buildImage,
+      artifactPath: s.artifactPath,
+    });
   }
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
@@ -250,8 +293,45 @@ export function NewProjectForm({
           type="url"
           placeholder="https://github.com/user/repo"
           value={gitRepoUrl}
-          onChange={(e) => { setGitRepoUrl(e.target.value); setBranches(null); setBranchError(null); }}
+          onChange={(e) => { setGitRepoUrl(e.target.value); setBranches(null); setBranchError(null); setAiSuggestion(null); setAiError(null); }}
         />
+
+        {/* ✨ AI tự nhận diện cấu hình từ repo */}
+        {gitRepoUrl.trim() && (
+          <div className="mt-2">
+            <button
+              type="button"
+              onClick={analyzeRepo}
+              disabled={analyzing}
+              className="inline-flex items-center gap-1.5 rounded-full border border-sky-500/40 bg-sky-500/10 px-3 py-1 text-xs font-medium text-sky-300 transition hover:bg-sky-500/20 disabled:opacity-50"
+            >
+              <Sparkles size={12} />
+              {analyzing ? 'AI đang đọc repo…' : 'Tự nhận diện cấu hình (AI)'}
+            </button>
+            {aiError && <p className="mt-1.5 text-xs text-red-400">{aiError}</p>}
+            {aiSuggestion && (
+              <div className="mt-2 rounded-lg border border-sky-500/20 bg-sky-500/5 p-2.5 text-xs">
+                <p className="text-sky-300">
+                  ✨ Nhận diện: <b>{aiSuggestion.framework}</b> ({aiSuggestion.type})
+                  {aiSuggestion.rootDir !== '.' && (
+                    <> · thư mục <code>{aiSuggestion.rootDir}</code></>
+                  )}
+                  {' '}— đã điền sẵn các ô bên dưới, kiểm tra lại rồi bấm Tạo.
+                </p>
+                {aiSuggestion.reason && (
+                  <p className="mt-1 text-white/40">{aiSuggestion.reason}</p>
+                )}
+                {aiSuggestion.envKeys.length > 0 && (
+                  <p className="mt-1 text-amber-300/80">
+                    ⚠️ App cần biến môi trường:{' '}
+                    <code>{aiSuggestion.envKeys.join(', ')}</code> — thêm ở tab Env sau
+                    khi tạo.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div>
@@ -412,7 +492,12 @@ export function NewProjectForm({
         </div>
         <div>
           <Label htmlFor="rootDir">Thư mục gốc</Label>
-          <Input id="rootDir" name="rootDir" defaultValue="." />
+          <Input
+            id="rootDir"
+            name="rootDir"
+            value={rootDir}
+            onChange={(e) => setRootDir(e.target.value)}
+          />
         </div>
       </div>
 

@@ -67,6 +67,22 @@ export interface AiConfigStatus {
   }>;
 }
 
+/** Cấu hình project do AI đề xuất từ việc đọc repo (nút "✨ Tự nhận diện"). */
+export interface AiProjectSuggestion {
+  type: ProjectType;
+  framework: string; // "Next.js", "NestJS", "Flutter"… (hiển thị cho user)
+  rootDir: string; // '.' nếu ở gốc
+  installCommand: string; // '' = dùng mặc định
+  buildCommand: string;
+  startCommand: string; // chỉ BACKEND
+  outputDir: string; // chỉ STATIC
+  internalPort: number; // chỉ BACKEND (0 = không áp dụng)
+  buildImage: string; // chỉ MOBILE
+  artifactPath: string; // chỉ MOBILE
+  envKeys: string[]; // biến môi trường app cần (đọc từ .env.example / code)
+  reason: string; // giải thích ngắn vì sao đoán vậy (tiếng Việt)
+}
+
 /** Kết quả AI "bác sĩ lỗi deploy" — đọc log thất bại, chỉ nguyên nhân + cách sửa. */
 export interface AiDiagnosis {
   cause: string; // Nguyên nhân gốc (tiếng Việt)

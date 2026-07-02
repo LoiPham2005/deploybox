@@ -4,11 +4,13 @@ import { useState } from 'react';
 import type { ApiTokenDto } from '@deploybox/shared';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import { createTokenAction, revokeTokenAction } from './token-actions';
 
 export function ApiTokensManager({ initialTokens }: { initialTokens: ApiTokenDto[] }) {
   const [tokens, setTokens] = useState(initialTokens);
   const [name, setName] = useState('');
+  const { confirm, dialog } = useConfirm();
   const [creating, setCreating] = useState(false);
   const [newToken, setNewToken] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -30,7 +32,13 @@ export function ApiTokensManager({ initialTokens }: { initialTokens: ApiTokenDto
   }
 
   async function revoke(id: string) {
-    if (!confirm('Thu hồi token này? Không thể hoàn tác.')) return;
+    const ok = await confirm({
+      title: 'Thu hồi token này?',
+      message: 'Ứng dụng đang dùng token sẽ mất quyền truy cập ngay. Không thể hoàn tác.',
+      confirmText: 'Thu hồi',
+      danger: true,
+    });
+    if (!ok) return;
     const res = await revokeTokenAction(id);
     if (res.ok) {
       setTokens((prev) => prev.filter((t) => t.id !== id));
@@ -42,6 +50,7 @@ export function ApiTokensManager({ initialTokens }: { initialTokens: ApiTokenDto
 
   return (
     <div className="space-y-4">
+      {dialog}
       {newToken && (
         <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 p-3">
           <p className="mb-1 text-xs font-medium text-emerald-400">

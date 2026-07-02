@@ -35,33 +35,44 @@ Deploy **FAILED** → mở trang deployment → card "🤖 AI chẩn đoán lỗ
 ### 2. Đa nhà cung cấp + Admin chọn model
 Như mô tả ở phần Kiến trúc. Đã test thật: lưu/đổi provider, persist, chặn provider sai (400).
 
+### 3. Nút "⚡ Áp dụng & deploy lại"
+AI đề xuất sửa 1 trường config (`configField`/`configValue`) → bấm nút ở card chẩn đoán:
+xác nhận → PATCH project → deploy lại → chuyển sang trang bản deploy mới. Khép kín vòng
+fail → chẩn đoán → sửa → redeploy.
+- Whitelist 7 trường (`installCommand/buildCommand/startCommand/outputDir/internalPort/rootDir/artifactPath`), `internalPort` ép kiểu + validate, đúng RBAC (chỉ OWNER)
+- Đã test live bằng Gemini (`gemini-2.5-flash`): chẩn đoán đúng bệnh, PATCH 200
+
+### 4. Chẩn đoán AI tự động + gửi Telegram khi deploy fail
+Deploy fail → tin ❌ fail đi NGAY → AI chẩn đoán nền (không chặn luồng) → lưu
+`aiDiagnosis` vào DB (mở web là có sẵn, không gọi AI lại) → gửi tin 🤖 bổ sung
+(nguyên nhân + cách sửa + gợi ý config) tới nhóm + các thành viên đã nối Telegram.
+- Fail lúc nửa đêm (auto-deploy) cũng có chẩn đoán chờ sẵn
+- Best-effort: AI lỗi/tắt flag/thiếu key → im lặng bỏ qua, không ảnh hưởng deploy
+- Đã test live: deploy fail thật → ~10s sau aiDiagnosis tự lưu + tin Telegram đi
+
+### 5. ✨ Tự nhận diện cấu hình khi tạo project
+Form tạo project: nhập repo URL → nút "✨ Tự nhận diện cấu hình (AI)" → clone nông →
+AI đọc cây file + file chìa khóa (`package.json`, `pubspec.yaml`, `build.gradle`,
+`.env.example`, Dockerfile…) → tự điền: loại project, rootDir, lệnh build/start/install,
+port, buildImage, artifactPath + cảnh báo biến env app cần.
+- Endpoint: `POST /git/analyze` · `GitService.snapshotRepo()` + `AiService.analyzeRepo()`
+- Prompt chống placeholder ("không bịa giá trị"), chống bịa Docker image
+- Đã test live: repo Flutter multi-flavor (nhận ra `--flavor prod -t lib/main_prod.dart`,
+  đường dẫn AAB đúng flavor) + repo NestJS (build/start:prod/port 3000) — đều chính xác
+
+### 6. 🔥 Watchdog + bác sĩ lỗi runtime (app đang chạy bị crash)
+`HostRunReconcilerService` nâng từ "chỉ chạy lúc boot" thành watchdog quét mỗi 60s
+cho app host-run (useDocker=false):
+- App chết → **đọc đuôi runtime log trước** (restart sẽ ghi đè log) → tự khởi động lại
+  → AI chẩn đoán nền → lưu `aiDiagnosis` + gửi Telegram 🔥 (crash lần mấy, nguyên nhân, cách sửa)
+- Chống crash-loop: chết >3 lần / 10 phút → DỪNG hẳn (STOPPED) + báo "sửa lỗi rồi deploy lại"
+- Chống spam AI: cùng chữ ký lỗi (đuôi log giống nhau) → không gọi AI lại
+- Đã test live: kill -9 process thật → watchdog bắt trong ≤60s, restart OK, đếm crash
+  đúng (lần 2/3), aiDiagnosis lưu vào DB, tin Telegram đi không lỗi
+
 ---
 
 ## 🗺️ Lộ trình tiếp theo (xếp theo ưu tiên)
-
-### Ưu tiên 1 — Nút "Áp dụng cách sửa & deploy lại" ⭐ (~1 buổi)
-Bác sĩ lỗi đã trả về `configField` + `configValue` (vd `buildCommand = npx prisma generate && npm run build`).
-- Thêm nút ở card chẩn đoán: bấm → `PATCH /projects/:id` với giá trị AI đề xuất → tự `POST /deploy` lại
-- Biến "AI chỉ cách sửa" thành "AI sửa luôn" — khép kín vòng fail → fix → redeploy
-- Việc: 1 server action + 1 nút UI (backend có sẵn hết)
-
-### Ưu tiên 2 — Đính kèm chẩn đoán AI vào tin Telegram khi fail (~vài giờ)
-Hiện tin nhắn fail chỉ có errorMessage thô.
-- Trong `build.runner.service.ts` chỗ deploy fail: gọi `ai.tryDiagnose()` (best-effort, không chặn) → thêm 2 dòng "Nguyên nhân / Cách sửa" vào tin Telegram
-- Lưu luôn kết quả vào `aiDiagnosis` → mở web đã có sẵn chẩn đoán, khỏi gọi lại
-- Lưu ý: gọi AI nền làm chậm thông báo vài giây → gửi tin fail trước, gửi tin chẩn đoán bổ sung sau
-
-### Ưu tiên 3 — Tự nhận diện cấu hình khi tạo project
-Diệt tận gốc nguyên nhân fail (config sai).
-- Lúc tạo project (đã có module `git` + token): clone nông / đọc `package.json` + cây thư mục → AI đoán: loại project (STATIC/BACKEND), installCommand, buildCommand, startCommand, internalPort, outputDir, env cần có
-- UI: nút "✨ Tự nhận diện" ở form tạo project → điền sẵn các ô, user xem lại rồi bấm tạo
-- Endpoint mới: `POST /git/analyze` (nhận repoUrl + token) hoặc phân tích sau khi tạo
-
-### Ưu tiên 4 — Bác sĩ lỗi runtime (app đang chạy bị crash)
-Phủ nốt nửa còn lại: build OK nhưng chạy thì chết.
-- Đã có: runtime log stream + `host-run-reconciler` phát hiện process chết
-- Thêm: app crash / restart liên tục → lấy đuôi runtime log → `AiService.diagnose` → thông báo "app X crash vì thiếu env DATABASE_URL"
-- Chống spam: chỉ chẩn đoán lại khi "chữ ký lỗi" thay đổi
 
 ### Ưu tiên 5 — Hỏi đáp AI qua Telegram
 Bot `@loipham_deploybox_bot` đang long-poll sẵn (`telegram-link.service.ts`).

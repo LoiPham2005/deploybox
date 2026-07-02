@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import type { AiDiagnosis } from '@deploybox/shared';
 import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
 
 /** Escape ký tự HTML để không vỡ message Telegram (parse_mode HTML). */
@@ -72,6 +73,77 @@ export class NotifyService {
     ];
     if (opts.ok && opts.url) lines.push(`🔗 ${esc(opts.url)}`);
     if (!opts.ok && opts.error) lines.push(`⚠️ <code>${esc(opts.error.slice(0, 350))}</code>`);
+    const text = lines.join('\n');
+
+    for (const chatId of recipients) await this.telegram(chatId, text);
+  }
+
+  /**
+   * App đang chạy bị CRASH (watchdog phát hiện): báo trạng thái xử lý
+   * (đã tự khởi động lại / đã dừng vì crash liên tục) + chẩn đoán AI nếu có.
+   */
+  async runtimeCrash(
+    opts: {
+      projectName: string;
+      action: 'restarted' | 'stopped'; // restarted = self-heal OK; stopped = crash loop, đã dừng
+      crashCount: number;
+      diagnosis?: AiDiagnosis | null;
+    },
+    extraRecipients: string[] = [],
+  ): Promise<void> {
+    if (!this.flags.isEnabled('telegram_notifications')) return;
+
+    const global = this.config.get<string>('TELEGRAM_CHAT_ID') ?? '';
+    const recipients = [...new Set([global, ...extraRecipients].filter(Boolean))];
+    if (!recipients.length) return;
+
+    const lines = [
+      `🔥 <b>App CRASH</b> · 📦 <b>${esc(opts.projectName)}</b>`,
+      opts.action === 'restarted'
+        ? `🔁 Đã tự khởi động lại (lần crash thứ ${opts.crashCount})`
+        : `⛔ Crash liên tục ${opts.crashCount} lần → ĐÃ DỪNG app. Sửa lỗi rồi deploy lại.`,
+    ];
+    const d = opts.diagnosis;
+    if (d) {
+      lines.push(`🔍 <b>Nguyên nhân:</b> ${esc(d.cause.slice(0, 500))}`);
+      lines.push(`🛠 <b>Cách sửa:</b> ${esc(d.fix.slice(0, 700))}`);
+      if (d.configField !== 'none' && d.configValue) {
+        lines.push(`💡 <code>${esc(d.configField)} = ${esc(d.configValue.slice(0, 200))}</code>`);
+      }
+    }
+    const text = lines.join('\n');
+    for (const chatId of recipients) await this.telegram(chatId, text);
+  }
+
+  /**
+   * Tin BỔ SUNG sau tin fail: kết quả AI chẩn đoán (nguyên nhân + cách sửa).
+   * Gửi riêng để tin fail đến ngay lập tức, không phải chờ AI (~5–15s).
+   */
+  async deployDiagnosis(
+    opts: { projectName: string; branch?: string | null; diagnosis: AiDiagnosis },
+    extraRecipients: string[] = [],
+  ): Promise<void> {
+    if (!this.flags.isEnabled('telegram_notifications')) return;
+
+    const global = this.config.get<string>('TELEGRAM_CHAT_ID') ?? '';
+    const recipients = [...new Set([global, ...extraRecipients].filter(Boolean))];
+    if (!recipients.length) return;
+
+    const d = opts.diagnosis;
+    const lines = [
+      `🤖 <b>AI chẩn đoán</b> · 📦 <b>${esc(opts.projectName)}</b>${opts.branch ? ` · <i>${esc(opts.branch)}</i>` : ''}`,
+      `🔍 <b>Nguyên nhân:</b> ${esc(d.cause.slice(0, 600))}`,
+      `🛠 <b>Cách sửa:</b> ${esc(d.fix.slice(0, 900))}`,
+    ];
+    if (d.commands.length) {
+      lines.push(`<pre>${esc(d.commands.join('\n').slice(0, 500))}</pre>`);
+    }
+    if (d.configField !== 'none' && d.configValue) {
+      lines.push(
+        `💡 Sửa cấu hình: <code>${esc(d.configField)} = ${esc(d.configValue.slice(0, 200))}</code>`,
+      );
+      lines.push('⚡ Mở trang deployment để bấm "Áp dụng &amp; deploy lại".');
+    }
     const text = lines.join('\n');
 
     for (const chatId of recipients) await this.telegram(chatId, text);

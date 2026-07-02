@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import type { AiDiagnosis as AiDiagnosisData } from '@deploybox/shared';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import {
   applyAiFixAction,
   diagnoseDeploymentAction,
@@ -37,6 +38,7 @@ export function AiDiagnosis({
   initial: AiDiagnosisData | null;
 }) {
   const router = useRouter();
+  const { confirm, dialog } = useConfirm();
   const [diag, setDiag] = useState<AiDiagnosisData | null>(initial);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -54,12 +56,22 @@ export function AiDiagnosis({
 
   async function applyFix() {
     if (!diag || diag.configField === 'none') return;
-    if (
-      !confirm(
-        `Đổi ${diag.configField} thành:\n\n${diag.configValue}\n\nrồi deploy lại ngay?`,
-      )
-    )
-      return;
+    const ok = await confirm({
+      title: 'Áp dụng cách sửa của AI?',
+      message: (
+        <div className="space-y-2">
+          <p>
+            Đổi <code className="text-sky-300">{diag.configField}</code> thành:
+          </p>
+          <pre className="overflow-x-auto rounded-lg bg-black/40 p-2.5 text-xs text-emerald-300">
+            {diag.configValue}
+          </pre>
+          <p>rồi deploy lại ngay.</p>
+        </div>
+      ),
+      confirmText: '⚡ Áp dụng & deploy lại',
+    });
+    if (!ok) return;
     setApplying(true);
     setApplyError(null);
     const res = await applyAiFixAction(projectId, diag.configField, diag.configValue);
@@ -81,6 +93,7 @@ export function AiDiagnosis({
 
   return (
     <Card className="border-sky-500/20">
+      {dialog}
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold text-white/80">
           🤖 AI chẩn đoán lỗi

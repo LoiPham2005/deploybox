@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import { rollbackAction } from '@/features/projects/actions';
 
 export function RollbackButton({
@@ -15,11 +16,17 @@ export function RollbackButton({
   canRollback?: boolean;
 }) {
   const router = useRouter();
+  const { confirm, dialog } = useConfirm();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function onRollback() {
-    if (!confirm('Rollback về bản deploy này?')) return;
+    const ok = await confirm({
+      title: 'Rollback về bản deploy này?',
+      message: 'App sẽ chạy lại đúng phiên bản của bản deploy này.',
+      confirmText: 'Rollback',
+    });
+    if (!ok) return;
     setLoading(true);
     setError(null);
     const res = await rollbackAction(deploymentId);
@@ -45,6 +52,7 @@ export function RollbackButton({
 
   return (
     <div className="flex flex-col items-end gap-1">
+      {dialog}
       <Button
         variant="ghost"
         onClick={onRollback}

@@ -5,6 +5,7 @@ import type { ServerDto, ServerType, TeamRole } from '@deploybox/shared';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import { addServerAction, removeServerAction, testServerAction } from './actions';
 
 const STATUS_COLOR: Record<string, string> = {
@@ -30,6 +31,7 @@ export function ServersManager({
 }) {
   const [servers, setServers] = useState(initialServers);
   const [showForm, setShowForm] = useState(false);
+  const { confirm, dialog } = useConfirm();
   const [type, setType] = useState<ServerType>('REMOTE');
   const [name, setName] = useState('');
   const [host, setHost] = useState('');
@@ -71,7 +73,13 @@ export function ServersManager({
       setErr('Không thể xóa server LOCAL mặc định');
       return;
     }
-    if (!confirm('Xóa server này? Các project đang dùng sẽ mất kết nối server.')) return;
+    const ok = await confirm({
+      title: 'Xóa server này?',
+      message: 'Các project đang deploy lên server này sẽ mất kết nối.',
+      confirmText: 'Xóa server',
+      danger: true,
+    });
+    if (!ok) return;
     const res = await removeServerAction(id);
     if (res.ok) {
       setServers((prev) => prev.filter((s) => s.id !== id));
@@ -98,6 +106,7 @@ export function ServersManager({
 
   return (
     <div className="space-y-4">
+      {dialog}
       {/* Server list */}
       <ul className="divide-y divide-white/5">
         {servers.map((s) => (

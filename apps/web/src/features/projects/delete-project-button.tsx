@@ -3,15 +3,23 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import { deleteProjectAction } from './actions';
 
 export function DeleteProjectButton({ projectId }: { projectId: string }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { confirm, dialog } = useConfirm();
 
   async function onDelete() {
-    if (!confirm('Xóa project này? Hành động không thể hoàn tác.')) return;
+    const ok = await confirm({
+      title: 'Xóa project này?',
+      message: 'Toàn bộ deployment, domain, env của project sẽ bị xóa. Không thể hoàn tác.',
+      confirmText: 'Xóa project',
+      danger: true,
+    });
+    if (!ok) return;
     setLoading(true);
     setError(null);
     const res = await deleteProjectAction(projectId);
@@ -26,6 +34,7 @@ export function DeleteProjectButton({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-2">
+      {dialog}
       <Button
         type="button"
         onClick={onDelete}

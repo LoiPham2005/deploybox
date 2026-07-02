@@ -8,10 +8,12 @@ import type { ProjectSummary } from '@deploybox/shared';
 import { deleteProjectAction } from './actions';
 import { ProjectCard } from './project-card';
 import { Button } from '@/components/ui/button';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 
 export function ProjectsGrid({ projects }: { projects: ProjectSummary[] }) {
   const router = useRouter();
   const [query, setQuery] = useState('');
+  const { confirm, dialog } = useConfirm();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -39,7 +41,13 @@ export function ProjectsGrid({ projects }: { projects: ProjectSummary[] }) {
 
   async function bulkDelete() {
     if (selected.size === 0) return;
-    if (!confirm(`Xóa ${selected.size} project? Không thể hoàn tác.`)) return;
+    const ok = await confirm({
+      title: `Xóa ${selected.size} project?`,
+      message: 'Toàn bộ deployment, domain, env của các project này sẽ bị xóa. Không thể hoàn tác.',
+      confirmText: `Xóa ${selected.size} project`,
+      danger: true,
+    });
+    if (!ok) return;
     setDeleting(true);
     setErr(null);
     for (const id of selected) {
@@ -72,6 +80,7 @@ export function ProjectsGrid({ projects }: { projects: ProjectSummary[] }) {
 
   return (
     <div className="space-y-5">
+      {dialog}
       {/* Toolbar */}
       <div className="flex items-center gap-3">
         <div className="relative flex-1 max-w-xs">

@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import { mkdtemp, rm } from 'fs/promises';
+import { mkdtemp, readdir, readFile, rm, stat } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { buildGitAuthUrl, type GitAuthMode } from '../../common/git-auth.util';
@@ -26,6 +26,26 @@ export interface RemoteBranch {
   /** ISO date của commit cuối cùng (null nếu không lấy được) */
   lastCommitAt: string | null;
 }
+
+/** Ảnh chụp nhẹ của repo cho AI phân tích: cây file + nội dung các file chìa khóa. */
+export interface RepoSnapshot {
+  tree: string; // danh sách đường dẫn (tối đa 3 cấp, có giới hạn)
+  files: Record<string, string>; // path → nội dung (đã cắt bớt)
+}
+
+// File "chìa khóa" giúp nhận diện framework/config — đọc nếu tồn tại (mọi cấp tới depth 2)
+const KEY_FILES = new Set([
+  'package.json', 'pubspec.yaml', 'requirements.txt', 'pyproject.toml',
+  'go.mod', 'composer.json', 'Dockerfile', 'docker-compose.yml',
+  'next.config.js', 'next.config.mjs', 'next.config.ts',
+  'vite.config.js', 'vite.config.ts', 'nuxt.config.ts',
+  'nest-cli.json', 'angular.json', 'index.html', '.env.example',
+  'build.gradle', 'build.gradle.kts', // android/app/build.gradle → phát hiện flavor
+]);
+const SKIP_DIRS = new Set([
+  '.git', 'node_modules', 'dist', 'build', 'out', '.next', '.nuxt',
+  'vendor', '__pycache__', '.dart_tool', 'Pods', '.idea', '.vscode',
+]);
 
 @Injectable()
 export class GitService {
@@ -138,6 +158,68 @@ export class GitService {
       const msg = err instanceof Error ? err.message : String(err);
       this.logger.warn(`ls-remote failed: ${msg.slice(0, 160)}`);
       throw this.friendly(msg);
+    }
+  }
+
+  /**
+   * Clone nông repo → thu cây file (3 cấp) + nội dung file chìa khóa (package.json,
+   * pubspec.yaml, Dockerfile…) cho AI phân tích. Tự dọn thư mục tạm.
+   */
+  async snapshotRepo(
+    repoUrl: string,
+    gitToken?: string,
+    branch?: string,
+    authMode: GitAuthMode = 'auto',
+    gitUsername?: string,
+  ): Promise<RepoSnapshot> {
+    const url = buildGitAuthUrl(repoUrl, gitToken, authMode, gitUsername);
+    let tmp: string | null = null;
+    try {
+      tmp = await mkdtemp(join(tmpdir(), 'db-analyze-'));
+      await execFileAsync(
+        'git',
+        [
+          'clone', '--depth', '1', '--no-tags',
+          ...(branch ? ['--branch', branch] : []),
+          url, tmp,
+        ],
+        { timeout: 60_000, env: { ...process.env, ...NO_PROMPT_ENV } },
+      );
+
+      const tree: string[] = [];
+      const files: Record<string, string> = {};
+
+      const walk = async (dir: string, rel: string, depth: number): Promise<void> => {
+        if (depth > 3 || tree.length >= 200) return;
+        const entries = await readdir(dir).catch(() => [] as string[]);
+        for (const name of entries.sort()) {
+          if (tree.length >= 200) return;
+          if (SKIP_DIRS.has(name)) continue;
+          const abs = join(dir, name);
+          const relPath = rel ? `${rel}/${name}` : name;
+          const st = await stat(abs).catch(() => null);
+          if (!st) continue;
+          if (st.isDirectory()) {
+            tree.push(relPath + '/');
+            await walk(abs, relPath, depth + 1);
+          } else {
+            tree.push(relPath);
+            // Đọc file chìa khóa (depth ≤ 3 để bắt cả android/app/build.gradle)
+            if (KEY_FILES.has(name) && st.size < 200_000) {
+              const content = await readFile(abs, 'utf8').catch(() => '');
+              if (content) files[relPath] = content.slice(0, 4_000);
+            }
+          }
+        }
+      };
+      await walk(tmp, '', 1);
+
+      return { tree: tree.join('\n'), files };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw this.friendly(msg);
+    } finally {
+      if (tmp) await rm(tmp, { recursive: true, force: true }).catch(() => {});
     }
   }
 
