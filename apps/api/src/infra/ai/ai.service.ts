@@ -373,6 +373,69 @@ export class AiService {
     };
   }
 
+  /** Sinh Dockerfile khi repo không có (project Docker mode). Trả về nội dung Dockerfile. */
+  async generateDockerfile(input: {
+    projectName: string;
+    internalPort: number;
+    startCommand?: string | null;
+    tree: string; // cây file của repo đã clone
+    files: Record<string, string>; // package.json, requirements.txt…
+  }): Promise<string> {
+    if (!this.isEnabled()) {
+      throw new BadRequestException('Tính năng AI đang tắt (Admin → Tính năng hệ thống).');
+    }
+    const cfg = await this.getConfig();
+    const provider = this.providers[cfg.provider];
+    if (!provider.isConfigured()) {
+      throw new BadRequestException(`Server chưa có API key cho ${provider.label}.`);
+    }
+    const fileBlocks = Object.entries(input.files)
+      .map(([p, c]) => `--- ${p} ---\n${c}`)
+      .join('\n\n');
+    try {
+      const raw = await provider.complete({
+        model: cfg.model,
+        system: [
+          'Bạn là kỹ sư DevOps. Sinh Dockerfile PRODUCTION cho repo dưới đây.',
+          'Quy tắc:',
+          '- Multi-stage (build stage + runtime stage nhỏ gọn, vd node:lts-alpine).',
+          '- COPY package*.json trước rồi mới COPY source (tận dụng layer cache).',
+          '- Node: cài đủ devDependencies để build (npm ci --include=dev), stage runtime chỉ production deps.',
+          '- Project dùng Prisma: chạy "npx prisma generate" trước build, COPY thư mục prisma vào runtime stage.',
+          `- EXPOSE đúng port app lắng nghe (project này: ${input.internalPort}).`,
+          input.startCommand ? `- CMD dựa theo lệnh chạy thật: ${input.startCommand}` : '- CMD theo script start trong package.json.',
+          '- CHỈ dùng base image công khai có thật. Không bịa. Không giải thích ngoài JSON.',
+        ].join('\n'),
+        user: [
+          `Project: ${input.projectName}`,
+          '',
+          'CÂY FILE:',
+          input.tree,
+          '',
+          'FILE CHÌA KHÓA:',
+          fileBlocks || '(không có)',
+        ].join('\n'),
+        schema: {
+          type: 'object',
+          properties: {
+            dockerfile: { type: 'string', description: 'Toàn bộ nội dung Dockerfile.' },
+          },
+          required: ['dockerfile'],
+          additionalProperties: false,
+        },
+      });
+      const dockerfile = String(raw.dockerfile ?? '').trim();
+      if (!dockerfile.toUpperCase().includes('FROM ')) {
+        throw new Error('AI không trả về Dockerfile hợp lệ');
+      }
+      return dockerfile;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      this.logger.warn(`AI sinh Dockerfile thất bại: ${msg}`);
+      throw new BadRequestException(`Gọi ${provider.label} thất bại: ${msg}`);
+    }
+  }
+
   /** Tóm tắt build log dài thành vài dòng tiếng Việt (dùng cho nút "Tóm tắt"). */
   async summarizeLog(projectName: string, logText: string): Promise<string> {
     if (!this.isEnabled()) {

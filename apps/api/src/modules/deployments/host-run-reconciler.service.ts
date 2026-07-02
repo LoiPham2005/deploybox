@@ -14,6 +14,7 @@ import { HostBackendBuilder } from '../../infra/builder/host-backend.builder';
 import { AiService } from '../../infra/ai/ai.service';
 import { NotifyService } from '../../infra/notify/notify.service';
 import { FeatureFlagsService } from '../../infra/feature-flags/feature-flags.service';
+import { opsTip } from '../git/secret-scan.util';
 
 // Quét mỗi 60s; crash quá N lần trong CỬA SỔ 10 phút → dừng hẳn (chống crash-loop)
 const SWEEP_MS = 60_000;
@@ -56,6 +57,10 @@ export class HostRunReconcilerService
   private crashes = new Map<string, number[]>();
   /** projectId → chữ ký lỗi đã chẩn đoán lần trước (chống gọi AI trùng) */
   private diagnosedSig = new Map<string, string>();
+  /** projectId → kích thước runtime log lần quét trước (đếm lỗi MỚI cho cảnh báo sớm) */
+  private logSize = new Map<string, number>();
+  /** projectId → lần cảnh báo sớm gần nhất (cooldown 30 phút, tránh spam) */
+  private warnedAt = new Map<string, number>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -112,12 +117,62 @@ export class HostRunReconcilerService
       });
 
       for (const project of projects) {
-        if (await this.hostBackend.isRunning(dataDir, project.slug)) continue;
+        if (await this.hostBackend.isRunning(dataDir, project.slug)) {
+          // App còn sống → soi lỗi mới trong runtime log (cảnh báo sớm trước khi chết)
+          await this.checkErrorSpike(project, dataDir).catch(() => undefined);
+          continue;
+        }
         await this.handleCrash(project, dataDir);
       }
     } finally {
       this.sweeping = false;
     }
+  }
+
+  /**
+   * ⚡ Cảnh báo sớm: app còn sống nhưng phần log MỚI (từ lần quét trước) có ≥8 dòng lỗi
+   * → báo Telegram trước khi app chết hẳn. Cooldown 30 phút/project.
+   */
+  private async checkErrorSpike(project: WatchedProject, dataDir: string): Promise<void> {
+    if (!this.flags.aiEnabled('ai_early_warning')) return;
+
+    const logPath = this.hostBackend.runtimeLog(dataDir, project.slug);
+    const buf = await readFile(logPath).catch(() => null);
+    if (!buf) return;
+
+    const prev = this.logSize.get(project.id) ?? buf.length; // lần đầu: chỉ ghi mốc
+    this.logSize.set(project.id, buf.length);
+    if (buf.length <= prev) return; // log bị reset (app restart) hoặc không có gì mới
+
+    // Chỉ xét phần MỚI ghi thêm; nếu quá lớn thì lấy 64KB cuối
+    const start = buf.length - prev > 64_000 ? buf.length - 64_000 : prev;
+    const fresh = buf.subarray(start).toString('utf8');
+    const errLines = fresh
+      .split('\n')
+      .filter((l) => /\b(error|exception|fatal|unhandled)\b/i.test(l));
+    if (errLines.length < 8) return;
+
+    const now = Date.now();
+    if (now - (this.warnedAt.get(project.id) ?? 0) < 30 * 60_000) return; // cooldown
+    this.warnedAt.set(project.id, now);
+
+    this.logger.warn(
+      `Cảnh báo sớm: ${project.slug} có ${errLines.length} dòng lỗi mới trong ~60s`,
+    );
+    const members = await this.prisma.teamMember.findMany({
+      where: { teamId: project.teamId },
+      select: { user: { select: { telegramChatId: true } } },
+    });
+    await this.notify.earlyWarning(
+      {
+        projectName: project.name,
+        errorCount: errLines.length,
+        windowSec: 60,
+        sample: errLines.slice(0, 3).map((l) => l.slice(0, 160)),
+        tip: this.flags.aiEnabled('ai_ops_tips') ? opsTip(fresh) : '',
+      },
+      members.map((m) => m.user.telegramChatId).filter((x): x is string => !!x),
+    );
   }
 
   private async handleCrash(project: WatchedProject, dataDir: string): Promise<void> {
@@ -232,8 +287,9 @@ export class HostRunReconcilerService
     const recipients = members
       .map((m) => m.user.telegramChatId)
       .filter((x): x is string => !!x);
+    const tip = this.flags.aiEnabled('ai_ops_tips') ? opsTip(crashLog) : '';
     await this.notify.runtimeCrash(
-      { projectName: project.name, action, crashCount, diagnosis },
+      { projectName: project.name, action, crashCount, diagnosis, tip },
       recipients,
     );
   }

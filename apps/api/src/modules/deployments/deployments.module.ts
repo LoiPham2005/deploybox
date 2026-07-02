@@ -49,6 +49,6 @@ const USE_REDIS = !!(process.env.REDIS_URL ?? '');
     // Worker processor chỉ khởi tạo khi có Redis
     ...(USE_REDIS ? [BuildProcessor] : []),
   ],
-  exports: [DeploymentsService, ReportService],
+  exports: [DeploymentsService, ReportService, NotifyService],
 })
 export class DeploymentsModule {}

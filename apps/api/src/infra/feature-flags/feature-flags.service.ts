@@ -103,6 +103,48 @@ export const KNOWN_FLAGS: {
       'Mỗi sáng (8h) gửi báo cáo deploy 24h qua Telegram; thứ 2 gửi báo cáo tuần + AI nhận xét.',
     default: true,
   },
+  {
+    key: 'ai_dockerfile_gen',
+    label: 'AI · Sinh Dockerfile tự động',
+    description:
+      'Project Docker mà repo không có Dockerfile → AI tự sinh (multi-stage, đúng port) rồi build luôn.',
+    default: true,
+  },
+  {
+    key: 'ai_log_masking',
+    label: 'AI · Che secret trong log',
+    description:
+      'Tự che giá trị env bí mật + token/key lỡ in ra build log (che cả trước khi gửi AI đọc).',
+    default: true,
+  },
+  {
+    key: 'ai_migration_guard',
+    label: 'AI · Gác lệnh phá dữ liệu',
+    description:
+      'Chặn deploy nếu lệnh build/start chứa lệnh phá DB (prisma migrate reset, DROP TABLE…). Cố ý dùng thì tắt nút này.',
+    default: true,
+  },
+  {
+    key: 'ai_smart_autodeploy',
+    label: 'AI · Auto-deploy có não',
+    description:
+      'Push chỉ đổi tài liệu/ảnh → bỏ qua không deploy; push đổi schema DB → vẫn deploy nhưng cảnh báo Telegram.',
+    default: true,
+  },
+  {
+    key: 'ai_early_warning',
+    label: 'AI · Cảnh báo sớm trước crash',
+    description:
+      'App đang chạy mà log lỗi tăng vọt (≥8 dòng error/phút) → báo Telegram TRƯỚC khi app chết hẳn.',
+    default: true,
+  },
+  {
+    key: 'ai_ops_tips',
+    label: 'AI · Gợi ý vận hành',
+    description:
+      'Kèm gợi ý xử lý theo loại lỗi khi crash/smoke fail: hết RAM → tăng memoryMb, cổng bận → đổi port…',
+    default: true,
+  },
 ];
 
 /**

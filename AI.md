@@ -126,27 +126,49 @@ Deploy BACKEND báo "thành công" chưa chắc app sống — smoke test gọi 
 - Đã test live cả 2 đường: deploy thật → "Smoke test OK (HTTP 404)"; kill app ngay sau
   RUNNING → phát hiện "KHÔNG trả lời sau ~20s", AI chẩn đoán + Telegram + watchdog cứu lại
 
+### 14. 🕶️ Che secret trong log
+Mọi dòng build log đi qua bộ che TỪ NGUỒN (file log, SSE stream, và cả AI đọc đều chỉ
+thấy bản đã che): giá trị env `isSecret` của project + token/key khớp pattern chung.
+- `maskSecrets()` trong `secret-scan.util.ts` — flag `ai_log_masking`
+
+### 15. 🛡️ Gác lệnh phá dữ liệu
+Lệnh install/build/start chứa `prisma migrate reset`, `--force-reset`, `migrate fresh`,
+`DROP TABLE/DATABASE`, `TRUNCATE`, `FLUSHALL` → CHẶN deploy ngay với hướng dẫn.
+Cố ý dùng → tắt flag `ai_migration_guard`.
+- Đã test live: deploy với buildCommand chứa `prisma migrate reset` → FAILED tức thì ✓
+
+### 16. 🧠 Auto-deploy có não
+Webhook push (GitHub/GitLab gửi kèm danh sách file đổi):
+- Chỉ đổi tài liệu/ảnh (md/png/docs/README…) → **bỏ qua deploy** (đỡ 1 lần build), ghi lý do vào lịch sử webhook
+- Đụng `schema.prisma`/`migrations/` → vẫn deploy nhưng **cảnh báo Telegram** trước
+- Flag `ai_smart_autodeploy` · đã test live webhook HMAC thật: push README.md → skipped ✓
+
+### 17. ⚡ Cảnh báo sớm trước crash
+Watchdog (60s/lần) soi phần log MỚI của app còn sống: ≥8 dòng error/exception trong 1 vòng
+quét → Telegram ⚡ kèm dòng lỗi mẫu + gợi ý — báo TRƯỚC khi app chết. Cooldown 30ph/project.
+- Flag `ai_early_warning` · đã test live: bơm 12 dòng error → cảnh báo bắn sau ≤60s ✓
+
+### 18. 💡 Gợi ý vận hành theo loại lỗi
+Crash/smoke-fail kèm gợi ý rule-based: OOM → "tăng memoryMb (hiện XMB)"; EADDRINUSE →
+"cổng bị chiếm"; P1001 → "kiểm tra DATABASE_URL"; MODULE_NOT_FOUND → "npm ci --include=dev"…
+- `opsTip()` — flag `ai_ops_tips` · đã test 5 loại lỗi ✓
+
+### 19. 🐳 Sinh Dockerfile tự động
+Project Docker mode mà repo không có Dockerfile → AI đọc repo đã clone → sinh Dockerfile
+multi-stage (đúng port, Prisma generate, layer cache) → ghi vào workdir + in vào build log → build luôn.
+- Hook `onMissingDockerfile` trong `DockerBackendEngine` — flag `ai_dockerfile_gen`
+- Lưu ý: verify bằng typecheck (chưa có ca Docker thật để test live — app đang host-run)
+
 ---
 
-## 🗺️ Lộ trình chính: ✅ ĐÃ XONG 13/13 (8 lộ trình gốc + trọn Đợt 1)
-Việc tiếp theo lấy từ bảng xếp hạng bên dưới (xếp theo **giá trị ÷ công sức**).
+## 🗺️ Lộ trình chính: ✅ ĐÃ XONG 19/19 (8 gốc + Đợt 1 + Đợt 2)
+Còn lại: Vòng 3 (5 ý cuối) + Đợt 3 (khi thành sản phẩm) — xem bên dưới.
 
 ---
 
 ## 🎯 Việc tiếp theo — xếp hạng chung
 
-### ~~Đợt 1~~ — ✅ ĐÃ LÀM XONG TẤT CẢ (xem mục 9–13 phần "Đã làm")
-
-### Đợt 2 — làm khi chạm đến ngữ cảnh đó
-
-| # | Tính năng | Mô tả | Cỡ | Khi nào đáng làm |
-|---|---|---|---|---|
-| 6 | Sinh Dockerfile tự động | Repo không có Dockerfile → AI sinh multi-stage đúng port | Vừa | Khi bạn thật sự dùng Docker mode (hiện chủ yếu host-run) |
-| 7 | Che secret trong log | Tự che token/password lỡ in ra build log | Nhỏ | Trước khi cho người ngoài dùng |
-| 8 | Gác cổng migration nguy hiểm | Chặn `prisma migrate reset`/`DROP TABLE` trong build, hỏi xác nhận | Nhỏ | Khi có DB production thật |
-| 9 | Auto-deploy có não | Push chỉ đổi docs → bỏ qua; đổi schema → cảnh báo | Nhỏ | Khi auto-deploy chạy nhiều |
-| 10 | Cảnh báo sớm trước crash | Error trong runtime log tăng vọt → báo TRƯỚC khi chết | Vừa | Khi app có traffic thật |
-| 11 | Gợi ý tối ưu vận hành | "Crash vì OOM → tăng memoryMb" (ghép vào watchdog) | Nhỏ | Ghép khi sửa watchdog lần sau |
+### ~~Đợt 1~~ — ✅ XONG (mục 9–13) · ~~Đợt 2~~ — ✅ XONG (mục 14–19)
 
 ### Vòng 3 — 5 ý tưởng MỚI cuối cùng (góc khác hẳn, sau đó nên coi là ĐỦ)
 

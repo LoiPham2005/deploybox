@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { access, mkdir, rm } from 'fs/promises';
+import { access, mkdir, rm, writeFile } from 'fs/promises';
 import { join } from 'path';
 import { runStreaming, type LogFn } from '../process.util';
 import { DockerService } from '../docker/docker.service';
@@ -16,6 +16,8 @@ export interface BackendBuildInput {
   cpuLimit: number;
   dataDir: string;
   signal?: AbortSignal;
+  /** Repo không có Dockerfile → gọi hook này (AI sinh); trả null = chịu, báo lỗi như cũ. */
+  onMissingDockerfile?: (appDir: string) => Promise<string | null>;
 }
 
 /**
@@ -47,9 +49,19 @@ export class DockerBackendEngine {
 
     const appDir = join(workDir, input.rootDir || '.');
     if (!(await this.exists(join(appDir, 'Dockerfile')))) {
-      throw new Error(
-        'App backend cần Dockerfile ở thư mục gốc để build (Nixpacks sẽ hỗ trợ sau).',
-      );
+      // 🤖 Repo không có Dockerfile → nhờ AI sinh (nếu bật tính năng)
+      const generated = input.onMissingDockerfile
+        ? await input.onMissingDockerfile(appDir).catch(() => null)
+        : null;
+      if (generated) {
+        await writeFile(join(appDir, 'Dockerfile'), generated, 'utf8');
+        log('🤖 Repo không có Dockerfile — AI đã sinh tự động:', 'stdout');
+        for (const line of generated.split('\n')) log(`   ${line}`, 'stdout');
+      } else {
+        throw new Error(
+          'App backend cần Dockerfile ở thư mục gốc để build. Bật "AI · Sinh Dockerfile tự động" ở Admin để AI tự sinh.',
+        );
+      }
     }
 
     const image = `deploybox-${input.slug}:${input.deploymentId.slice(-8)}`;

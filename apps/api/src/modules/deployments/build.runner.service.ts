@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { appendFileSync, mkdirSync } from 'fs';
-import { readFile } from 'fs/promises';
+import { readFile, readdir, stat } from 'fs/promises';
 import { join, resolve } from 'path';
 import type { Prisma, Project } from '../../generated/prisma';
 import { type BuildLogger, HostStaticBuilder } from '../../infra/builder/host-static.builder';
@@ -20,6 +20,7 @@ import { CryptoService } from '../../common/crypto/crypto.service';
 import { SshService } from '../../infra/ssh/ssh.service';
 import { EnvService } from '../env/env.service';
 import { buildGitAuthUrl } from '../../common/git-auth.util';
+import { maskSecrets, opsTip } from '../git/secret-scan.util';
 import type { BuildJobData } from './queue.constants';
 
 /**
@@ -84,9 +85,37 @@ export class BuildRunnerService {
     const logsDir = join(dataDir, 'logs');
     mkdirSync(logsDir, { recursive: true });
     const logFile = join(logsDir, `${deploymentId}.log`);
+
+    // 🕶️ Che secret trong log: giá trị env bí mật của project + token khớp pattern.
+    // Che TỪ NGUỒN → file log, SSE stream và cả AI đọc log đều chỉ thấy bản đã che.
+    let secretValues: string[] = [];
+    if (this.flags.aiEnabled('ai_log_masking')) {
+      try {
+        const secretRows = await this.prisma.envVar.findMany({
+          where: { projectId: project.id, isSecret: true },
+          select: { key: true },
+        });
+        if (secretRows.length) {
+          const resolved = {
+            ...(await this.env.resolveForPhase(project.id, 'build')),
+            ...(await this.env.resolveForPhase(project.id, 'runtime')),
+          };
+          secretValues = secretRows
+            .map((r) => resolved[r.key])
+            .filter((v): v is string => !!v && v.length >= 6);
+        }
+      } catch {
+        /* không chặn deploy vì masking */
+      }
+    }
+    const mask = this.flags.aiEnabled('ai_log_masking')
+      ? (line: string) => maskSecrets(line, secretValues)
+      : (line: string) => line;
+
     const log: BuildLogger = (line) => {
-      appendFileSync(logFile, line + '\n');
-      this.broadcast.emit(deploymentId, line);
+      const safe = mask(line);
+      appendFileSync(logFile, safe + '\n');
+      this.broadcast.emit(deploymentId, safe);
     };
 
     // Timeout để kill build bị treo
@@ -111,6 +140,28 @@ export class BuildRunnerService {
         data: { status: 'BUILDING', startedAt: new Date() },
       });
       log('=== BẮT ĐẦU BUILD ===', 'stdout');
+
+      // 🛡️ Gác lệnh phá dữ liệu: chặn deploy nếu lệnh cấu hình chứa lệnh nguy hiểm.
+      // Cố ý dùng → admin tắt flag "Gác lệnh phá dữ liệu" rồi deploy lại.
+      if (!rollbackOf && this.flags.aiEnabled('ai_migration_guard')) {
+        const DANGEROUS: { re: RegExp; name: string }[] = [
+          { re: /prisma\s+(db\s+push\s+.*--force-reset|migrate\s+reset)/i, name: 'prisma migrate reset / --force-reset (XÓA toàn bộ dữ liệu)' },
+          { re: /migrate(:|\s+)fresh/i, name: 'migrate fresh (drop hết bảng)' },
+          { re: /drop\s+(table|database|schema)/i, name: 'DROP TABLE/DATABASE' },
+          { re: /truncate\s+table/i, name: 'TRUNCATE TABLE' },
+          { re: /flushall|flushdb/i, name: 'redis FLUSHALL/FLUSHDB' },
+        ];
+        const cmds = [project.installCommand, project.buildCommand, project.startCommand]
+          .filter(Boolean)
+          .join(' && ');
+        const hit = DANGEROUS.find((d) => d.re.test(cmds));
+        if (hit) {
+          throw new Error(
+            `🛡️ Chặn deploy: lệnh cấu hình chứa "${hit.name}" — chạy sẽ MẤT DỮ LIỆU. ` +
+              'Sửa lệnh trong Sửa cấu hình, hoặc nếu cố ý thì tắt "AI · Gác lệnh phá dữ liệu" ở Admin.',
+          );
+        }
+      }
 
       // ⚠️ Cảnh báo env thiếu (requiredEnvKeys do AI đọc từ repo) — chỉ báo, không chặn
       const requiredKeys = (project as { requiredEnvKeys?: string[] }).requiredEnvKeys ?? [];
@@ -245,6 +296,20 @@ export class BuildRunnerService {
             cpuLimit: project.cpuLimit,
             dataDir,
             signal: controller.signal,
+            // 🤖 Repo không có Dockerfile → AI sinh (flag ai_dockerfile_gen)
+            onMissingDockerfile: this.flags.aiEnabled('ai_dockerfile_gen')
+              ? async (appDir) => {
+                  log('🤖 Không thấy Dockerfile — nhờ AI sinh…', 'stdout');
+                  const snap = await this.localSnapshot(appDir);
+                  return this.ai.generateDockerfile({
+                    projectName: project.name,
+                    internalPort: project.internalPort,
+                    startCommand: project.startCommand,
+                    tree: snap.tree,
+                    files: snap.files,
+                  });
+                }
+              : undefined,
           },
           runtimeEnv,
           log,
@@ -329,6 +394,42 @@ export class BuildRunnerService {
     }
   }
 
+  /** Ảnh chụp nhẹ repo ĐÃ CLONE trên máy (cho AI sinh Dockerfile): cây 2 cấp + file chìa khóa. */
+  private async localSnapshot(
+    appDir: string,
+  ): Promise<{ tree: string; files: Record<string, string> }> {
+    const KEY = new Set([
+      'package.json', 'pnpm-lock.yaml', 'requirements.txt', 'pyproject.toml',
+      'go.mod', 'composer.json', 'nest-cli.json', 'next.config.js',
+      'next.config.mjs', 'next.config.ts', 'tsconfig.json',
+    ]);
+    const SKIP = new Set(['.git', 'node_modules', 'dist', 'build', '.next', 'vendor']);
+    const tree: string[] = [];
+    const files: Record<string, string> = {};
+    const walk = async (dir: string, rel: string, depth: number): Promise<void> => {
+      if (depth > 2 || tree.length >= 120) return;
+      for (const name of (await readdir(dir).catch(() => [] as string[])).sort()) {
+        if (SKIP.has(name) || tree.length >= 120) continue;
+        const abs = join(dir, name);
+        const rp = rel ? `${rel}/${name}` : name;
+        const st = await stat(abs).catch(() => null);
+        if (!st) continue;
+        if (st.isDirectory()) {
+          tree.push(rp + '/');
+          await walk(abs, rp, depth + 1);
+        } else {
+          tree.push(rp);
+          if (KEY.has(name) && st.size < 100_000) {
+            const c = await readFile(abs, 'utf8').catch(() => '');
+            if (c) files[rp] = c.slice(0, 4_000);
+          }
+        }
+      }
+    };
+    await walk(appDir, '', 1);
+    return { tree: tree.join('\n'), files };
+  }
+
   /**
    * 🩺 Smoke test sau deploy (BACKEND): gọi thử app tối đa ~20s.
    * - App trả lời (HTTP < 500, kể cả 404) → PASS, ghi log.
@@ -400,7 +501,14 @@ export class BuildRunnerService {
     }).catch(() => undefined);
 
     await this.notify.smokeTestFailed(
-      { projectName: project.name, detail, diagnosis },
+      {
+        projectName: project.name,
+        detail,
+        diagnosis,
+        tip: this.flags.aiEnabled('ai_ops_tips')
+          ? opsTip(runtimeLog, project.memoryMb)
+          : '',
+      },
       await this.telegramRecipients(project.teamId).catch(() => []),
     );
 

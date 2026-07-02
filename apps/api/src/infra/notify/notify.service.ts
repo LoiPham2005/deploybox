@@ -86,6 +86,35 @@ export class NotifyService {
     for (const chatId of recipients) await this.telegram(chatId, textHtml.slice(0, 4000));
   }
 
+  /** ⚡ Cảnh báo SỚM: app còn sống nhưng log lỗi tăng vọt — báo trước khi chết hẳn. */
+  async earlyWarning(
+    opts: {
+      projectName: string;
+      errorCount: number;
+      windowSec: number;
+      sample: string[]; // vài dòng lỗi mẫu
+      tip?: string;
+    },
+    extraRecipients: string[] = [],
+  ): Promise<void> {
+    if (!this.flags.isEnabled('telegram_notifications')) return;
+    const global = this.config.get<string>('TELEGRAM_CHAT_ID') ?? '';
+    const recipients = [...new Set([global, ...extraRecipients].filter(Boolean))];
+    if (!recipients.length) return;
+
+    const lines = [
+      `⚡ <b>CẢNH BÁO SỚM</b> · 📦 <b>${esc(opts.projectName)}</b>`,
+      `App vẫn đang chạy nhưng log lỗi tăng vọt: ${opts.errorCount} dòng lỗi trong ~${opts.windowSec}s.`,
+    ];
+    if (opts.sample.length) {
+      lines.push(`<pre>${esc(opts.sample.join('\n').slice(0, 500))}</pre>`);
+    }
+    if (opts.tip) lines.push(`💡 ${esc(opts.tip)}`);
+    lines.push('Xem runtime log ở trang deployment để xử lý trước khi app chết.');
+    const text = lines.join('\n');
+    for (const chatId of recipients) await this.telegram(chatId, text);
+  }
+
   /** ⏪ Đã tự động rollback (smoke test fail trên bản Docker mới). */
   async autoRollback(
     opts: { projectName: string; targetShort: string; reason: string },
@@ -112,6 +141,7 @@ export class NotifyService {
       projectName: string;
       detail: string; // vd "không trả lời sau 20s" / "trả HTTP 500"
       diagnosis?: AiDiagnosis | null;
+      tip?: string; // gợi ý vận hành theo loại lỗi (OOM, cổng bận…)
     },
     extraRecipients: string[] = [],
   ): Promise<void> {
@@ -130,6 +160,7 @@ export class NotifyService {
       lines.push(`🔍 <b>Nguyên nhân:</b> ${esc(d.cause.slice(0, 500))}`);
       lines.push(`🛠 <b>Cách sửa:</b> ${esc(d.fix.slice(0, 700))}`);
     }
+    if (opts.tip) lines.push(`💡 ${esc(opts.tip)}`);
     const text = lines.join('\n');
     for (const chatId of recipients) await this.telegram(chatId, text);
   }
@@ -144,6 +175,7 @@ export class NotifyService {
       action: 'restarted' | 'stopped'; // restarted = self-heal OK; stopped = crash loop, đã dừng
       crashCount: number;
       diagnosis?: AiDiagnosis | null;
+      tip?: string; // gợi ý vận hành theo loại lỗi (OOM, cổng bận…)
     },
     extraRecipients: string[] = [],
   ): Promise<void> {
@@ -167,6 +199,7 @@ export class NotifyService {
         lines.push(`💡 <code>${esc(d.configField)} = ${esc(d.configValue.slice(0, 200))}</code>`);
       }
     }
+    if (opts.tip) lines.push(`💡 ${esc(opts.tip)}`);
     const text = lines.join('\n');
     for (const chatId of recipients) await this.telegram(chatId, text);
   }

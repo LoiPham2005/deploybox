@@ -6,6 +6,8 @@ import {
 import { createHmac, timingSafeEqual } from 'crypto';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 import { DeploymentsService } from '../deployments/deployments.service';
+import { NotifyService } from '../../infra/notify/notify.service';
+import { FeatureFlagsService } from '../../infra/feature-flags/feature-flags.service';
 
 function safeEqual(a: string, b: string): boolean {
   const ab = Buffer.from(a);
@@ -19,7 +21,13 @@ interface PushPayload {
   ref?: string;
   after?: string;
   head_commit?: { message?: string };
-  commits?: Array<{ message?: string }>;
+  // GitHub & GitLab đều gửi danh sách file đổi trong từng commit
+  commits?: Array<{
+    message?: string;
+    added?: string[];
+    modified?: string[];
+    removed?: string[];
+  }>;
   // Bitbucket
   push?: {
     changes?: Array<{
@@ -57,11 +65,19 @@ function extractPush(
   };
 }
 
+// File "chỉ tài liệu/ảnh" — đổi mấy cái này không cần deploy lại
+const DOCS_ONLY_RE =
+  /(^|\/)(docs?|\.github)\/|\.(md|mdx|txt|png|jpe?g|gif|svg|ico)$|(^|\/)(readme|license|changelog|contributing|authors)(\.[a-z]+)?$/i;
+// File đụng schema DB — deploy vẫn chạy nhưng cảnh báo
+const SCHEMA_RE = /schema\.prisma$|(^|\/)migrations?\//i;
+
 @Injectable()
 export class WebhooksService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly deployments: DeploymentsService,
+    private readonly notify: NotifyService,
+    private readonly flags: FeatureFlagsService,
   ) {}
 
   async handlePush(
@@ -113,6 +129,36 @@ export class WebhooksService {
       const reason = 'autoDeploy đang tắt';
       await this.logEvent(projectId, source, branch, commitSha, 'skipped', reason);
       return { deployed: false, reason };
+    }
+
+    // 🧠 Auto-deploy có não: xem danh sách file đổi (GitHub/GitLab gửi kèm;
+    // Bitbucket không có → deploy như thường)
+    const changedFiles = (data.commits ?? []).flatMap((c) => [
+      ...(c.added ?? []),
+      ...(c.modified ?? []),
+      ...(c.removed ?? []),
+    ]);
+    if (this.flags.aiEnabled('ai_smart_autodeploy') && changedFiles.length) {
+      // Chỉ đổi tài liệu/ảnh → khỏi deploy, đỡ tốn 1 lần build
+      if (changedFiles.every((f) => DOCS_ONLY_RE.test(f))) {
+        const reason = `🧠 Bỏ qua: ${changedFiles.length} file đổi đều là tài liệu/ảnh`;
+        await this.logEvent(projectId, source, branch, commitSha, 'skipped', reason);
+        return { deployed: false, reason };
+      }
+      // Đụng schema DB → vẫn deploy nhưng cảnh báo trước
+      const schemaFiles = changedFiles.filter((f) => SCHEMA_RE.test(f));
+      if (schemaFiles.length) {
+        const members = await this.prisma.teamMember.findMany({
+          where: { teamId: project.teamId },
+          select: { user: { select: { telegramChatId: true } } },
+        });
+        void this.notify.broadcast(
+          `🧠 <b>Deploy tự động có THAY ĐỔI SCHEMA DB</b> · 📦 <b>${project.name}</b>\n` +
+            `File: <code>${schemaFiles.slice(0, 3).join(', ')}</code>\n` +
+            `Kiểm tra kỹ migration — sai là mất dữ liệu.`,
+          members.map((m) => m.user.telegramChatId).filter((x): x is string => !!x),
+        );
+      }
     }
 
     await this.deployments.deployFromPush(projectId, commitSha, commitMsg);
