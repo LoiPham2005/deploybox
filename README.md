@@ -12,6 +12,7 @@ PaaS tự host: kết nối Git → build → chạy app → tự gắn domain +
 | Biến máy Mac thành server (pm2 + tunnel) | [docs/deploy/home-mac.md](docs/deploy/home-mac.md) |
 | Biến máy Windows thành server (WSL2) | [docs/deploy/home-windows.md](docs/deploy/home-windows.md) |
 | CI/CD — push code là tự deploy | [docs/deploy/cicd.md](docs/deploy/cicd.md) |
+| Vận hành production (backup, sự cố, checklist) | [docs/deploy/van-hanh-production.md](docs/deploy/van-hanh-production.md) |
 | Lộ trình tính năng AI | [AI.md](AI.md) |
 | Kiến trúc / thiết kế / kế hoạch gốc | [docs/](docs/README.md) |
 

@@ -10,6 +10,7 @@ PaaS tự host: kết nối Git → build → chạy app → tự gắn domain +
 | Biến máy Mac thành server (pm2 + self-heal + Cloudflare Tunnel) | [deploy/home-mac.md](deploy/home-mac.md) |
 | Biến máy Windows thành server (WSL2) | [deploy/home-windows.md](deploy/home-windows.md) |
 | **CI/CD** — push code là tự deploy (DeployBox lên VPS + app qua webhook) | [deploy/cicd.md](deploy/cicd.md) |
+| **Vận hành production** — backup/khôi phục, sự cố, checklist định kỳ | [deploy/van-hanh-production.md](deploy/van-hanh-production.md) |
 | Những gì CHƯA làm (SaaS/billing, cô lập bảo mật, iOS, BYO server, vận hành) | [ke-hoach-tuong-lai.md](ke-hoach-tuong-lai.md) |
 | Tính năng AI (đã làm + lộ trình) | [../AI.md](../AI.md) |
 | Chạy dev trên máy | [../README.md](../README.md) |
