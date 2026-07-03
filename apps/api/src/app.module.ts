@@ -7,6 +7,7 @@ import { CryptoModule } from './common/crypto/crypto.module';
 import { MetricsModule } from './infra/metrics/metrics.module';
 import { PrismaModule } from './infra/prisma/prisma.module';
 import { FeatureFlagsModule } from './infra/feature-flags/feature-flags.module';
+import { FeatureFlagsService } from './infra/feature-flags/feature-flags.service';
 import { AiModule } from './infra/ai/ai.module';
 import { MailModule } from './infra/mail/mail.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -55,7 +56,14 @@ const REDIS_URL = process.env.REDIS_URL ?? '';
     // CHỈ áp dụng ở route nào gắn @UseGuards(ThrottlerGuard) — hiện là các route
     // auth công khai (login/register/OTP). KHÔNG gắn global vì /auth/me được
     // Next server gọi hộ mọi user từ cùng 1 IP → limit global sẽ khoá nhầm cả app.
-    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 10 }]),
+    // Bật/tắt ở Admin → Tính năng hệ thống (flag auth_rate_limit).
+    ThrottlerModule.forRootAsync({
+      inject: [FeatureFlagsService],
+      useFactory: (flags: FeatureFlagsService) => ({
+        throttlers: [{ ttl: 60_000, limit: 10 }],
+        skipIf: () => !flags.isEnabled('auth_rate_limit'),
+      }),
+    }),
     PrismaModule,
     FeatureFlagsModule,
     AiModule,

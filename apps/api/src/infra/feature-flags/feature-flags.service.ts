@@ -24,6 +24,34 @@ export const KNOWN_FLAGS: {
     default: true,
   },
   {
+    key: 'signup_enabled',
+    label: 'Cho phép đăng ký mới',
+    description:
+      'Tắt: chặn đăng ký tài khoản mới hoàn toàn (kể cả có mã mời đúng). Mã mời SIGNUP_CODE vẫn cấu hình trong .env như cũ.',
+    default: true,
+  },
+  {
+    key: 'auth_rate_limit',
+    label: 'Rate-limit đăng nhập',
+    description:
+      'Giới hạn 10 request/phút/IP cho các route login/register/OTP (chống dò mật khẩu). Tắt: không giới hạn (không khuyến nghị).',
+    default: true,
+  },
+  {
+    key: 'app_watchdog',
+    label: 'Watchdog tự cứu app',
+    description:
+      'App user (host-run) crash → tự khởi động lại trong ≤60s, chống crash-loop, cảnh báo sớm. Tắt: app chết nằm im (không khuyến nghị).',
+    default: true,
+  },
+  {
+    key: 'db_backup',
+    label: 'Backup DB hằng đêm',
+    description:
+      'pg_dump 3h sáng, giữ 7 bản gần nhất (script trên VPS đọc cờ này trước khi chạy). Tắt: bỏ qua backup đêm đó.',
+    default: true,
+  },
+  {
     key: 'deploy_hooks',
     label: 'Hook trước/sau deploy',
     description:

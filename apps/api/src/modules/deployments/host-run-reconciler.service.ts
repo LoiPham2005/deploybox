@@ -110,6 +110,8 @@ export class HostRunReconcilerService
 
   private async sweep(): Promise<void> {
     if (this.sweeping) return; // không chồng lần quét
+    // Tắt ở Admin → Tính năng hệ thống → app crash sẽ KHÔNG tự khởi động lại
+    if (!this.flags.isEnabled('app_watchdog')) return;
     this.sweeping = true;
     try {
       const dataDir = this.dataDir();

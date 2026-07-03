@@ -5,16 +5,19 @@
 
 ## 0. Hệ thống đang có gì (đã setup xong)
 
-| Lớp bảo vệ | Trạng thái | Kiểm tra bằng |
-|---|---|---|
-| CI/CD — push là tự test + deploy | ✅ | tab Actions trên GitHub |
-| Khoá đăng ký (SIGNUP_CODE) | ✅ | thử đăng ký không mã → 403 |
-| Rate-limit auth 10/phút/IP | ✅ | 11 lần login sai → 429 |
-| Swap 2GB (chống OOM khi build) | ✅ | `free -h` → dòng Swap |
-| Backup DB 3h sáng hằng ngày, giữ 7 bản | ✅ | `ls /opt/deploybox-backups/` |
-| pm2 tự bật sau reboot + self-heal app | ✅ | `systemctl status pm2-root` |
-| Thông báo Telegram (deploy/crash/báo cáo) | ✅ | bot @loipham_deploybox_bot |
-| Uptime bên ngoài (UptimeRobot) | ⬜ bạn tự gắn — xem mục 4 | uptimerobot.com |
+| Lớp bảo vệ | Trạng thái | Bật/tắt ở Admin* | Kiểm tra bằng |
+|---|---|---|---|
+| CI/CD — push là tự test + deploy | ✅ | — (hạ tầng GitHub) | tab Actions trên GitHub |
+| Khoá đăng ký (SIGNUP_CODE) | ✅ | `Cho phép đăng ký mới` (tắt = đóng đăng ký hẳn; mã mời vẫn ở .env) | thử đăng ký không mã → 403 |
+| Rate-limit auth 10/phút/IP | ✅ | `Rate-limit đăng nhập` | 11 lần login sai → 429 |
+| Swap 2GB (chống OOM khi build) | ✅ | — (cấp hệ điều hành) | `free -h` → dòng Swap |
+| Backup DB 3h sáng hằng ngày, giữ 7 bản | ✅ | `Backup DB hằng đêm` (script đọc cờ trước khi chạy) | `ls /opt/deploybox-backups/` |
+| pm2 tự bật sau reboot | ✅ | — (cấp hệ điều hành) | `systemctl status pm2-root` |
+| Watchdog self-heal app user (≤60s) | ✅ | `Watchdog tự cứu app` | giết process app → tự sống lại |
+| Thông báo Telegram (deploy/crash/báo cáo) | ✅ | `Thông báo Telegram` | bot @loipham_deploybox_bot |
+| Uptime bên ngoài (UptimeRobot) | ⬜ bạn tự gắn — xem mục 4 | — (dịch vụ ngoài) | uptimerobot.com |
+
+> \* **Admin → Tính năng hệ thống** trên web dashboard. Các dòng "—" là hạ tầng ngoài app (CI/CD, swap, pm2, UptimeRobot) — không gate được từ Admin, quản lý theo cách riêng của từng thứ. Các tính năng Nhóm A (preview PR, cron, database 1-click, CLI, hooks) cũng có cờ riêng tại đó.
 
 ---
 

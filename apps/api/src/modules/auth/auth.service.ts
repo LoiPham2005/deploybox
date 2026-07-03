@@ -23,6 +23,7 @@ import type {
 } from '@deploybox/shared';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 import { MailService } from '../../infra/mail/mail.service';
+import { FeatureFlagsService } from '../../infra/feature-flags/feature-flags.service';
 
 const OTP_TTL_MS = 10 * 60 * 1000; // mã sống 10 phút
 const OTP_RESEND_MS = 60 * 1000; // 60s mới được gửi lại
@@ -52,10 +53,17 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
     private readonly mail: MailService,
+    private readonly flags: FeatureFlagsService,
   ) {}
 
   /** Kiểm tra mã mời + email chưa dùng (dùng chung cho register thẳng và register OTP). */
   private async assertCanRegister(dto: RegisterDto): Promise<void> {
+    // Admin có thể đóng đăng ký hoàn toàn (Admin → Tính năng hệ thống)
+    if (!this.flags.isEnabled('signup_enabled')) {
+      throw new ForbiddenException(
+        'Đăng ký tài khoản mới đang tắt (Admin → Tính năng hệ thống).',
+      );
+    }
     const required = this.config.get<string>('SIGNUP_CODE', '');
     if (required && dto.signupCode !== required) {
       throw new ForbiddenException(
