@@ -12,6 +12,7 @@ PaaS tự host: kết nối Git → build → chạy app → tự gắn domain +
 | **CI/CD** — push code là tự deploy (DeployBox lên VPS + app qua webhook) | [deploy/cicd.md](deploy/cicd.md) |
 | **Vận hành production** — backup/khôi phục, sự cố, checklist định kỳ | [deploy/van-hanh-production.md](deploy/van-hanh-production.md) |
 | Những gì CHƯA làm (SaaS/billing, cô lập bảo mật, iOS, BYO server, vận hành) | [ke-hoach-tuong-lai.md](ke-hoach-tuong-lai.md) |
+| **Ý tưởng tính năng** còn có thể làm (preview deploy, cron, DBaaS, 2FA, CLI…) | [y-tuong-tinh-nang.md](y-tuong-tinh-nang.md) |
 | Tính năng AI (đã làm + lộ trình) | [../AI.md](../AI.md) |
 | Chạy dev trên máy | [../README.md](../README.md) |
 
