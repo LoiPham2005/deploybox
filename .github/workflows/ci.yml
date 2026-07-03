@@ -10,9 +10,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # KHÔNG ghi version ở đây — action tự đọc "packageManager" trong package.json
+      # (ghi cả 2 nơi là action báo lỗi "Multiple versions of pnpm specified")
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
       - uses: actions/setup-node@v4
         with:
           node-version: 20

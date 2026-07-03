@@ -15,9 +15,24 @@ const baseProject = {
 };
 
 function make(project: unknown) {
-  const prisma = { project: { findUnique: vi.fn().mockResolvedValue(project) } };
+  const prisma = {
+    project: { findUnique: vi.fn().mockResolvedValue(project) },
+    teamMember: { findMany: vi.fn().mockResolvedValue([]) },
+    webhookEvent: { create: vi.fn().mockResolvedValue(undefined) },
+  };
   const deployments = { deployFromPush: vi.fn().mockResolvedValue(undefined) };
-  const svc = new WebhooksService(prisma as never, deployments as never);
+  const notify = { broadcast: vi.fn().mockResolvedValue(undefined) };
+  // Tắt nhánh AI trong test — chỉ kiểm tra logic webhook thuần
+  const flags = {
+    aiEnabled: vi.fn().mockReturnValue(false),
+    isEnabled: vi.fn().mockReturnValue(true),
+  };
+  const svc = new WebhooksService(
+    prisma as never,
+    deployments as never,
+    notify as never,
+    flags as never,
+  );
   return { svc, deployments };
 }
 
@@ -28,7 +43,7 @@ describe('WebhooksService.handlePush', () => {
       '{"ref":"refs/heads/main","after":"abc","head_commit":{"message":"hi"}}';
     const res = await svc.handlePush(
       'p1',
-      { 'x-hub-signature-256': sign(body) },
+      { 'x-github-event': 'push', 'x-hub-signature-256': sign(body) },
       Buffer.from(body),
       JSON.parse(body),
     );
@@ -42,7 +57,7 @@ describe('WebhooksService.handlePush', () => {
     await expect(
       svc.handlePush(
         'p1',
-        { 'x-hub-signature-256': 'sha256=bad' },
+        { 'x-github-event': 'push', 'x-hub-signature-256': 'sha256=bad' },
         Buffer.from(body),
         JSON.parse(body),
       ),
@@ -54,7 +69,7 @@ describe('WebhooksService.handlePush', () => {
     const body = '{"ref":"refs/heads/dev"}';
     const res = await svc.handlePush(
       'p1',
-      { 'x-hub-signature-256': sign(body) },
+      { 'x-github-event': 'push', 'x-hub-signature-256': sign(body) },
       Buffer.from(body),
       JSON.parse(body),
     );
@@ -67,7 +82,7 @@ describe('WebhooksService.handlePush', () => {
     const body = '{"ref":"refs/heads/main"}';
     const res = await svc.handlePush(
       'p1',
-      { 'x-hub-signature-256': sign(body) },
+      { 'x-github-event': 'push', 'x-hub-signature-256': sign(body) },
       Buffer.from(body),
       JSON.parse(body),
     );
@@ -79,7 +94,7 @@ describe('WebhooksService.handlePush', () => {
     const body = '{"ref":"refs/heads/main"}';
     const res = await svc.handlePush(
       'p1',
-      { 'x-gitlab-token': SECRET },
+      { 'x-gitlab-event': 'Push Hook', 'x-gitlab-token': SECRET },
       Buffer.from(body),
       JSON.parse(body),
     );
