@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { type Deployment, Prisma, ProjectType } from '../../generated/prisma';
-import type { AiDiagnosis, DeploymentDetail, DeploymentView } from '@deploybox/shared';
+import type { AiDiagnosis, DeploymentDetail, DeploymentView, PreviewDto } from '@deploybox/shared';
 import { Queue } from 'bullmq';
 import { readFile, rm } from 'fs/promises';
 import { join, resolve } from 'path';
@@ -514,4 +514,296 @@ export class DeploymentsService {
     });
     return this.toDetail(updated);
   }
+
+  // ─── PREVIEW DEPLOY THEO PULL REQUEST (A1) ────────────────────────────────
+  // Mỗi PR mở ra → tạo 1 "shadow project" ẩn (isPreview) build từ nhánh PR,
+  // chạy ở port riêng, phục vụ tại <pr-N-slug>.<domain>. PR đóng → xoá sạch.
+  // Tái dùng nguyên pipeline build/Caddy/teardown qua deployFromPush.
+
+  /**
+   * Xử lý webhook Pull Request (đã xác thực chữ ký ở WebhooksService).
+   * project = project GỐC (parent). Trả về mô tả hành động để ghi log webhook.
+   */
+  async handlePullRequest(
+    project: PreviewParent,
+    source: string,
+    payload: unknown,
+  ): Promise<{ deployed: boolean; reason: string }> {
+    const ev = this.parsePrEvent(source, payload as PrPayload);
+    if (!ev) return { deployed: false, reason: 'Sự kiện PR không đọc được' };
+    if (ev.kind === 'ignore') {
+      return { deployed: false, reason: `Bỏ qua PR #${ev.prNumber}: ${ev.reason ?? 'action khác'}` };
+    }
+    // 🔒 Bảo mật: CHỈ preview PR cùng repo. PR từ fork = code người ngoài;
+    // host chạy thẳng (không sandbox) → tuyệt đối không build/chạy code fork.
+    if (!ev.sameRepo) {
+      return { deployed: false, reason: `Bỏ qua PR #${ev.prNumber}: từ fork (không chạy code ngoài)` };
+    }
+    if (project.type === 'MOBILE') {
+      return { deployed: false, reason: 'Project MOBILE không hỗ trợ preview' };
+    }
+
+    if (ev.kind === 'teardown') {
+      const removed = await this.teardownPreview(project.id, ev.prNumber);
+      return {
+        deployed: false,
+        reason: removed ? `Đã xoá preview PR #${ev.prNumber}` : `Không có preview PR #${ev.prNumber} để xoá`,
+      };
+    }
+
+    // opened / reopened / synchronize → tạo (nếu chưa có) rồi deploy nhánh PR
+    const preview = await this.createOrUpdatePreview(project, ev.prNumber, ev.branch);
+    const commitMsg = ev.title ? `PR #${ev.prNumber}: ${ev.title}` : `PR #${ev.prNumber}`;
+    await this.deployFromPush(preview.id, ev.sha, commitMsg);
+    return {
+      deployed: true,
+      reason: `Preview PR #${ev.prNumber} đang deploy → ${this.caddy.publicUrl(preview.slug)}`,
+    };
+  }
+
+  /** Chuẩn hoá payload PR của GitHub / GitLab về 1 dạng chung. */
+  private parsePrEvent(source: string, data: PrPayload): PrEvent | null {
+    if (source === 'github') {
+      const pr = data.pull_request;
+      const num = typeof data.number === 'number' ? data.number : pr?.number;
+      if (!pr || typeof num !== 'number') return null;
+      const sameRepo =
+        !!pr.head?.repo?.full_name &&
+        pr.head.repo.full_name === pr.base?.repo?.full_name;
+      const branch = pr.head?.ref ?? '';
+      if (data.action === 'closed') {
+        return { kind: 'teardown', prNumber: num, branch, sameRepo };
+      }
+      if (data.action === 'opened' || data.action === 'reopened' || data.action === 'synchronize') {
+        return { kind: 'upsert', prNumber: num, branch, sha: pr.head?.sha, title: pr.title, sameRepo };
+      }
+      return { kind: 'ignore', prNumber: num, branch, sameRepo, reason: `action ${data.action}` };
+    }
+    if (source === 'gitlab') {
+      const a = data.object_attributes;
+      if (!a || typeof a.iid !== 'number') return null;
+      const sameRepo = a.source_project_id === a.target_project_id;
+      const branch = a.source_branch ?? '';
+      if (a.action === 'close' || a.action === 'merge') {
+        return { kind: 'teardown', prNumber: a.iid, branch, sameRepo };
+      }
+      if (a.action === 'open' || a.action === 'reopen' || a.action === 'update') {
+        return { kind: 'upsert', prNumber: a.iid, branch, sha: a.last_commit?.id, title: a.title, sameRepo };
+      }
+      return { kind: 'ignore', prNumber: a.iid, branch, sameRepo, reason: `action ${a.action}` };
+    }
+    return null; // Bitbucket PR chưa hỗ trợ preview (chỉ push)
+  }
+
+  /** Tạo preview project mới hoặc trả lại cái đã có (đồng bộ nhánh nếu đổi). */
+  private async createOrUpdatePreview(
+    parent: PreviewParent,
+    prNumber: number,
+    branch: string,
+  ): Promise<{ id: string; slug: string }> {
+    const existing = await this.prisma.project.findFirst({
+      where: { parentProjectId: parent.id, prNumber },
+    });
+    if (existing) {
+      if (branch && existing.gitBranch !== branch) {
+        await this.prisma.project.update({
+          where: { id: existing.id },
+          data: { gitBranch: branch },
+        });
+      }
+      return { id: existing.id, slug: existing.slug };
+    }
+
+    const port = await this.allocatePreviewPort();
+    const slug = `pr-${prNumber}-${parent.slug}`.slice(0, 63);
+    const preview = await this.prisma.project.create({
+      data: {
+        teamId: parent.teamId,
+        name: `${parent.name} · PR #${prNumber}`,
+        slug,
+        type: parent.type as ProjectType,
+        gitProvider: parent.gitProvider,
+        gitRepoUrl: parent.gitRepoUrl,
+        gitBranch: branch || parent.gitBranch,
+        rootDir: parent.rootDir,
+        gitToken: parent.gitToken, // đã mã hoá at-rest — copy nguyên chuỗi
+        autoDeploy: false, // preview không tự trigger; không có webhook riêng
+        installCommand: parent.installCommand,
+        buildCommand: parent.buildCommand,
+        startCommand: parent.startCommand,
+        outputDir: parent.outputDir,
+        preDeployCommand: parent.preDeployCommand,
+        postDeployCommand: parent.postDeployCommand,
+        internalPort: port,
+        buildImage: parent.buildImage,
+        artifactPath: parent.artifactPath,
+        useDocker: parent.useDocker,
+        requiredEnvKeys: parent.requiredEnvKeys ?? [],
+        memoryMb: parent.memoryMb,
+        cpuLimit: parent.cpuLimit,
+        serverId: parent.serverId,
+        isPreview: true,
+        parentProjectId: parent.id,
+        prNumber,
+      },
+      select: { id: true, slug: true },
+    });
+
+    // Copy env vars của parent (value đã mã hoá/plain đúng như lưu → copy nguyên)
+    const envs = await this.prisma.envVar.findMany({
+      where: { projectId: parent.id },
+      select: { key: true, value: true, isSecret: true, target: true },
+    });
+    if (envs.length) {
+      await this.prisma.envVar.createMany({
+        data: envs.map((e) => ({ projectId: preview.id, ...e })),
+      });
+    }
+    return preview;
+  }
+
+  /** Chọn 1 port trống trong dải preview 7000–7999 (tránh trùng project khác). */
+  private async allocatePreviewPort(): Promise<number> {
+    const rows = await this.prisma.project.findMany({
+      where: { internalPort: { gte: 7000, lte: 7999 } },
+      select: { internalPort: true },
+    });
+    const used = new Set(rows.map((r) => r.internalPort));
+    for (let p = 7000; p <= 7999; p++) if (!used.has(p)) return p;
+    throw new BadRequestException('Hết port preview (7000–7999) — đóng bớt PR cũ.');
+  }
+
+  /** Dừng runtime + xoá hẳn preview project (cascade deployment/env) + reload Caddy. */
+  private async teardownPreview(parentId: string, prNumber: number): Promise<boolean> {
+    const preview = await this.prisma.project.findFirst({
+      where: { parentProjectId: parentId, prNumber },
+      select: { id: true, slug: true, type: true, useDocker: true },
+    });
+    if (!preview) return false;
+
+    await this.stopRuntime(preview).catch(() => undefined);
+
+    const dataDir = resolve(
+      process.cwd(),
+      this.config.get<string>('DATA_DIR', '.deploybox-data'),
+    );
+    const deps = await this.prisma.deployment.findMany({
+      where: { projectId: preview.id },
+      select: { id: true },
+    });
+    await this.prisma.project.delete({ where: { id: preview.id } });
+    for (const { id } of deps) {
+      await rm(join(dataDir, 'logs', `${id}.log`), { force: true }).catch(() => undefined);
+      await rm(join(dataDir, 'artifacts', id), { recursive: true, force: true }).catch(() => undefined);
+    }
+    if (preview.type === 'STATIC') {
+      await rm(join(dataDir, 'sites', preview.slug), { recursive: true, force: true }).catch(() => undefined);
+    }
+    await this.caddy.sync().catch(() => undefined);
+    return true;
+  }
+
+  /** Dừng process/container đang chạy của 1 project (dùng khi teardown preview). */
+  private async stopRuntime(project: {
+    type: string;
+    slug: string;
+    useDocker: boolean;
+  }): Promise<void> {
+    const dataDir = resolve(
+      process.cwd(),
+      this.config.get<string>('DATA_DIR', '.deploybox-data'),
+    );
+    if (project.type === 'STATIC') {
+      await rm(join(dataDir, 'sites', project.slug), { recursive: true, force: true });
+    } else if (project.useDocker === false) {
+      await this.hostBackend.stop(dataDir, project.slug);
+    } else {
+      await this.docker.remove(`deploybox-${project.slug}`);
+    }
+  }
+
+  /** Danh sách preview đang sống của 1 project (cho UI). */
+  async listPreviews(userId: string, projectId: string): Promise<PreviewDto[]> {
+    const project = await this.loadOwnedProject(userId, projectId);
+    const previews = await this.prisma.project.findMany({
+      where: { parentProjectId: project.id },
+      orderBy: { prNumber: 'asc' },
+      include: { deployments: { orderBy: { queuedAt: 'desc' }, take: 1 } },
+    });
+    return previews.map((p) => {
+      const status = p.deployments[0]?.status ?? 'NONE';
+      return {
+        id: p.id,
+        prNumber: p.prNumber ?? 0,
+        branch: p.gitBranch,
+        slug: p.slug,
+        status,
+        url: status === 'RUNNING' ? this.caddy.publicUrl(p.slug) : null,
+        createdAt: p.createdAt.toISOString(),
+      };
+    });
+  }
+}
+
+// ─── Kiểu dữ liệu nội bộ cho preview ─────────────────────────────────────────
+
+/** Project GỐC cần đủ field để nhân bản sang preview. */
+interface PreviewParent {
+  id: string;
+  teamId: string;
+  name: string;
+  slug: string;
+  type: string;
+  gitProvider: import('../../generated/prisma').GitProvider | null;
+  gitRepoUrl: string | null;
+  gitBranch: string;
+  rootDir: string;
+  gitToken: string | null;
+  installCommand: string | null;
+  buildCommand: string | null;
+  startCommand: string | null;
+  outputDir: string | null;
+  preDeployCommand: string | null;
+  postDeployCommand: string | null;
+  buildImage: string | null;
+  artifactPath: string | null;
+  useDocker: boolean;
+  requiredEnvKeys: string[];
+  memoryMb: number;
+  cpuLimit: number;
+  serverId: string | null;
+  previewEnabled: boolean;
+}
+
+type PrEventKind = 'upsert' | 'teardown' | 'ignore';
+interface PrEvent {
+  kind: PrEventKind;
+  prNumber: number;
+  branch: string;
+  sha?: string;
+  title?: string;
+  sameRepo: boolean;
+  reason?: string;
+}
+
+/** Payload thô của webhook PR (GitHub / GitLab) — chỉ khai field ta đọc. */
+interface PrPayload {
+  action?: string;
+  number?: number;
+  pull_request?: {
+    number?: number;
+    title?: string;
+    head?: { ref?: string; sha?: string; repo?: { full_name?: string } };
+    base?: { ref?: string; repo?: { full_name?: string } };
+    merged?: boolean;
+  };
+  object_attributes?: {
+    iid?: number;
+    action?: string;
+    source_branch?: string;
+    title?: string;
+    last_commit?: { id?: string };
+    source_project_id?: number;
+    target_project_id?: number;
+  };
 }

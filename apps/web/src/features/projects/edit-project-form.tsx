@@ -88,6 +88,7 @@ export function EditProjectForm({ project }: { project: ProjectDetailDto }) {
       notifyUrl: s('notifyUrl') ?? '',
       autoDeploy: f.get('autoDeploy') === 'on',
       sleepEnabled: f.get('sleepEnabled') === 'on',
+      previewEnabled: type !== 'MOBILE' ? f.get('previewEnabled') === 'on' : undefined,
       useDocker: type === 'BACKEND' ? f.get('useDocker') === 'on' : undefined,
     };
     setSaving(true);
@@ -352,6 +353,16 @@ export function EditProjectForm({ project }: { project: ProjectDetailDto }) {
           />
           Ngủ khi nhàn rỗi
         </label>
+        {type !== 'MOBILE' && (
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              name="previewEnabled"
+              defaultChecked={project.previewEnabled}
+            />
+            Preview mỗi Pull Request
+          </label>
+        )}
       </div>
       <div className="flex items-center gap-3">
         <Button type="submit" disabled={saving}>

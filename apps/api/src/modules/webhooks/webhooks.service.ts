@@ -118,6 +118,29 @@ export class WebhooksService {
       throw new UnauthorizedException('Chữ ký webhook không hợp lệ');
     }
 
+    // ── Sự kiện Pull Request → luồng preview deploy (A1) ────────────────────
+    const ghEvent = typeof headers['x-github-event'] === 'string' ? headers['x-github-event'] : '';
+    const glEvent = typeof headers['x-gitlab-event'] === 'string' ? headers['x-gitlab-event'] : '';
+    if (ghEvent === 'ping') return { deployed: false, reason: 'GitHub ping OK' };
+    const isPrEvent = ghEvent === 'pull_request' || glEvent === 'Merge Request Hook';
+    if (isPrEvent) {
+      if (!(project as { previewEnabled?: boolean }).previewEnabled) {
+        const reason = 'Preview PR đang tắt cho project này';
+        await this.logEvent(projectId, source, undefined, undefined, 'skipped', reason);
+        return { deployed: false, reason };
+      }
+      const result = await this.deployments.handlePullRequest(project, source, payload);
+      await this.logEvent(
+        projectId,
+        source,
+        undefined,
+        undefined,
+        result.deployed ? 'deployed' : 'skipped',
+        result.reason,
+      );
+      return result;
+    }
+
     const data = (payload ?? {}) as PushPayload;
     const { branch, commitSha, commitMsg } = extractPush(source, data);
     if (branch && branch !== project.gitBranch) {

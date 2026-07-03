@@ -187,6 +187,7 @@ export interface ProjectDetailDto {
   autoDeploy: boolean;
   sleepEnabled: boolean;
   useDocker: boolean;
+  previewEnabled: boolean; // bật deploy preview cho mỗi Pull Request
   memoryMb: number;
   cpuLimit: number;
   notifyUrl?: string | null;
@@ -209,6 +210,17 @@ export interface ManagedDatabaseDto {
   status: string;
   createdAt: string;
   connectionString?: string; // CHỈ trả 1 lần lúc mới tạo (không lưu plaintext)
+}
+
+/** 1 preview deploy đang sống cho 1 Pull Request. */
+export interface PreviewDto {
+  id: string; // id của project preview (ẩn)
+  prNumber: number;
+  branch: string; // nhánh nguồn của PR
+  slug: string;
+  url?: string | null; // URL công khai khi đang RUNNING
+  status: DeploymentStatus | 'NONE';
+  createdAt: string;
 }
 
 /** Cron job của app (chạy lệnh định kỳ). */

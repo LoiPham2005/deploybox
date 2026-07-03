@@ -85,6 +85,7 @@ export const updateProjectSchema = z.object({
   sleepEnabled: z.boolean().optional(),
   autoDeploy: z.boolean().optional(),
   useDocker: z.boolean().optional(),
+  previewEnabled: z.boolean().optional(),
   notifyUrl: z.string().url().optional().or(z.literal('')),
 });
 export type UpdateProjectDto = z.infer<typeof updateProjectSchema>;

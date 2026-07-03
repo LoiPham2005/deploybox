@@ -9,6 +9,7 @@ import { DeployButton } from '@/features/deployments/deploy-button';
 import { EnvManager } from '@/features/projects/env-manager';
 import { CronPanel } from '@/features/projects/cron-panel';
 import { DatabasePanel } from '@/features/projects/database-panel';
+import { PreviewPanel } from '@/features/projects/preview-panel';
 import { EditProjectForm } from '@/features/projects/edit-project-form';
 import { ProjectRuntimeActions } from '@/features/projects/project-runtime-actions';
 import { DomainManager } from '@/features/projects/domain-manager';
@@ -33,7 +34,7 @@ export default async function ProjectDetailPage({
     notFound();
   }
 
-  const [me, env, webhookEvents, cron, databases] = await Promise.all([
+  const [me, env, webhookEvents, cron, databases, previews] = await Promise.all([
     serverGet.me().catch(() => null),
     serverGet.env(project.id).catch(() => []),
     serverGet.webhookEvents(project.id).catch(() => []),
@@ -42,6 +43,9 @@ export default async function ProjectDetailPage({
       : Promise.resolve([]),
     project.type === 'BACKEND'
       ? serverGet.databases(project.id).catch(() => [])
+      : Promise.resolve([]),
+    project.type !== 'MOBILE'
+      ? serverGet.previews(project.id).catch(() => [])
       : Promise.resolve([]),
   ]);
 
@@ -238,6 +242,15 @@ export default async function ProjectDetailPage({
             Cron — chạy lệnh định kỳ
           </h2>
           <CronPanel projectId={project.id} initial={cron} />
+        </Card>
+      )}
+
+      {project.type !== 'MOBILE' && (
+        <Card>
+          <h2 className="mb-3 text-sm font-semibold text-white/70">
+            Preview mỗi Pull Request
+          </h2>
+          <PreviewPanel enabled={project.previewEnabled} initial={previews} />
         </Card>
       )}
 

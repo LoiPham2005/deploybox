@@ -190,6 +190,14 @@ model Project {
   // Cách chạy BACKEND: true = build Docker (cần Dockerfile); false = chạy node thẳng trên máy
   useDocker      Boolean      @default(true)
 
+  // Preview deploy theo Pull Request
+  previewEnabled  Boolean     @default(false) // parent: bật tạo preview cho mỗi PR
+  isPreview       Boolean     @default(false) // true = row này là 1 preview PR (ẩn khỏi dashboard)
+  prNumber        Int?                         // số PR mà preview này phục vụ (chỉ preview)
+  parent          Project?    @relation("ProjectPreviews", fields: [parentProjectId], references: [id], onDelete: Cascade)
+  parentProjectId String?
+  previews        Project[]   @relation("ProjectPreviews")
+
   // Biến env app CẦN (AI đọc từ repo — .env.example/config). Dùng cảnh báo thiếu env trước deploy.
   requiredEnvKeys String[]    @default([])
 
@@ -212,6 +220,7 @@ model Project {
 
   @@unique([teamId, slug])
   @@index([teamId])
+  @@index([parentProjectId])
 }
 
 // Database 1-click: Postgres/Redis chạy trong Docker container, connection string

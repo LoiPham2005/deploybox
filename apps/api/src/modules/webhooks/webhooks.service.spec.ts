@@ -20,7 +20,12 @@ function make(project: unknown) {
     teamMember: { findMany: vi.fn().mockResolvedValue([]) },
     webhookEvent: { create: vi.fn().mockResolvedValue(undefined) },
   };
-  const deployments = { deployFromPush: vi.fn().mockResolvedValue(undefined) };
+  const deployments = {
+    deployFromPush: vi.fn().mockResolvedValue(undefined),
+    handlePullRequest: vi
+      .fn()
+      .mockResolvedValue({ deployed: true, reason: 'Preview PR #7 đang deploy' }),
+  };
   const notify = { broadcast: vi.fn().mockResolvedValue(undefined) };
   // Tắt nhánh AI trong test — chỉ kiểm tra logic webhook thuần
   const flags = {
@@ -99,5 +104,46 @@ describe('WebhooksService.handlePush', () => {
       JSON.parse(body),
     );
     expect(res.deployed).toBe(true);
+  });
+
+  it('PR event + preview BẬT → gọi handlePullRequest', async () => {
+    const { svc, deployments } = make({ ...baseProject, previewEnabled: true });
+    const body = '{"action":"opened","number":7}';
+    const res = await svc.handlePush(
+      'p1',
+      { 'x-github-event': 'pull_request', 'x-hub-signature-256': sign(body) },
+      Buffer.from(body),
+      JSON.parse(body),
+    );
+    expect(deployments.handlePullRequest).toHaveBeenCalledOnce();
+    expect(deployments.deployFromPush).not.toHaveBeenCalled();
+    expect(res.deployed).toBe(true);
+  });
+
+  it('PR event + preview TẮT → bỏ qua, không đụng preview', async () => {
+    const { svc, deployments } = make({ ...baseProject, previewEnabled: false });
+    const body = '{"action":"opened","number":7}';
+    const res = await svc.handlePush(
+      'p1',
+      { 'x-github-event': 'pull_request', 'x-hub-signature-256': sign(body) },
+      Buffer.from(body),
+      JSON.parse(body),
+    );
+    expect(res.deployed).toBe(false);
+    expect(deployments.handlePullRequest).not.toHaveBeenCalled();
+  });
+
+  it('GitHub ping → OK, không deploy', async () => {
+    const { svc, deployments } = make({ ...baseProject, previewEnabled: true });
+    const body = '{"zen":"hi"}';
+    const res = await svc.handlePush(
+      'p1',
+      { 'x-github-event': 'ping', 'x-hub-signature-256': sign(body) },
+      Buffer.from(body),
+      JSON.parse(body),
+    );
+    expect(res.deployed).toBe(false);
+    expect(deployments.deployFromPush).not.toHaveBeenCalled();
+    expect(deployments.handlePullRequest).not.toHaveBeenCalled();
   });
 });

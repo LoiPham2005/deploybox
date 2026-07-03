@@ -212,6 +212,15 @@ export class DeploymentsController {
     });
   }
 
+  /** Danh sách preview deploy (mỗi Pull Request) đang sống của project. */
+  @Get('projects/:projectId/previews')
+  listPreviews(
+    @CurrentUser() user: JwtPayload,
+    @Param('projectId') projectId: string,
+  ) {
+    return this.deployments.listPreviews(user.sub, projectId);
+  }
+
   /** Container CPU/RAM stats (one-shot, frontend polls). */
   @Get('projects/:projectId/metrics')
   getMetrics(

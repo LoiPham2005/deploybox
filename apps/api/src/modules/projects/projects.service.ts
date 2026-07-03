@@ -150,7 +150,10 @@ export class ProjectsService {
     });
     const seesAll = member?.role === 'OWNER';
     const projects = await this.prisma.project.findMany({
-      where: seesAll ? { teamId } : { teamId, members: { some: { userId } } },
+      // isPreview: false — preview PR là project ẩn, không hiện ở dashboard
+      where: seesAll
+        ? { teamId, isPreview: false }
+        : { teamId, isPreview: false, members: { some: { userId } } },
       orderBy: { createdAt: 'desc' },
       include: {
         domains: { where: { isPrimary: true }, take: 1 },
@@ -165,6 +168,7 @@ export class ProjectsService {
   async listAccessible(userId: string): Promise<import('@deploybox/shared').CliProjectDto[]> {
     const projects = await this.prisma.project.findMany({
       where: {
+        isPreview: false,
         OR: [
           { team: { members: { some: { userId, role: 'OWNER' } } } },
           { members: { some: { userId } } },
@@ -206,7 +210,7 @@ export class ProjectsService {
     const noLimit = isAdmin || !this.flags.isEnabled('plan_limits_enabled');
     const limit = noLimit ? -1 : PLAN_LIMITS[team.plan as 'FREE' | 'PRO'].projects;
     if (limit !== -1) {
-      const count = await this.prisma.project.count({ where: { teamId } });
+      const count = await this.prisma.project.count({ where: { teamId, isPreview: false } });
       if (count >= limit) {
         throw new ForbiddenException(
           `Gói ${team.plan} chỉ cho tạo tối đa ${limit} project. Nâng cấp lên Pro để tạo thêm.`,
@@ -386,6 +390,7 @@ export class ProjectsService {
       autoDeploy: p.autoDeploy,
       sleepEnabled: p.sleepEnabled,
       useDocker: (p as { useDocker?: boolean }).useDocker ?? true,
+      previewEnabled: (p as { previewEnabled?: boolean }).previewEnabled ?? false,
       memoryMb: p.memoryMb,
       cpuLimit: p.cpuLimit,
       notifyUrl: p.notifyUrl,

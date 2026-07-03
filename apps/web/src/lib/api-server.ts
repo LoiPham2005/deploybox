@@ -4,6 +4,7 @@ import type {
   ApiTokenDto,
   CronJobDto,
   ManagedDatabaseDto,
+  PreviewDto,
   DeploymentView,
   EnvVarDto,
   MeResponse,
@@ -58,6 +59,8 @@ export const serverGet = {
     serverApi<CronJobDto[]>(`/projects/${projectId}/cron`),
   databases: (projectId: string) =>
     serverApi<ManagedDatabaseDto[]>(`/projects/${projectId}/databases`),
+  previews: (projectId: string) =>
+    serverApi<PreviewDto[]>(`/projects/${projectId}/previews`),
   servers: (teamId: string) =>
     serverApi<ServerDto[]>(`/teams/${teamId}/servers`),
 };
