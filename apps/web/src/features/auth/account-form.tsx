@@ -5,28 +5,9 @@ import type { UserDto } from '@deploybox/shared';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-
-const BASE = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000') + '/api/v1';
-
-async function apiCall(path: string, method: string, body: unknown) {
-  const token = document.cookie
-    .split('; ')
-    .find((r) => r.startsWith('db_token='))
-    ?.split('=')[1];
-  const res = await fetch(`${BASE}${path}`, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const e = await res.json().catch(() => ({})) as { message?: string };
-    throw new Error(e.message ?? `Lỗi ${res.status}`);
-  }
-  return res.json();
-}
+// Cookie db_token là httpOnly — JS trình duyệt KHÔNG đọc được, nên phải gọi
+// qua server action (chạy server-side, đọc cookie hộ). Đừng fetch API trực tiếp ở đây.
+import { changePasswordAction, updateNameAction } from './account-actions';
 
 export function AccountForm({ user }: { user: UserDto }) {
   const [name, setName] = useState(user.name ?? '');
@@ -45,14 +26,10 @@ export function AccountForm({ user }: { user: UserDto }) {
     setSavingName(true);
     setNameMsg(null);
     setNameErr(null);
-    try {
-      await apiCall('/auth/me', 'PATCH', { name: name.trim() || undefined });
-      setNameMsg('Đã lưu');
-    } catch (err) {
-      setNameErr(err instanceof Error ? err.message : 'Lỗi');
-    } finally {
-      setSavingName(false);
-    }
+    const res = await updateNameAction(name);
+    if (res.ok) setNameMsg('Đã lưu');
+    else setNameErr(res.error);
+    setSavingName(false);
   }
 
   async function onChangePassword(e: FormEvent) {
@@ -61,16 +38,15 @@ export function AccountForm({ user }: { user: UserDto }) {
     setSavingPw(true);
     setPwMsg(null);
     setPwErr(null);
-    try {
-      await apiCall('/auth/me/password', 'POST', { currentPassword: curPw, newPassword: newPw });
+    const res = await changePasswordAction(curPw, newPw);
+    if (res.ok) {
       setPwMsg('Đã đổi mật khẩu');
       setCurPw('');
       setNewPw('');
-    } catch (err) {
-      setPwErr(err instanceof Error ? err.message : 'Lỗi');
-    } finally {
-      setSavingPw(false);
+    } else {
+      setPwErr(res.error);
     }
+    setSavingPw(false);
   }
 
   return (
