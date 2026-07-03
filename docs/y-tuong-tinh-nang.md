@@ -9,15 +9,19 @@
 
 ---
 
-## 🔥 Nhóm A — Tính năng PaaS "xịn" (ngang Railway/Vercel)
+## 🔥 Nhóm A — Tính năng PaaS "xịn" (ngang Railway/Vercel) — ✅ ĐÃ LÀM HẾT (2026-07-03)
 
-| # | Tính năng | Là gì | Tận dụng đồ có sẵn | Cỡ |
-|---|---|---|---|---|
-| A1 | **Preview deploy mỗi Pull Request** ⭐ | Mở PR → tự deploy ra URL riêng `pr-12.<slug>.sneakup.io.vn` để review; đóng/merge PR → tự xoá | Webhook + Caddy route + build pipeline | Vừa |
-| A2 | **Cron jobs cho app user** | User đặt lịch chạy 1 lệnh/endpoint định kỳ (gửi mail, dọn data, sync…) | Đã có pattern chạy interval (sleep/report/cleanup) | Vừa |
-| A3 | **Database 1-click** | Bấm nút tạo Postgres/Redis cho app (Docker container) + tự bơm connection string vào env | Docker engine đã có | Vừa–lớn |
-| A4 | **CLI `deploybox`** | `deploybox deploy` / `logs` / `env` từ terminal, không cần mở web | API token đã có | Vừa |
-| A5 | **Build/deploy hooks** | Chạy lệnh trước/sau deploy (migrate DB, warmup cache, gọi webhook) | Build runner đã có | Nhỏ |
+Cả 5 tính năng đã code + typecheck + test + deploy production + verify live.
+
+| # | Tính năng | Là gì | Trạng thái |
+|---|---|---|---|
+| A1 | **Preview deploy mỗi Pull Request** ⭐ | PR cùng repo mở → tự deploy ra `pr-<số>-<slug>.sneakup.io.vn`; đóng/merge → tự xoá. Chặn PR từ fork (bảo mật). Bật ở Sửa cấu hình. | ✅ live |
+| A2 | **Cron jobs cho app user** | User đặt lịch chạy lệnh định kỳ (cron 5 trường); chạy host-run hoặc `docker exec` | ✅ live |
+| A3 | **Database 1-click** | 1 nút tạo Postgres/Redis (Docker container + volume) + tự bơm connection string vào env (mã hoá) | ✅ live |
+| A4 | **CLI `deploybox`** | `deploybox login/whoami/list/deploy/logs` từ terminal (dùng API token) | ✅ live |
+| A5 | **Build/deploy hooks** | Lệnh pre/post-deploy (migrate DB, warmup) cho BACKEND | ✅ live |
+
+> Ghi chú vận hành: preview cần **wildcard DNS `*.sneakup.io.vn`** (đã có) + PUBLIC_TLS (đã bật) → subdomain động tự có HTTPS. A3 cần **Docker** trên VPS (đã cài 2026-07-03, v29.6.1).
 
 ## 🔒 Nhóm B — Bảo mật & tài khoản
 
