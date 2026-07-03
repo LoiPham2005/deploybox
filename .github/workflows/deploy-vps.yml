@@ -1,0 +1,69 @@
+# Tự động deploy DeployBox lên VPS mỗi khi push vào main.
+# Cần 3 secret trong GitHub repo (Settings → Secrets and variables → Actions):
+#   VPS_HOST    = 14.225.204.227
+#   VPS_USER    = root
+#   VPS_SSH_KEY = private key SSH (tạo riêng cho Actions — xem docs/deploy/sneakup-vps.md)
+name: Deploy VPS
+
+# Chạy SAU khi workflow "CI" (test + typecheck + build) xanh trên main —
+# code hỏng test sẽ KHÔNG được deploy. Bấm "Run workflow" để deploy tay (bỏ qua CI).
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch: {} # cho phép bấm "Run workflow" chạy tay
+
+# Mỗi lúc chỉ 1 deploy; push dồn dập thì đợi cái trước xong
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # workflow_run kích hoạt cả khi CI FAIL → chỉ deploy khi CI xanh (hoặc chạy tay)
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: SSH vào VPS — pull + build + restart
+        env:
+          SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          HOST: ${{ secrets.VPS_HOST }}
+          USER: ${{ secrets.VPS_USER }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh -i ~/.ssh/id_deploy -o StrictHostKeyChecking=accept-new "$USER@$HOST" bash -s <<'REMOTE'
+          set -euo pipefail
+          cd /opt/deploybox
+
+          echo "══ 1. Lấy code mới ══"
+          git fetch origin main
+          git reset --hard origin/main   # server chỉ nhận code, không sửa tay → theo remote tuyệt đối
+
+          echo "══ 2. Cài dependencies ══"
+          pnpm install --frozen-lockfile || pnpm install
+
+          echo "══ 3. Prisma: đồng bộ schema + generate client ══"
+          # prisma không tự đọc .env ở gốc repo → nạp riêng DATABASE_URL
+          export DATABASE_URL="$(grep -m1 '^DATABASE_URL=' .env | cut -d= -f2-)"
+          # KHÔNG dùng --accept-data-loss: thay đổi phá dữ liệu sẽ FAIL ở đây (an toàn, xử lý tay)
+          pnpm --filter @deploybox/api exec prisma db push --skip-generate
+          pnpm --filter @deploybox/api exec prisma generate
+
+          echo "══ 4. Build + restart (make deploy) ══"
+          make deploy
+          pm2 save
+
+          echo "══ 5. Kiểm tra sống ══"
+          ok=0
+          for i in $(seq 1 20); do
+            if curl -sf http://localhost:4000/api/v1/health >/dev/null; then ok=1; break; fi
+            sleep 2
+          done
+          [ "$ok" = "1" ] || { echo "❌ API không lên sau restart"; pm2 logs deploybox-api --lines 30 --nostream; exit 1; }
+          curl -sf -o /dev/null http://localhost:3000/login || { echo "❌ Web không lên"; exit 1; }
+          echo "✅ Deploy xong — API + Web đều sống"
+          REMOTE

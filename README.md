@@ -11,6 +11,7 @@ PaaS tự host: kết nối Git → build → chạy app → tự gắn domain +
 | **Deploy lên VPS** (HTTPS thật) | [docs/deploy/vps.md](docs/deploy/vps.md) — bản production hiện tại: [docs/deploy/sneakup-vps.md](docs/deploy/sneakup-vps.md) |
 | Biến máy Mac thành server (pm2 + tunnel) | [docs/deploy/home-mac.md](docs/deploy/home-mac.md) |
 | Biến máy Windows thành server (WSL2) | [docs/deploy/home-windows.md](docs/deploy/home-windows.md) |
+| CI/CD — push code là tự deploy | [docs/deploy/cicd.md](docs/deploy/cicd.md) |
 | Lộ trình tính năng AI | [AI.md](AI.md) |
 | Kiến trúc / thiết kế / kế hoạch gốc | [docs/](docs/README.md) |
 

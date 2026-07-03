@@ -223,10 +223,14 @@ Muốn chạy song song thật sự thì phải tách: DB riêng + bot Telegram 
 
 ## Cập nhật code sau này
 
+**Tự động (CI/CD):** chỉ cần `git push` lên `main` — GitHub Actions tự SSH vào VPS pull + build + restart + health check. **Cơ chế + cách thiết lập + gỡ lỗi: xem [cicd.md](cicd.md).**
+
+**Thủ công (dự phòng):**
 ```bash
-# Máy Mac: commit + push lên GitHub như bình thường, rồi:
 ssh root@14.225.204.227 'cd /opt/deploybox && git pull && pnpm install && make deploy'
 ```
+
+> ⚠️ Đã bật CI/CD thì KHÔNG sửa code tay trên VPS (workflow `git reset --hard` sẽ ghi đè). `.env` trên VPS thì an toàn.
 
 ---
 
