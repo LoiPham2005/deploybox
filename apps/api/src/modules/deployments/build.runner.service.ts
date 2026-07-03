@@ -195,6 +195,12 @@ export class BuildRunnerService {
         // rơi xuống local builders bên dưới
       }
 
+      // Hook pre/post-deploy bật/tắt toàn hệ thống ở Admin → Tính năng hệ thống
+      const hooksEnabled = this.flags.isEnabled('deploy_hooks');
+      if (!hooksEnabled && (project.preDeployCommand || project.postDeployCommand)) {
+        log('⚙️ Hook pre/post-deploy đang TẮT toàn hệ thống — bỏ qua hook của project này.', 'stderr');
+      }
+
       if (rollbackOf) {
         await this.doRollback(deploymentId, rollbackOf, project, dataDir, log);
       } else if (project.type === 'MOBILE') {
@@ -270,8 +276,8 @@ export class BuildRunnerService {
             installCommand: project.installCommand,
             buildCommand: project.buildCommand,
             startCommand: project.startCommand,
-            preDeployCommand: project.preDeployCommand,
-            postDeployCommand: project.postDeployCommand,
+            preDeployCommand: hooksEnabled ? project.preDeployCommand : null,
+            postDeployCommand: hooksEnabled ? project.postDeployCommand : null,
             internalPort: project.internalPort,
             env: runtimeEnv,
             dataDir,
@@ -296,8 +302,8 @@ export class BuildRunnerService {
             internalPort: project.internalPort,
             memoryMb: project.memoryMb,
             cpuLimit: project.cpuLimit,
-            preDeployCommand: project.preDeployCommand,
-            postDeployCommand: project.postDeployCommand,
+            preDeployCommand: hooksEnabled ? project.preDeployCommand : null,
+            postDeployCommand: hooksEnabled ? project.postDeployCommand : null,
             dataDir,
             signal: controller.signal,
             // 🤖 Repo không có Dockerfile → AI sinh (flag ai_dockerfile_gen)

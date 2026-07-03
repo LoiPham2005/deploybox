@@ -9,6 +9,7 @@ import { randomBytes } from 'crypto';
 import type { CreateDatabaseDto, ManagedDatabaseDto } from '@deploybox/shared';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
+import { FeatureFlagsService } from '../../infra/feature-flags/feature-flags.service';
 import { capture } from '../../infra/process.util';
 
 const IMAGE: Record<string, string> = {
@@ -25,6 +26,7 @@ export class DatabaseService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly crypto: CryptoService,
+    private readonly flags: FeatureFlagsService,
   ) {}
 
   private async assertAccess(userId: string, projectId: string) {
@@ -57,6 +59,12 @@ export class DatabaseService {
     projectId: string,
     dto: CreateDatabaseDto,
   ): Promise<ManagedDatabaseDto> {
+    // Tắt ở Admin → chặn tạo mới; db đang chạy giữ nguyên, vẫn xoá được để dọn.
+    if (!this.flags.isEnabled('managed_databases')) {
+      throw new BadRequestException(
+        'Tính năng "Database 1-click" đang tắt (Admin → Tính năng hệ thống).',
+      );
+    }
     const project = await this.assertAccess(userId, projectId);
 
     // Cổng host trống trong [6000..6999]

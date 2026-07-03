@@ -124,6 +124,11 @@ export class WebhooksService {
     if (ghEvent === 'ping') return { deployed: false, reason: 'GitHub ping OK' };
     const isPrEvent = ghEvent === 'pull_request' || glEvent === 'Merge Request Hook';
     if (isPrEvent) {
+      if (!this.flags.isEnabled('preview_deploys')) {
+        const reason = 'Preview PR đang tắt toàn hệ thống (Admin → Tính năng hệ thống)';
+        await this.logEvent(projectId, source, undefined, undefined, 'skipped', reason);
+        return { deployed: false, reason };
+      }
       if (!(project as { previewEnabled?: boolean }).previewEnabled) {
         const reason = 'Preview PR đang tắt cho project này';
         await this.logEvent(projectId, source, undefined, undefined, 'skipped', reason);

@@ -24,6 +24,41 @@ export const KNOWN_FLAGS: {
     default: true,
   },
   {
+    key: 'deploy_hooks',
+    label: 'Hook trước/sau deploy',
+    description:
+      'Chạy lệnh pre/post-deploy của project (migrate DB, warmup…). Tắt: deploy vẫn chạy nhưng bỏ qua hook.',
+    default: true,
+  },
+  {
+    key: 'cron_jobs',
+    label: 'Cron jobs cho app',
+    description:
+      'Chạy lệnh định kỳ theo lịch cron của từng project. Tắt: scheduler ngừng + chặn tạo/chạy-ngay (job cũ vẫn xem/sửa/xoá được).',
+    default: true,
+  },
+  {
+    key: 'managed_databases',
+    label: 'Database 1-click',
+    description:
+      'Tạo Postgres/Redis 1 nút (Docker container) + tự bơm connection string. Tắt: chặn tạo mới (db đang chạy giữ nguyên, vẫn xoá được).',
+    default: true,
+  },
+  {
+    key: 'cli_api',
+    label: 'CLI deploybox',
+    description:
+      'Endpoint /cli cho công cụ dòng lệnh (login/list/deploy/logs qua API token). Tắt: CLI không dùng được.',
+    default: true,
+  },
+  {
+    key: 'preview_deploys',
+    label: 'Preview mỗi Pull Request',
+    description:
+      'PR mở → tự deploy bản preview pr-<số>-<slug>; đóng/merge → tự xoá. Tắt: bỏ qua mọi webhook PR (kể cả project đã bật preview).',
+    default: true,
+  },
+  {
     key: 'ai_features',
     label: '🤖 AI — NÚT TỔNG',
     description:

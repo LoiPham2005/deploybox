@@ -16,6 +16,7 @@ import type {
 } from '@deploybox/shared';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 import { EnvService } from '../env/env.service';
+import { FeatureFlagsService } from '../../infra/feature-flags/feature-flags.service';
 import { cronMatches, isValidCron, parseCron } from './cron.util';
 
 const OUTPUT_CAP = 4096; // giữ tối đa 4KB đuôi output
@@ -30,6 +31,7 @@ export class CronService implements OnApplicationBootstrap {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly env: EnvService,
+    private readonly flags: FeatureFlagsService,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -38,6 +40,8 @@ export class CronService implements OnApplicationBootstrap {
   }
 
   private async tick(): Promise<void> {
+    // Tắt ở Admin → Tính năng hệ thống → scheduler ngừng hẳn (job cũ giữ nguyên)
+    if (!this.flags.isEnabled('cron_jobs')) return;
     const now = new Date();
     const jobs = await this.prisma.cronJob
       .findMany({ where: { enabled: true }, include: { project: true } })
@@ -185,6 +189,7 @@ export class CronService implements OnApplicationBootstrap {
   }
 
   async create(userId: string, projectId: string, dto: CreateCronDto): Promise<CronJobDto> {
+    this.assertFeatureOn();
     await this.assertAccess(userId, projectId);
     if (!isValidCron(dto.schedule)) {
       throw new BadRequestException('Lịch cron không hợp lệ (5 trường: phút giờ ngày tháng thứ).');
@@ -232,9 +237,18 @@ export class CronService implements OnApplicationBootstrap {
   }
 
   async runNow(userId: string, projectId: string, cronId: string): Promise<CronJobDto> {
+    this.assertFeatureOn();
     await this.assertAccess(userId, projectId);
     await this.getOwned(projectId, cronId);
     return this.runJob(cronId);
+  }
+
+  private assertFeatureOn(): void {
+    if (!this.flags.isEnabled('cron_jobs')) {
+      throw new BadRequestException(
+        'Tính năng "Cron jobs" đang tắt (Admin → Tính năng hệ thống).',
+      );
+    }
   }
 
   private async getOwned(projectId: string, cronId: string) {

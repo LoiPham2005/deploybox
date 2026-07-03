@@ -38,7 +38,7 @@ function make(project: unknown) {
     notify as never,
     flags as never,
   );
-  return { svc, deployments };
+  return { svc, deployments, flags };
 }
 
 describe('WebhooksService.handlePush', () => {
@@ -130,6 +130,21 @@ describe('WebhooksService.handlePush', () => {
       JSON.parse(body),
     );
     expect(res.deployed).toBe(false);
+    expect(deployments.handlePullRequest).not.toHaveBeenCalled();
+  });
+
+  it('flag preview_deploys TẮT toàn hệ thống → bỏ qua dù project bật preview', async () => {
+    const { svc, deployments, flags } = make({ ...baseProject, previewEnabled: true });
+    flags.isEnabled.mockImplementation((k: string) => k !== 'preview_deploys');
+    const body = '{"action":"opened","number":7}';
+    const res = await svc.handlePush(
+      'p1',
+      { 'x-github-event': 'pull_request', 'x-hub-signature-256': sign(body) },
+      Buffer.from(body),
+      JSON.parse(body),
+    );
+    expect(res.deployed).toBe(false);
+    expect(res.reason).toContain('tắt toàn hệ thống');
     expect(deployments.handlePullRequest).not.toHaveBeenCalled();
   });
 
