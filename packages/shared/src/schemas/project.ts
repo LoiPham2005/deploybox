@@ -55,6 +55,8 @@ export const updateProjectSchema = z.object({
   buildCommand: z.string().optional(),
   startCommand: z.string().optional(),
   outputDir: z.string().optional(),
+  preDeployCommand: z.string().max(1000).optional().or(z.literal('')),
+  postDeployCommand: z.string().max(1000).optional().or(z.literal('')),
   internalPort: z.number().int().positive().max(65535).optional(),
   buildImage: z.string().optional(),
   artifactPath: z.string().optional(),

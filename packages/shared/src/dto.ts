@@ -179,6 +179,8 @@ export interface ProjectDetailDto {
   buildCommand?: string | null;
   startCommand?: string | null;
   outputDir?: string | null;
+  preDeployCommand?: string | null; // chạy trước khi start (vd migrate DB)
+  postDeployCommand?: string | null; // chạy sau khi app sống (vd warmup)
   internalPort: number;
   buildImage?: string | null;
   artifactPath?: string | null;

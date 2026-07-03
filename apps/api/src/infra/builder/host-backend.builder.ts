@@ -15,6 +15,8 @@ export interface HostBackendInput {
   installCommand?: string | null;
   buildCommand?: string | null;
   startCommand?: string | null;
+  preDeployCommand?: string | null;
+  postDeployCommand?: string | null;
   internalPort: number;
   env?: Record<string, string>;
   dataDir: string;
@@ -86,8 +88,24 @@ export class HostBackendBuilder {
       await this.exec('sh', ['-c', input.buildCommand], workDir, log, buildEnv, input.signal);
     }
 
+    // 3.5 Pre-deploy hook (vd "npx prisma migrate deploy") — chạy sau build, TRƯỚC khi start.
+    if (input.preDeployCommand?.trim()) {
+      log(`$ [pre-deploy] ${input.preDeployCommand}`, 'stdout');
+      await this.exec('sh', ['-c', input.preDeployCommand], workDir, log, runEnv, input.signal);
+    }
+
     // 4. Dừng process cũ + spawn lệnh chạy
-    return this.spawnApp(workDir, runEnv, input, log);
+    const result = await this.spawnApp(workDir, runEnv, input, log);
+
+    // 5. Post-deploy hook (vd warmup) — chạy sau khi app đã sống. Lỗi ở đây KHÔNG
+    // làm deploy thất bại (app đã chạy rồi), chỉ ghi cảnh báo.
+    if (input.postDeployCommand?.trim()) {
+      log(`$ [post-deploy] ${input.postDeployCommand}`, 'stdout');
+      await this.exec('sh', ['-c', input.postDeployCommand], workDir, log, runEnv, input.signal).catch(
+        (e) => log(`Cảnh báo: post-deploy lỗi (bỏ qua): ${e instanceof Error ? e.message : e}`, 'stderr'),
+      );
+    }
+    return result;
   }
 
   /**

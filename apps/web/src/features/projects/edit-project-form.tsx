@@ -75,6 +75,8 @@ export function EditProjectForm({ project }: { project: ProjectDetailDto }) {
       buildCommand: s('buildCommand'),
       outputDir: type === 'STATIC' ? s('outputDir') : undefined,
       startCommand: type === 'BACKEND' ? s('startCommand') : undefined,
+      preDeployCommand: type === 'BACKEND' ? (s('preDeployCommand') ?? '') : undefined,
+      postDeployCommand: type === 'BACKEND' ? (s('postDeployCommand') ?? '') : undefined,
       internalPort:
         type === 'BACKEND' && s('internalPort')
           ? Number(s('internalPort'))
@@ -268,6 +270,32 @@ export function EditProjectForm({ project }: { project: ProjectDetailDto }) {
                 </span>
               </span>
             </label>
+          </div>
+
+          {/* Hooks: pre/post deploy */}
+          <div className="sm:col-span-2">
+            <Label htmlFor="preDeployCommand">Lệnh trước khi chạy (tuỳ chọn)</Label>
+            <Input
+              id="preDeployCommand"
+              name="preDeployCommand"
+              defaultValue={project.preDeployCommand ?? ''}
+              placeholder="npx prisma migrate deploy"
+            />
+            <p className="mt-1 text-xs text-white/40">
+              Chạy sau khi build, TRƯỚC khi start app. Hợp để migrate DB. Lỗi ở đây = deploy thất bại.
+            </p>
+          </div>
+          <div className="sm:col-span-2">
+            <Label htmlFor="postDeployCommand">Lệnh sau khi chạy (tuỳ chọn)</Label>
+            <Input
+              id="postDeployCommand"
+              name="postDeployCommand"
+              defaultValue={project.postDeployCommand ?? ''}
+              placeholder="curl -s http://localhost:$PORT/warmup"
+            />
+            <p className="mt-1 text-xs text-white/40">
+              Chạy SAU khi app đã sống (vd warmup). Lỗi ở đây chỉ cảnh báo, không làm deploy fail.
+            </p>
           </div>
         </div>
       )}

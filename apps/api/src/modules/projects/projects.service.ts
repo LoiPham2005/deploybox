@@ -257,6 +257,13 @@ export class ProjectsService {
         notifyUrl: dto.notifyUrl === undefined
           ? undefined
           : dto.notifyUrl === '' ? null : dto.notifyUrl,
+        // hook: '' = xoá (null), undefined = không đổi
+        preDeployCommand: dto.preDeployCommand === undefined
+          ? undefined
+          : dto.preDeployCommand === '' ? null : dto.preDeployCommand,
+        postDeployCommand: dto.postDeployCommand === undefined
+          ? undefined
+          : dto.postDeployCommand === '' ? null : dto.postDeployCommand,
       },
     });
     return this.get(userId, projectId);
@@ -341,6 +348,8 @@ export class ProjectsService {
       buildCommand: p.buildCommand,
       startCommand: p.startCommand,
       outputDir: p.outputDir,
+      preDeployCommand: (p as { preDeployCommand?: string | null }).preDeployCommand ?? null,
+      postDeployCommand: (p as { postDeployCommand?: string | null }).postDeployCommand ?? null,
       internalPort: p.internalPort,
       autoDeploy: p.autoDeploy,
       sleepEnabled: p.sleepEnabled,

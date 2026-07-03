@@ -173,6 +173,11 @@ model Project {
   buildCommand   String?
   startCommand   String?
   outputDir      String?
+
+  // Hooks (BACKEND): lệnh chạy TRƯỚC khi start app (vd "npx prisma migrate deploy")
+  // và SAU khi app đã sống (vd warmup). Null = bỏ qua.
+  preDeployCommand  String?
+  postDeployCommand String?
   internalPort   Int          @default(3000)
   buildImage     String?
   artifactPath   String?

@@ -270,6 +270,8 @@ export class BuildRunnerService {
             installCommand: project.installCommand,
             buildCommand: project.buildCommand,
             startCommand: project.startCommand,
+            preDeployCommand: project.preDeployCommand,
+            postDeployCommand: project.postDeployCommand,
             internalPort: project.internalPort,
             env: runtimeEnv,
             dataDir,
@@ -294,6 +296,8 @@ export class BuildRunnerService {
             internalPort: project.internalPort,
             memoryMb: project.memoryMb,
             cpuLimit: project.cpuLimit,
+            preDeployCommand: project.preDeployCommand,
+            postDeployCommand: project.postDeployCommand,
             dataDir,
             signal: controller.signal,
             // 🤖 Repo không có Dockerfile → AI sinh (flag ai_dockerfile_gen)

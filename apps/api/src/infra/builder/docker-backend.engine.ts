@@ -14,6 +14,8 @@ export interface BackendBuildInput {
   internalPort: number;
   memoryMb: number;
   cpuLimit: number;
+  preDeployCommand?: string | null;
+  postDeployCommand?: string | null;
   dataDir: string;
   signal?: AbortSignal;
   /** Repo không có Dockerfile → gọi hook này (AI sinh); trả null = chịu, báo lỗi như cũ. */
@@ -67,6 +69,13 @@ export class DockerBackendEngine {
     const image = `deploybox-${input.slug}:${input.deploymentId.slice(-8)}`;
     await this.docker.buildImage(image, appDir, log, input.signal);
 
+    // Pre-deploy hook: chạy 1 container tạm từ image vừa build (vd migrate DB) TRƯỚC khi
+    // khởi chạy container chính. Fail ở đây = deploy fail (migrate hỏng thì không nên chạy app).
+    if (input.preDeployCommand?.trim()) {
+      log(`$ [pre-deploy] ${input.preDeployCommand}`, 'stdout');
+      await this.runOnce(image, input.preDeployCommand, runtimeEnv, log, input.signal);
+    }
+
     const name = `deploybox-${input.slug}`;
     log('Dừng container cũ (nếu có)…', 'stdout');
     await this.docker.remove(name).catch(() => undefined);
@@ -83,7 +92,31 @@ export class DockerBackendEngine {
 
     const hostPort = await this.docker.getHostPort(name, input.internalPort);
     log(`Container "${name}" chạy ở host port ${hostPort ?? '?'}`, 'stdout');
+
+    // Post-deploy hook: chạy sau khi container chính đã lên. Fail = chỉ cảnh báo.
+    if (input.postDeployCommand?.trim()) {
+      log(`$ [post-deploy] ${input.postDeployCommand}`, 'stdout');
+      await this.runOnce(image, input.postDeployCommand, runtimeEnv, log, input.signal).catch((e) =>
+        log(`Cảnh báo: post-deploy lỗi (bỏ qua): ${e instanceof Error ? e.message : e}`, 'stderr'),
+      );
+    }
     return { containerId, hostPort, imageTag: image };
+  }
+
+  /** Chạy 1 lệnh trong container tạm (--rm) từ image, có bơm env. */
+  private async runOnce(
+    image: string,
+    cmd: string,
+    env: Record<string, string>,
+    log: LogFn,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    const envArgs = Object.entries(env).flatMap(([k, v]) => ['--env', `${k}=${v}`]);
+    await runStreaming(
+      'docker',
+      ['run', '--rm', ...envArgs, image, 'sh', '-c', cmd],
+      { cwd: process.cwd(), log, signal },
+    );
   }
 
   /** Rollback: chạy lại một image đã build sẵn (không clone/build lại). */
