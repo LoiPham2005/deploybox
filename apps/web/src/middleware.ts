@@ -5,7 +5,10 @@ const SESSION_COOKIE = 'db_token';
 export function middleware(req: NextRequest) {
   const token = req.cookies.get(SESSION_COOKIE)?.value;
   const { pathname } = req.nextUrl;
-  const isAuthPage = pathname === '/login' || pathname === '/register';
+  const isAuthPage =
+    pathname === '/login' ||
+    pathname === '/register' ||
+    pathname === '/forgot-password';
 
   if (!token && !isAuthPage) {
     const url = req.nextUrl.clone();

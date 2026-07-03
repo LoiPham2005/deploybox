@@ -14,6 +14,25 @@ export const loginSchema = z.object({
 });
 export type LoginDto = z.infer<typeof loginSchema>;
 
+// ── OTP qua email (xác thực đăng ký + quên mật khẩu) ──
+export const verifyRegisterSchema = z.object({
+  email: z.string().email(),
+  code: z.string().regex(/^\d{6}$/, 'Mã OTP gồm 6 chữ số'),
+});
+export type VerifyRegisterDto = z.infer<typeof verifyRegisterSchema>;
+
+export const forgotPasswordSchema = z.object({
+  email: z.string().email(),
+});
+export type ForgotPasswordDto = z.infer<typeof forgotPasswordSchema>;
+
+export const resetPasswordSchema = z.object({
+  email: z.string().email(),
+  code: z.string().regex(/^\d{6}$/, 'Mã OTP gồm 6 chữ số'),
+  newPassword: z.string().min(8, 'Mật khẩu tối thiểu 8 ký tự'),
+});
+export type ResetPasswordDto = z.infer<typeof resetPasswordSchema>;
+
 export const updateMeSchema = z.object({
   name: z.string().min(1).max(80).optional(),
 });

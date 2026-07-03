@@ -34,6 +34,13 @@ export const envSchema = z.object({
   GEMINI_API_KEY: z.string().default(''), // Google Gemini
   // Provider + model mặc định lúc chưa cấu hình trong DB (admin đổi sau ở trang Admin).
   AI_MODEL: z.string().default('claude-opus-4-8'),
+  // Gửi email (OTP đăng ký, quên mật khẩu). Gmail: SMTP_USER = địa chỉ Gmail,
+  // SMTP_PASS = App Password (myaccount.google.com/apppasswords). Trống = tắt email.
+  SMTP_HOST: z.string().default('smtp.gmail.com'),
+  SMTP_PORT: z.coerce.number().default(587),
+  SMTP_USER: z.string().default(''),
+  SMTP_PASS: z.string().default(''),
+  MAIL_FROM: z.string().default(''), // vd: "DeployBox <bot@gmail.com>" — trống = dùng SMTP_USER
 });
 
 export type AppEnv = z.infer<typeof envSchema>;

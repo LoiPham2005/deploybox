@@ -3,14 +3,20 @@ import type { Response } from 'express';
 import {
   changePasswordSchema,
   createTokenSchema,
+  forgotPasswordSchema,
   loginSchema,
   registerSchema,
+  resetPasswordSchema,
   updateMeSchema,
+  verifyRegisterSchema,
   type ChangePasswordDto,
   type CreateTokenDto,
+  type ForgotPasswordDto,
   type LoginDto,
   type RegisterDto,
+  type ResetPasswordDto,
   type UpdateMeDto,
+  type VerifyRegisterDto,
 } from '@deploybox/shared';
 import { AuthService } from './auth.service';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
@@ -27,6 +33,30 @@ export class AuthController {
   @Post('register')
   register(@Body(new ZodValidationPipe(registerSchema)) dto: RegisterDto) {
     return this.auth.register(dto);
+  }
+
+  /** Đăng ký B1: gửi mã OTP về email (user chưa được tạo). */
+  @Post('register/request-otp')
+  requestRegisterOtp(@Body(new ZodValidationPipe(registerSchema)) dto: RegisterDto) {
+    return this.auth.requestRegisterOtp(dto);
+  }
+
+  /** Đăng ký B2: nhập đúng OTP → tạo tài khoản + đăng nhập. */
+  @Post('register/verify')
+  verifyRegister(@Body(new ZodValidationPipe(verifyRegisterSchema)) dto: VerifyRegisterDto) {
+    return this.auth.verifyRegister(dto);
+  }
+
+  /** Quên mật khẩu B1: gửi mã OTP về email (nếu tồn tại — luôn trả ok). */
+  @Post('forgot-password')
+  forgotPassword(@Body(new ZodValidationPipe(forgotPasswordSchema)) dto: ForgotPasswordDto) {
+    return this.auth.forgotPassword(dto.email);
+  }
+
+  /** Quên mật khẩu B2: OTP đúng → đặt mật khẩu mới. */
+  @Post('reset-password')
+  resetPassword(@Body(new ZodValidationPipe(resetPasswordSchema)) dto: ResetPasswordDto) {
+    return this.auth.resetPassword(dto);
   }
 
   @Post('login')

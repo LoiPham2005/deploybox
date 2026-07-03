@@ -311,6 +311,23 @@ model Setting {
   updatedAt DateTime @updatedAt
 }
 
+// Mã OTP gửi qua email (xác thực đăng ký / quên mật khẩu).
+// Không lưu mã thô — chỉ sha256. Đăng ký: user CHỈ được tạo sau khi verify OTP,
+// thông tin đăng ký (name + passwordHash) giữ tạm trong payload.
+model EmailOtp {
+  id        String   @id @default(cuid())
+  email     String
+  purpose   String   // "register" | "reset"
+  codeHash  String
+  payload   String?  // register: JSON { name, passwordHash }
+  attempts  Int      @default(0)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@unique([email, purpose])
+  @@index([expiresAt])
+}
+
 // 📚 "Trí nhớ sửa lỗi": lỗi đã gặp + cách sửa ĐÃ CHỨNG MINH hiệu quả (fail → fix → deploy OK).
 // Lỗi mới trùng chữ ký → trả lời từ đây, không tốn AI.
 model FixMemory {

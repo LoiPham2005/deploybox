@@ -50,4 +50,13 @@ export const authApi = {
   login: (dto: LoginDto) => apiPost<AuthResponse>('/auth/login', dto),
   register: (dto: RegisterDto) => apiPost<AuthResponse>('/auth/register', dto),
   me: (token: string) => apiGet<MeResponse>('/auth/me', token),
+  // OTP qua email (đăng ký + quên mật khẩu) — endpoint public, gọi thẳng từ client
+  requestRegisterOtp: (dto: RegisterDto) =>
+    apiPost<{ ok: true }>('/auth/register/request-otp', dto),
+  verifyRegister: (dto: { email: string; code: string }) =>
+    apiPost<AuthResponse>('/auth/register/verify', dto),
+  forgotPassword: (email: string) =>
+    apiPost<{ ok: true }>('/auth/forgot-password', { email }),
+  resetPassword: (dto: { email: string; code: string; newPassword: string }) =>
+    apiPost<{ ok: true }>('/auth/reset-password', dto),
 };
