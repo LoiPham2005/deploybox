@@ -23,6 +23,7 @@ import { GitModule } from './modules/git/git.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { TelegramModule } from './modules/telegram/telegram.module';
 import { CliModule } from './modules/cli/cli.module';
+import { CronModule } from './modules/cron/cron.module';
 import { CopilotModule } from './modules/copilot/copilot.module';
 
 // Đọc sớm để quyết định có import BullModule không (trước khi NestJS bootstrap)
@@ -75,6 +76,7 @@ const REDIS_URL = process.env.REDIS_URL ?? '';
     TelegramModule,
     CopilotModule,
     CliModule,
+    CronModule,
   ],
 })
 export class AppModule {}

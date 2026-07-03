@@ -199,6 +199,19 @@ export interface ProjectDetailDto {
   createdAt: string;
 }
 
+/** Cron job của app (chạy lệnh định kỳ). */
+export interface CronJobDto {
+  id: string;
+  name: string;
+  schedule: string;
+  command: string;
+  enabled: boolean;
+  lastRunAt?: string | null;
+  lastStatus?: string | null; // "success" | "failed"
+  lastOutput?: string | null;
+  createdAt: string;
+}
+
 /** Project rút gọn cho CLI (liệt kê nhanh, resolve slug→id). */
 export interface CliProjectDto {
   id: string;

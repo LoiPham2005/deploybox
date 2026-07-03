@@ -36,6 +36,17 @@ export const upsertEnvSchema = z.object({
 });
 export type UpsertEnvDto = z.infer<typeof upsertEnvSchema>;
 
+export const createCronSchema = z.object({
+  name: z.string().min(1).max(60),
+  schedule: z.string().min(1).max(100), // cron 5 trường; BE validate bằng parser
+  command: z.string().min(1).max(1000),
+  enabled: z.boolean().default(true),
+});
+export type CreateCronDto = z.infer<typeof createCronSchema>;
+
+export const updateCronSchema = createCronSchema.partial();
+export type UpdateCronDto = z.infer<typeof updateCronSchema>;
+
 export const addDomainSchema = z.object({
   hostname: z
     .string()

@@ -2,6 +2,7 @@
 // CHỈ import trong Server Component / Server Action / Route Handler.
 import type {
   ApiTokenDto,
+  CronJobDto,
   DeploymentView,
   EnvVarDto,
   MeResponse,
@@ -52,6 +53,8 @@ export const serverGet = {
   tokens: () => serverApi<ApiTokenDto[]>('/auth/tokens'),
   webhookEvents: (projectId: string) =>
     serverApi<WebhookEventDto[]>(`/projects/${projectId}/webhook-events`),
+  cron: (projectId: string) =>
+    serverApi<CronJobDto[]>(`/projects/${projectId}/cron`),
   servers: (teamId: string) =>
     serverApi<ServerDto[]>(`/teams/${teamId}/servers`),
 };

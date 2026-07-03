@@ -202,9 +202,28 @@ model Project {
   envVars        EnvVar[]
   webhookEvents  WebhookEvent[]
   members        ProjectMember[]
+  cronJobs       CronJob[]
 
   @@unique([teamId, slug])
   @@index([teamId])
+}
+
+// Lịch chạy lệnh định kỳ cho app (như cron của Railway/Render).
+// Chạy lệnh trong thư mục app (host-run) hoặc `docker exec` (Docker mode).
+model CronJob {
+  id         String    @id @default(cuid())
+  project    Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId  String
+  name       String
+  schedule   String    // cron 5 trường: "0 3 * * *" (giờ server)
+  command    String    // lệnh chạy trong thư mục app
+  enabled    Boolean   @default(true)
+  lastRunAt  DateTime?
+  lastStatus String?   // "success" | "failed"
+  lastOutput String?   // đuôi output (giới hạn 4KB)
+  createdAt  DateTime  @default(now())
+
+  @@index([projectId])
 }
 
 // Quyền xem/dùng project ở cấp THÀNH VIÊN (giống collaborator GitHub).
