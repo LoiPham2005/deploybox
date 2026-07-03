@@ -1,6 +1,6 @@
 # Đẩy DeployBox lên VPS — sneakup.io.vn (hướng dẫn riêng cho máy này)
 
-> Bản cá nhân hoá của `DEPLOY.md` với thông số thật:
+> Bản cá nhân hoá của [vps.md](vps.md) với thông số thật:
 > - **VPS:** `14.225.204.227` · user `root` · SSH port `22` (mật khẩu đã có riêng — **KHÔNG ghi vào file này**, file có thể bị commit/lộ)
 > - **Domain:** `sneakup.io.vn`
 > - ⚠️ **VPS dùng chung (dùng ké)** → mọi bước cài đặt đều phải KIỂM TRA TRƯỚC, không ghi đè/tắt đồ của người khác, KHÔNG tự ý bật firewall.
