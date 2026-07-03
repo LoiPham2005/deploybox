@@ -15,6 +15,10 @@ async function bootstrap(): Promise<void> {
   });
   const config = app.get(ConfigService);
 
+  // Đứng sau Caddy (cùng máy) → tin header X-Forwarded-For từ loopback
+  // để req.ip là IP THẬT của client (rate-limit mới đếm đúng từng người).
+  app.set('trust proxy', 'loopback');
+
   app.setGlobalPrefix('api/v1');
   app.enableCors({
     origin: config.get<string>('CORS_ORIGIN', 'http://localhost:3000'),

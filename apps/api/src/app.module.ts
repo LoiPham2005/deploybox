@@ -1,6 +1,7 @@
 import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { validateEnv } from './config/config.schema';
 import { CryptoModule } from './common/crypto/crypto.module';
 import { MetricsModule } from './infra/metrics/metrics.module';
@@ -47,6 +48,11 @@ const REDIS_URL = process.env.REDIS_URL ?? '';
           }),
         ]
       : []),
+    // Rate-limit (chống brute-force): mặc định 10 request/phút/IP.
+    // CHỈ áp dụng ở route nào gắn @UseGuards(ThrottlerGuard) — hiện là các route
+    // auth công khai (login/register/OTP). KHÔNG gắn global vì /auth/me được
+    // Next server gọi hộ mọi user từ cùng 1 IP → limit global sẽ khoá nhầm cả app.
+    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 10 }]),
     PrismaModule,
     FeatureFlagsModule,
     AiModule,

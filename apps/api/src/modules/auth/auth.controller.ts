@@ -1,4 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Res, UseGuards } from '@nestjs/common';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import type { Response } from 'express';
 import {
   changePasswordSchema,
@@ -30,35 +31,47 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('register')
   register(@Body(new ZodValidationPipe(registerSchema)) dto: RegisterDto) {
     return this.auth.register(dto);
   }
 
   /** Đăng ký B1: gửi mã OTP về email (user chưa được tạo). */
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('register/request-otp')
   requestRegisterOtp(@Body(new ZodValidationPipe(registerSchema)) dto: RegisterDto) {
     return this.auth.requestRegisterOtp(dto);
   }
 
   /** Đăng ký B2: nhập đúng OTP → tạo tài khoản + đăng nhập. */
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('register/verify')
   verifyRegister(@Body(new ZodValidationPipe(verifyRegisterSchema)) dto: VerifyRegisterDto) {
     return this.auth.verifyRegister(dto);
   }
 
   /** Quên mật khẩu B1: gửi mã OTP về email (nếu tồn tại — luôn trả ok). */
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('forgot-password')
   forgotPassword(@Body(new ZodValidationPipe(forgotPasswordSchema)) dto: ForgotPasswordDto) {
     return this.auth.forgotPassword(dto.email);
   }
 
   /** Quên mật khẩu B2: OTP đúng → đặt mật khẩu mới. */
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('reset-password')
   resetPassword(@Body(new ZodValidationPipe(resetPasswordSchema)) dto: ResetPasswordDto) {
     return this.auth.resetPassword(dto);
   }
 
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('login')
   login(@Body(new ZodValidationPipe(loginSchema)) dto: LoginDto) {
     return this.auth.login(dto);
