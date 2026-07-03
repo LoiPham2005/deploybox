@@ -44,7 +44,7 @@ export default async function AdminPage() {
   const token = getToken();
   if (!token) redirect('/login');
 
-  const me = await authApi.me(token).catch(() => redirect('/login'));
+  const me = await authApi.me(token).catch(() => redirect('/api/session/clear'));
   if (!isAdminRole(me.user.role)) redirect('/dashboard');
 
   const [stats, users, features, aiConfig, aiUsage] = await Promise.all([

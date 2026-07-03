@@ -8,7 +8,7 @@ export default async function BillingPage() {
   const token = getToken();
   if (!token) redirect('/login');
 
-  const me = await authApi.me(token).catch(() => redirect('/login'));
+  const me = await authApi.me(token).catch(() => redirect('/api/session/clear'));
   const team = me.teams[0];
   if (!team) redirect('/dashboard');
 

@@ -15,7 +15,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   const token = getToken();
   if (!token) redirect('/login');
 
-  const me = await authApi.me(token).catch(() => redirect('/login'));
+  const me = await authApi.me(token).catch(() => redirect('/api/session/clear'));
   const currentTeam = getSelectedTeam(me.teams);
 
   const initials = (me.user.name ?? me.user.email)

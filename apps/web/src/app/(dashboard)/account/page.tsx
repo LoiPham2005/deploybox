@@ -9,7 +9,7 @@ export default async function AccountPage() {
   const token = getToken();
   if (!token) redirect('/login');
 
-  const me = await authApi.me(token).catch(() => redirect('/login'));
+  const me = await authApi.me(token).catch(() => redirect('/api/session/clear'));
 
   return (
     <div className="space-y-6 max-w-lg">

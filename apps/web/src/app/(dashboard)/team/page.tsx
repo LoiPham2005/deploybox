@@ -15,7 +15,7 @@ export default async function TeamPage() {
   const token = getToken();
   if (!token) redirect('/login');
 
-  const me = await authApi.me(token).catch(() => redirect('/login'));
+  const me = await authApi.me(token).catch(() => redirect('/api/session/clear'));
   const team = getSelectedTeam(me.teams);
   if (!team) redirect('/dashboard');
 
