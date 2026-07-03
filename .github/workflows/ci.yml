@@ -30,6 +30,7 @@ jobs:
         run: |
           pnpm --filter @deploybox/api typecheck
           pnpm --filter @deploybox/web typecheck
+          pnpm --filter @deploybox/cli typecheck
 
       - name: Build
         run: |

@@ -199,6 +199,17 @@ export interface ProjectDetailDto {
   createdAt: string;
 }
 
+/** Project rút gọn cho CLI (liệt kê nhanh, resolve slug→id). */
+export interface CliProjectDto {
+  id: string;
+  name: string;
+  slug: string;
+  teamId: string;
+  type: ProjectType;
+  status: DeploymentStatus | 'NONE';
+  url?: string | null;
+}
+
 export interface DeploymentView {
   deployment: DeploymentDetail;
   project: { id: string; name: string; slug: string; type: ProjectType };

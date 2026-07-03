@@ -1,0 +1,21 @@
+{
+  "name": "@deploybox/cli",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CLI cho DeployBox — deploy / xem log / list project từ terminal",
+  "bin": {
+    "deploybox": "dist/index.js"
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json && chmod +x dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.6.3"
+  }
+}

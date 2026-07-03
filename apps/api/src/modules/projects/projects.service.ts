@@ -161,6 +161,38 @@ export class ProjectsService {
     return { data, total: data.length, page: 1, pageSize: data.length };
   }
 
+  /** Mọi project user truy cập được (mọi team) — cho CLI. */
+  async listAccessible(userId: string): Promise<import('@deploybox/shared').CliProjectDto[]> {
+    const projects = await this.prisma.project.findMany({
+      where: {
+        OR: [
+          { team: { members: { some: { userId, role: 'OWNER' } } } },
+          { members: { some: { userId } } },
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+      include: { deployments: { orderBy: { queuedAt: 'desc' }, take: 1 } },
+    });
+    return projects.map((p) => ({
+      id: p.id,
+      name: p.name,
+      slug: p.slug,
+      teamId: p.teamId,
+      type: p.type,
+      status: p.deployments[0]?.status ?? 'NONE',
+      url: p.deployments[0]?.status === 'RUNNING' ? this.publicUrl(p.slug) : null,
+    }));
+  }
+
+  /** URL công khai của project (tự dựng, khớp CaddyService.publicUrl). */
+  private publicUrl(slug: string): string {
+    const domain = this.config.get<string>('APP_DOMAIN', 'localhost');
+    const port = this.config.get<string>('PROXY_PORT', '8080');
+    return domain === 'localhost'
+      ? `http://${slug}.${domain}:${port}/`
+      : `https://${slug}.${domain}/`;
+  }
+
   async create(
     userId: string,
     teamId: string,

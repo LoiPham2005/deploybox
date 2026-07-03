@@ -7,5 +7,6 @@ import { AuthModule } from '../auth/auth.module';
   imports: [AuthModule], // dùng JwtAuthGuard + JwtModule
   controllers: [ProjectsController],
   providers: [ProjectsService],
+  exports: [ProjectsService], // CLI module dùng listAccessible
 })
 export class ProjectsModule {}
