@@ -22,19 +22,37 @@ function toGeminiSchema(js: Record<string, unknown>): Record<string, unknown> {
   return out;
 }
 
-/** Gemini hay nhét ký tự control thô vào string JSON → escape lại trước khi parse. */
+/**
+ * Gemini hay nhét ký tự control thô vào STRING literal của JSON.
+ * Vá đúng cách: đi qua từng ký tự, chỉ escape control char khi ĐANG Ở TRONG string
+ * (newline/tab cấu trúc của pretty-print giữ nguyên — không phá JSON nhiều dòng).
+ */
 function safeJsonParse(text: string): Record<string, unknown> {
   try {
     return JSON.parse(text) as Record<string, unknown>;
   } catch {
-    const cleaned = text
-      .replace(/\r\n/g, '\\n')
-      .replace(/\n/g, '\\n')
-      .replace(/\t/g, '\\t')
-      // các control char còn lại (trừ đã escape) → bỏ
-      .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '');
-    return JSON.parse(cleaned) as Record<string, unknown>;
+    /* vá rồi thử lại bên dưới */
   }
+  let out = '';
+  let inStr = false;
+  let esc = false;
+  for (const ch of text) {
+    if (inStr) {
+      if (esc) { out += ch; esc = false; continue; }
+      if (ch === '\\') { out += ch; esc = true; continue; }
+      if (ch === '"') { inStr = false; out += ch; continue; }
+      const code = ch.charCodeAt(0);
+      if (code < 0x20) {
+        out += ch === '\n' ? '\\n' : ch === '\r' ? '\\r' : ch === '\t' ? '\\t' : '';
+        continue;
+      }
+      out += ch;
+    } else {
+      if (ch === '"') inStr = true;
+      out += ch;
+    }
+  }
+  return JSON.parse(out) as Record<string, unknown>;
 }
 
 /** Google Gemini — ép khuôn bằng responseSchema + parse an toàn. */
@@ -42,7 +60,7 @@ function safeJsonParse(text: string): Record<string, unknown> {
 export class GeminiProvider implements LlmProvider {
   readonly id = 'gemini' as const;
   readonly label = 'Gemini';
-  readonly suggestedModels = ['gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash'];
+  readonly suggestedModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-pro'];
   private client: GoogleGenAI | null = null;
 
   constructor(private readonly config: ConfigService) {}
