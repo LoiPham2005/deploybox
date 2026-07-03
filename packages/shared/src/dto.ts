@@ -199,6 +199,18 @@ export interface ProjectDetailDto {
   createdAt: string;
 }
 
+/** Database 1-click gắn với project. */
+export interface ManagedDatabaseDto {
+  id: string;
+  engine: 'POSTGRES' | 'REDIS';
+  name: string;
+  envKey: string; // biến env đã bơm (DATABASE_URL / REDIS_URL)
+  hostPort: number;
+  status: string;
+  createdAt: string;
+  connectionString?: string; // CHỈ trả 1 lần lúc mới tạo (không lưu plaintext)
+}
+
 /** Cron job của app (chạy lệnh định kỳ). */
 export interface CronJobDto {
   id: string;

@@ -8,6 +8,7 @@ import { DeleteProjectButton } from '@/features/projects/delete-project-button';
 import { DeployButton } from '@/features/deployments/deploy-button';
 import { EnvManager } from '@/features/projects/env-manager';
 import { CronPanel } from '@/features/projects/cron-panel';
+import { DatabasePanel } from '@/features/projects/database-panel';
 import { EditProjectForm } from '@/features/projects/edit-project-form';
 import { ProjectRuntimeActions } from '@/features/projects/project-runtime-actions';
 import { DomainManager } from '@/features/projects/domain-manager';
@@ -32,12 +33,15 @@ export default async function ProjectDetailPage({
     notFound();
   }
 
-  const [me, env, webhookEvents, cron] = await Promise.all([
+  const [me, env, webhookEvents, cron, databases] = await Promise.all([
     serverGet.me().catch(() => null),
     serverGet.env(project.id).catch(() => []),
     serverGet.webhookEvents(project.id).catch(() => []),
     project.type === 'BACKEND'
       ? serverGet.cron(project.id).catch(() => [])
+      : Promise.resolve([]),
+    project.type === 'BACKEND'
+      ? serverGet.databases(project.id).catch(() => [])
       : Promise.resolve([]),
   ]);
 
@@ -218,6 +222,15 @@ export default async function ProjectDetailPage({
         </h2>
         <EnvManager projectId={project.id} vars={env} />
       </Card>
+
+      {project.type === 'BACKEND' && (
+        <Card>
+          <h2 className="mb-3 text-sm font-semibold text-white/70">
+            Database (1-click)
+          </h2>
+          <DatabasePanel projectId={project.id} initial={databases} />
+        </Card>
+      )}
 
       {project.type === 'BACKEND' && (
         <Card>

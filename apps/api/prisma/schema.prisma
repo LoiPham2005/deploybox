@@ -82,6 +82,11 @@ enum ServerStatus {
   OFFLINE
 }
 
+enum DbEngine {
+  POSTGRES
+  REDIS
+}
+
 // ---------- MODELS ----------
 
 model User {
@@ -203,9 +208,30 @@ model Project {
   webhookEvents  WebhookEvent[]
   members        ProjectMember[]
   cronJobs       CronJob[]
+  databases      ManagedDatabase[]
 
   @@unique([teamId, slug])
   @@index([teamId])
+}
+
+// Database 1-click: Postgres/Redis chạy trong Docker container, connection string
+// tự bơm vào env project. Mật khẩu mã hoá at-rest.
+model ManagedDatabase {
+  id            String   @id @default(cuid())
+  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId     String
+  engine        DbEngine
+  name          String
+  containerName String   @unique // deploybox-db-<id>
+  hostPort      Int      @unique
+  username      String
+  passwordEnc   String // mã hoá AES-256-GCM
+  dbName        String
+  envKey        String // env đã bơm (DATABASE_URL / REDIS_URL)
+  status        String   @default("running")
+  createdAt     DateTime @default(now())
+
+  @@index([projectId])
 }
 
 // Lịch chạy lệnh định kỳ cho app (như cron của Railway/Render).

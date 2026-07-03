@@ -36,6 +36,17 @@ export const upsertEnvSchema = z.object({
 });
 export type UpsertEnvDto = z.infer<typeof upsertEnvSchema>;
 
+export const createDatabaseSchema = z.object({
+  engine: z.enum(['POSTGRES', 'REDIS']),
+  name: z.string().min(1).max(60),
+  envKey: z
+    .string()
+    .regex(/^[A-Z_][A-Z0-9_]*$/, 'Tên biến phải UPPER_SNAKE_CASE')
+    .max(100)
+    .optional(),
+});
+export type CreateDatabaseDto = z.infer<typeof createDatabaseSchema>;
+
 export const createCronSchema = z.object({
   name: z.string().min(1).max(60),
   schedule: z.string().min(1).max(100), // cron 5 trường; BE validate bằng parser

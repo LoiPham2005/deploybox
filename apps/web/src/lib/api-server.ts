@@ -3,6 +3,7 @@
 import type {
   ApiTokenDto,
   CronJobDto,
+  ManagedDatabaseDto,
   DeploymentView,
   EnvVarDto,
   MeResponse,
@@ -55,6 +56,8 @@ export const serverGet = {
     serverApi<WebhookEventDto[]>(`/projects/${projectId}/webhook-events`),
   cron: (projectId: string) =>
     serverApi<CronJobDto[]>(`/projects/${projectId}/cron`),
+  databases: (projectId: string) =>
+    serverApi<ManagedDatabaseDto[]>(`/projects/${projectId}/databases`),
   servers: (teamId: string) =>
     serverApi<ServerDto[]>(`/teams/${teamId}/servers`),
 };
