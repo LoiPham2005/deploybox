@@ -34,6 +34,9 @@ export class GithubProvider implements OAuthProviderAdapter {
       // repo: đọc repo private + tạo webhook; user:email: lấy email verified để link tài khoản
       scope: 'repo read:user user:email',
       state,
+      // Luôn hiện màn chọn tài khoản — không thì GitHub tự trả về tài khoản đang
+      // đăng nhập sẵn trong browser, user không đổi được tài khoản GitHub khác
+      prompt: 'select_account',
     });
     return `https://github.com/login/oauth/authorize?${q.toString()}`;
   }
