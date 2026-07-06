@@ -192,11 +192,15 @@ export class MonitorService implements OnApplicationBootstrap, OnModuleDestroy {
     if (Date.now() - last < RAM_WARN_COOLDOWN_MS) return;
     this.ramWarnedAt.set(p.id, Date.now());
     const pct = Math.round(ratio * 100);
+    // Hệ quả tuỳ chế độ chạy — chỉ nói đúng cái app này đang dùng, khỏi gây hiểu lầm
+    const consequence = p.useDocker
+      ? 'App chạy Docker (giới hạn RAM cứng) — chạm hạn là container bị OOM-kill (app chết).'
+      : 'App chạy thẳng trên VPS (host-run, không Docker) — RAM cao ăn chung tài nguyên VPS, dễ làm các app khác đuối.';
     await this.notifyTeam(
       p.teamId,
       `⚠️ <b>${p.name}</b> đang dùng <b>${Math.round(memMb)} MB / ${p.memoryMb} MB</b> RAM (${pct}%).\n` +
-        `Sắp chạm hạn — cân nhắc tăng "Giới hạn RAM" trong Sửa cấu hình, hoặc tối ưu app. ` +
-        `(Docker: chạm hạn = app bị OOM-kill; host-run: ăn RAM chung của VPS.)`,
+        `${consequence}\n` +
+        `Cân nhắc tăng "Giới hạn RAM" trong Sửa cấu hình, hoặc tối ưu app.`,
     );
   }
 
