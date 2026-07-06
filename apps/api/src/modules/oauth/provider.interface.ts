@@ -46,4 +46,6 @@ export interface OAuthProviderAdapter {
     hookUrl: string,
     secret: string,
   ): Promise<void>;
+  /** Đổi refresh token lấy access token mới (GitLab/Bitbucket — token có hạn). */
+  refresh?(refreshToken: string): Promise<OAuthTokens>;
 }

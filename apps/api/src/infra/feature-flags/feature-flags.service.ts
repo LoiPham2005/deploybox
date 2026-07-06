@@ -32,9 +32,9 @@ export const KNOWN_FLAGS: {
   },
   {
     key: 'oauth_login',
-    label: 'Đăng nhập OAuth (GitHub…)',
+    label: 'Đăng nhập OAuth (GitHub/GitLab/Bitbucket)',
     description:
-      'Nút "Đăng nhập với GitHub" + kết nối tài khoản + chọn repo từ danh sách. Cần cấu hình GITHUB_OAUTH_CLIENT_ID/SECRET trong .env. Tắt: ẩn toàn bộ.',
+      'Nút đăng nhập OAuth + kết nối tài khoản + chọn repo từ danh sách + tự gắn webhook. Nhà nào có CLIENT_ID/SECRET trong .env thì nhà đó hiện. Tắt: ẩn toàn bộ.',
     default: true,
   },
   {

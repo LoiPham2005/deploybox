@@ -26,14 +26,21 @@ export default function RegisterPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [cooldown, setCooldown] = useState(0);
-  // Đăng ký qua OAuth (GitHub…) đang chờ mã mời — API redirect về ?oauth_pending=
-  const [oauthPending, setOauthPending] = useState<{ id: string; login: string; email: string } | null>(null);
+  // Đăng ký qua OAuth (GitHub/GitLab/Bitbucket) đang chờ mã mời — API redirect về ?oauth_pending=
+  const [oauthPending, setOauthPending] = useState<{
+    id: string; login: string; email: string; provider: string;
+  } | null>(null);
 
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
     const pid = q.get('oauth_pending');
     if (pid) {
-      setOauthPending({ id: pid, login: q.get('login') ?? '', email: q.get('email') ?? '' });
+      setOauthPending({
+        id: pid,
+        login: q.get('login') ?? '',
+        email: q.get('email') ?? '',
+        provider: q.get('provider') ?? 'github',
+      });
     }
   }, []);
 
@@ -150,7 +157,8 @@ export default function RegisterPage() {
         <div>
           <h1 className="text-xl font-semibold">Gần xong! 🎉</h1>
           <p className="mt-1 text-sm text-white/50">
-            Tài khoản GitHub <b className="text-white/80">@{oauthPending.login}</b>
+            Tài khoản {({ github: 'GitHub', gitlab: 'GitLab', bitbucket: 'Bitbucket' } as Record<string, string>)[oauthPending.provider] ?? oauthPending.provider}{' '}
+            <b className="text-white/80">@{oauthPending.login}</b>
             {oauthPending.email && <> ({oauthPending.email})</>} đã xác thực. Instance này yêu cầu{' '}
             <b>mã mời</b> để tạo tài khoản mới.
           </p>

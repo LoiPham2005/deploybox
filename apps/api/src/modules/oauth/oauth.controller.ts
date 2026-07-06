@@ -79,6 +79,7 @@ export class OauthController {
       case 'pending_signup':
         return res.redirect(
           `${web}/register?oauth_pending=${encodeURIComponent(r.pendingId)}` +
+            `&provider=${encodeURIComponent(provider)}` +
             `&login=${encodeURIComponent(r.login)}&email=${encodeURIComponent(r.email)}`,
         );
       case 'error':

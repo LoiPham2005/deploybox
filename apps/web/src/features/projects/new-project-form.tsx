@@ -79,14 +79,20 @@ const TEMPLATES: Array<{
   { label: 'Flutter AAB',       type: 'MOBILE',  buildCommand: 'flutter build appbundle --release', buildImage: 'cirrusci/flutter:stable', artifactPath: 'build/app/outputs/bundle/release/app-release.aab' },
 ];
 
+const PICKER_LABELS: Record<string, string> = {
+  github: '🐙 GitHub',
+  gitlab: '🦊 GitLab',
+  bitbucket: '🪣 Bitbucket',
+};
+
 export function NewProjectForm({
   teamId,
   servers = [],
-  githubConnected = false,
+  oauthConnected = [],
 }: {
   teamId: string;
   servers?: ServerDto[];
-  githubConnected?: boolean;
+  oauthConnected?: string[]; // các nhà OAuth user đã kết nối ('github'…)
 }) {
   const router = useRouter();
   const [type, setType] = useState<ProjectType>('STATIC');
@@ -104,12 +110,13 @@ export function NewProjectForm({
   const [fetchingBranches, setFetchingBranches] = useState(false);
   const [branchError, setBranchError] = useState<string | null>(null);
   const [rootDir, setRootDir] = useState('.');
-  // 🐙 Repo picker qua OAuth GitHub
+  // Repo picker qua OAuth (nhà nào đã kết nối thì có nút)
   const [ghRepos, setGhRepos] = useState<GitRepoDto[] | null>(null);
+  const [ghOpenProvider, setGhOpenProvider] = useState<string | null>(null);
   const [ghLoading, setGhLoading] = useState(false);
   const [ghError, setGhError] = useState<string | null>(null);
   const [ghFilter, setGhFilter] = useState('');
-  const [pickedProvider, setPickedProvider] = useState<'github' | null>(null);
+  const [pickedProvider, setPickedProvider] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [aiSuggestion, setAiSuggestion] = useState<AiProjectSuggestion | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
@@ -318,26 +325,36 @@ export function NewProjectForm({
       <div>
         <Label htmlFor="gitRepoUrl">Git repo URL (tùy chọn)</Label>
 
-        {/* 🐙 Chọn repo từ GitHub đã kết nối — tự điền URL + nhánh, tự gắn webhook sau khi tạo */}
-        {githubConnected ? (
+        {/* Chọn repo từ nhà đã kết nối — tự điền URL + nhánh, tự gắn webhook sau khi tạo */}
+        {oauthConnected.length > 0 ? (
           <div className="mb-2">
-            <button
-              type="button"
-              disabled={ghLoading}
-              onClick={async () => {
-                if (ghRepos) { setGhRepos(null); return; } // toggle đóng
-                setGhLoading(true);
-                setGhError(null);
-                const { listOauthReposAction } = await import('./actions');
-                const res = await listOauthReposAction('github');
-                if (res.ok && res.data) setGhRepos(res.data);
-                else setGhError(res.ok ? 'Không tải được' : res.error);
-                setGhLoading(false);
-              }}
-              className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.04] px-3 py-1 text-xs font-medium text-white/75 transition hover:bg-white/[0.08] disabled:opacity-50"
-            >
-              🐙 {ghLoading ? 'Đang tải repo…' : ghRepos ? 'Đóng danh sách' : 'Chọn repo GitHub'}
-            </button>
+            <div className="flex flex-wrap gap-1.5">
+              {oauthConnected.map((prov) => (
+                <button
+                  key={prov}
+                  type="button"
+                  disabled={ghLoading}
+                  onClick={async () => {
+                    if (ghRepos && ghOpenProvider === prov) { setGhRepos(null); setGhOpenProvider(null); return; }
+                    setGhLoading(true);
+                    setGhError(null);
+                    setGhOpenProvider(prov);
+                    const { listOauthReposAction } = await import('./actions');
+                    const res = await listOauthReposAction(prov);
+                    if (res.ok && res.data) setGhRepos(res.data);
+                    else { setGhError(res.ok ? 'Không tải được' : res.error); setGhOpenProvider(null); }
+                    setGhLoading(false);
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.04] px-3 py-1 text-xs font-medium text-white/75 transition hover:bg-white/[0.08] disabled:opacity-50"
+                >
+                  {ghLoading && ghOpenProvider === prov
+                    ? 'Đang tải…'
+                    : ghRepos && ghOpenProvider === prov
+                      ? 'Đóng danh sách'
+                      : `Chọn repo ${PICKER_LABELS[prov] ?? prov}`}
+                </button>
+              ))}
+            </div>
             {ghError && <p className="mt-1 text-xs text-red-400">{ghError}</p>}
             {ghRepos && (
               <div className="mt-2 rounded-lg border border-white/10 bg-white/[0.02] p-2">
@@ -358,8 +375,9 @@ export function NewProjectForm({
                         onClick={() => {
                           setGitRepoUrl(r.url);
                           setSelectedBranch(r.defaultBranch);
-                          setPickedProvider('github');
+                          setPickedProvider(ghOpenProvider);
                           setGhRepos(null);
+                          setGhOpenProvider(null);
                           setBranches(null);
                           setAiSuggestion(null);
                         }}
@@ -379,14 +397,14 @@ export function NewProjectForm({
             )}
             {pickedProvider && (
               <p className="mt-1 text-[11px] text-emerald-300/80">
-                ✓ Repo GitHub đã chọn — webhook auto-deploy sẽ được gắn tự động sau khi tạo.
+                ✓ Repo {PICKER_LABELS[pickedProvider] ?? pickedProvider} đã chọn — webhook auto-deploy sẽ được gắn tự động sau khi tạo.
               </p>
             )}
           </div>
         ) : (
           <p className="mb-2 text-[11px] text-white/35">
             💡 <a href="/api/oauth/connect/github" className="text-indigo-400 hover:underline">Kết nối GitHub</a>{' '}
-            để chọn repo từ danh sách + tự gắn webhook (khỏi dán URL/token).
+            (hoặc GitLab/Bitbucket ở trang Tài khoản) để chọn repo từ danh sách + tự gắn webhook.
           </p>
         )}
 

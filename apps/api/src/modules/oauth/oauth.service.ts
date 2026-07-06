@@ -14,6 +14,8 @@ import { CryptoService } from '../../common/crypto/crypto.service';
 import { FeatureFlagsService } from '../../infra/feature-flags/feature-flags.service';
 import { AuthService, type LoginMeta } from '../auth/auth.service';
 import { GithubProvider } from './github.provider';
+import { GitlabProvider } from './gitlab.provider';
+import { BitbucketProvider } from './bitbucket.provider';
 import type { OAuthProviderAdapter, OAuthProviderKey, OAuthUserInfo } from './provider.interface';
 import type { GitProvider } from '../../generated/prisma';
 
@@ -81,9 +83,15 @@ export class OauthService {
     private readonly flags: FeatureFlagsService,
     private readonly auth: AuthService,
     github: GithubProvider,
+    gitlab: GitlabProvider,
+    bitbucket: BitbucketProvider,
   ) {
     // Thêm nhà mới: đăng ký adapter vào đây là xong phần backend
-    this.providers = new Map([[github.key, github]]);
+    this.providers = new Map<OAuthProviderKey, OAuthProviderAdapter>([
+      [github.key, github],
+      [gitlab.key, gitlab],
+      [bitbucket.key, bitbucket],
+    ]);
   }
 
   // ── helpers ────────────────────────────────────────────────────────────────
@@ -348,6 +356,30 @@ export class OauthService {
         `Chưa kết nối ${provider} — vào Tài khoản → Kết nối ${provider} trước`,
       );
     }
+    // Token sắp/đã hết hạn (GitLab 2h, Bitbucket 2h) → tự xoay bằng refresh token
+    const expiringSoon =
+      row.tokenExpiresAt && row.tokenExpiresAt.getTime() < Date.now() + 60_000;
+    if (expiringSoon && row.refreshTokenEnc) {
+      const a = this.providers.get(provider as OAuthProviderKey);
+      if (a?.refresh) {
+        try {
+          const t = await a.refresh(this.crypto.decrypt(row.refreshTokenEnc));
+          await this.prisma.oAuthIdentity.update({
+            where: { id: row.id },
+            data: {
+              accessTokenEnc: this.crypto.encrypt(t.accessToken),
+              refreshTokenEnc: t.refreshToken ? this.crypto.encrypt(t.refreshToken) : row.refreshTokenEnc,
+              tokenExpiresAt: t.expiresAt ?? null,
+            },
+          });
+          return t.accessToken;
+        } catch {
+          throw new BadRequestException(
+            `Token ${provider} hết hạn và không làm mới được — vào Tài khoản kết nối lại`,
+          );
+        }
+      }
+    }
     return this.crypto.decrypt(row.accessTokenEnc);
   }
 
@@ -370,13 +402,21 @@ export class OauthService {
     if (!member) throw new ForbiddenException('Bạn không thuộc team này');
     if (!project.webhookSecret) throw new BadRequestException('Project chưa có webhook secret');
 
-    const m = project.gitRepoUrl.match(/[:/]([^/]+\/[^/]+?)(\.git)?$/);
-    if (!m) throw new BadRequestException('Không đọc được owner/repo từ URL');
+    // Lấy path đầy đủ từ URL (hỗ trợ GitLab subgroup: group/sub/repo)
+    let fullName: string;
+    try {
+      fullName = new URL(project.gitRepoUrl).pathname.replace(/^\//, '').replace(/\.git$/, '');
+    } catch {
+      const m = project.gitRepoUrl.match(/[:/]([^/]+\/[^/]+?)(\.git)?$/);
+      if (!m) throw new BadRequestException('Không đọc được owner/repo từ URL');
+      fullName = m[1];
+    }
+    if (!fullName.includes('/')) throw new BadRequestException('URL repo không hợp lệ');
     const token = await this.identityToken(userId, provider);
     const api = this.config.get<string>('PUBLIC_API_URL', 'http://localhost:4000');
     await a.createWebhook(
       token,
-      m[1],
+      fullName,
       `${api}/api/v1/webhooks/git/${project.id}`,
       project.webhookSecret,
     );

@@ -10,7 +10,7 @@ export default async function NewProjectPage() {
     teamId ? serverGet.servers(teamId).catch(() => []) : Promise.resolve([]),
     serverGet.oauthIdentities().catch(() => []),
   ]);
-  const githubConnected = identities.some((i) => i.provider === 'github');
+  const oauthConnected = identities.map((i) => i.provider);
 
   return (
     <div className="mx-auto max-w-xl space-y-6">
@@ -27,7 +27,7 @@ export default async function NewProjectPage() {
           sự sẽ có khi build engine sẵn sàng.
         </p>
       </div>
-      <NewProjectForm teamId={teamId} servers={servers} githubConnected={githubConnected} />
+      <NewProjectForm teamId={teamId} servers={servers} oauthConnected={oauthConnected} />
     </div>
   );
 }
