@@ -26,6 +26,36 @@ export interface RemoteBranch {
   lastCommitAt: string | null;
 }
 
+/** Repos của user qua danh tính OAuth đã kết nối (picker tạo project). */
+export async function listOauthReposAction(
+  provider: string,
+): Promise<ActionResult<import('@deploybox/shared').GitRepoDto[]>> {
+  try {
+    const repos = await serverApi<import('@deploybox/shared').GitRepoDto[]>(
+      `/auth/oauth/${provider}/repos`,
+    );
+    return { ok: true, data: repos };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Không tải được danh sách repo' };
+  }
+}
+
+/** Tự tạo webhook cho project vừa tạo từ repo picker (best-effort). */
+export async function setupOauthWebhookAction(
+  provider: string,
+  projectId: string,
+): Promise<ActionResult> {
+  try {
+    await serverApi(`/auth/oauth/${provider}/setup-webhook`, {
+      method: 'POST',
+      body: JSON.stringify({ projectId }),
+    });
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Tạo webhook thất bại' };
+  }
+}
+
 export async function createProjectAction(
   teamId: string,
   input: CreateProjectDto,

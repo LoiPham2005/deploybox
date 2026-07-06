@@ -26,6 +26,33 @@ export interface TwoFactorChallenge {
   requires2fa: true;
 }
 
+/** Nhà OAuth được hỗ trợ (mở rộng dần: github → gitlab/bitbucket). */
+export type OAuthProviderKey = 'github' | 'gitlab' | 'bitbucket';
+
+/** Trạng thái từng nhà OAuth — web dựa vào để hiện nút. */
+export interface OAuthProviderStatusDto {
+  provider: OAuthProviderKey;
+  configured: boolean; // đã có client id/secret trong .env
+  enabled: boolean; // flag oauth_login đang bật
+}
+
+/** 1 danh tính OAuth đã liên kết vào tài khoản. */
+export interface OAuthIdentityDto {
+  provider: OAuthProviderKey;
+  login: string; // username phía provider
+  connectedAt: string;
+}
+
+/** 1 repo lấy từ provider (picker khi tạo project). */
+export interface GitRepoDto {
+  fullName: string; // owner/repo
+  url: string;
+  private: boolean;
+  defaultBranch: string;
+  description?: string | null;
+  updatedAt?: string;
+}
+
 /** 1 điểm dữ liệu CPU/RAM (đã gộp bucket) cho biểu đồ lịch sử. */
 export interface MetricPointDto {
   at: string; // ISO time (đầu bucket)

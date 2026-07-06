@@ -27,6 +27,7 @@ import { AdminModule } from './modules/admin/admin.module';
 import { TelegramModule } from './modules/telegram/telegram.module';
 import { CliModule } from './modules/cli/cli.module';
 import { MonitorModule } from './modules/monitor/monitor.module';
+import { OauthModule } from './modules/oauth/oauth.module';
 import { CronModule } from './modules/cron/cron.module';
 import { DatabaseModule } from './modules/database/database.module';
 import { CopilotModule } from './modules/copilot/copilot.module';
@@ -93,6 +94,7 @@ const REDIS_URL = process.env.REDIS_URL ?? '';
     CronModule,
     DatabaseModule,
     MonitorModule,
+    OauthModule,
   ],
 })
 export class AppModule {}

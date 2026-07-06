@@ -12,6 +12,9 @@ import { Label } from '@/components/ui/label';
  * Đăng ký 2 bước: (1) nhập thông tin → gửi OTP về email; (2) nhập OTP → tạo tài khoản.
  * Server chưa cấu hình SMTP → tự fallback đăng ký thẳng (không OTP).
  */
+const API_BASE =
+  (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000') + '/api/v1';
+
 export default function RegisterPage() {
   const router = useRouter();
   const [step, setStep] = useState<'info' | 'otp'>('info');
@@ -23,6 +26,16 @@ export default function RegisterPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [cooldown, setCooldown] = useState(0);
+  // Đăng ký qua OAuth (GitHub…) đang chờ mã mời — API redirect về ?oauth_pending=
+  const [oauthPending, setOauthPending] = useState<{ id: string; login: string; email: string } | null>(null);
+
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const pid = q.get('oauth_pending');
+    if (pid) {
+      setOauthPending({ id: pid, login: q.get('login') ?? '', email: q.get('email') ?? '' });
+    }
+  }, []);
 
   // Đếm ngược nút "Gửi lại mã"
   useEffect(() => {
@@ -47,6 +60,34 @@ export default function RegisterPage() {
     password,
     signupCode: signupCode || undefined,
   });
+
+  /** Hoàn tất đăng ký OAuth: chỉ cần mã mời (danh tính đã do GitHub xác thực). */
+  async function onCompleteOauth(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!oauthPending) return;
+    setError(null);
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/auth/oauth/complete-signup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pendingId: oauthPending.id, signupCode }),
+      });
+      const body = (await res.json().catch(() => ({}))) as { accessToken?: string; message?: string };
+      if (!res.ok || !body.accessToken) {
+        // "Mã mời không đúng|<retryId>" → giữ pendingId mới để gõ lại, khỏi OAuth lại
+        const [msg, retryId] = (body.message ?? 'Đăng ký thất bại').split('|');
+        if (retryId) setOauthPending({ ...oauthPending, id: retryId });
+        setError(msg);
+        setLoading(false);
+        return;
+      }
+      await finishLogin(body.accessToken);
+    } catch {
+      setError('Không gọi được API');
+      setLoading(false);
+    }
+  }
 
   /** B1: gửi OTP (fallback đăng ký thẳng nếu server chưa có SMTP). */
   async function onRequestOtp(e: FormEvent<HTMLFormElement>) {
@@ -100,6 +141,40 @@ export default function RegisterPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Gửi lại mã thất bại');
     }
+  }
+
+  // ── Hoàn tất đăng ký qua GitHub: chỉ hỏi mã mời ──
+  if (oauthPending) {
+    return (
+      <form onSubmit={onCompleteOauth} className="space-y-4">
+        <div>
+          <h1 className="text-xl font-semibold">Gần xong! 🎉</h1>
+          <p className="mt-1 text-sm text-white/50">
+            Tài khoản GitHub <b className="text-white/80">@{oauthPending.login}</b>
+            {oauthPending.email && <> ({oauthPending.email})</>} đã xác thực. Instance này yêu cầu{' '}
+            <b>mã mời</b> để tạo tài khoản mới.
+          </p>
+        </div>
+        <div>
+          <Label htmlFor="oauthSignupCode">Mã mời</Label>
+          <Input
+            id="oauthSignupCode"
+            value={signupCode}
+            onChange={(e) => setSignupCode(e.target.value)}
+            placeholder="Liên hệ admin để được cấp"
+            autoFocus
+            required
+          />
+        </div>
+        {error && <p className="text-sm text-red-400">{error}</p>}
+        <Button type="submit" disabled={loading || !signupCode} className="w-full">
+          {loading ? 'Đang tạo tài khoản…' : 'Hoàn tất đăng ký'}
+        </Button>
+        <p className="text-center text-sm text-white/50">
+          <Link href="/login" className="text-indigo-400 hover:underline">← Quay lại đăng nhập</Link>
+        </p>
+      </form>
+    );
   }
 
   if (step === 'otp') {

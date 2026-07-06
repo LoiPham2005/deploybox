@@ -41,6 +41,12 @@ export const envSchema = z.object({
   SMTP_USER: z.string().default(''),
   SMTP_PASS: z.string().default(''),
   MAIL_FROM: z.string().default(''), // vd: "DeployBox <bot@gmail.com>" — trống = dùng SMTP_USER
+  // OAuth "Đăng nhập với GitHub" (tuỳ chọn): tạo OAuth App ở github.com/settings/developers,
+  // Callback URL = <PUBLIC_API_URL>/api/v1/auth/oauth/github/callback. Trống = tắt.
+  GITHUB_OAUTH_CLIENT_ID: z.string().default(''),
+  GITHUB_OAUTH_CLIENT_SECRET: z.string().default(''),
+  // URL web công khai để OAuth redirect về. Trống = tự suy (PUBLIC_TLS ? https://APP_DOMAIN : http://localhost:3000)
+  PUBLIC_WEB_URL: z.string().default(''),
 });
 
 export type AppEnv = z.infer<typeof envSchema>;

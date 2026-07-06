@@ -31,6 +31,13 @@ export const KNOWN_FLAGS: {
     default: true,
   },
   {
+    key: 'oauth_login',
+    label: 'Đăng nhập OAuth (GitHub…)',
+    description:
+      'Nút "Đăng nhập với GitHub" + kết nối tài khoản + chọn repo từ danh sách. Cần cấu hình GITHUB_OAUTH_CLIENT_ID/SECRET trong .env. Tắt: ẩn toàn bộ.',
+    default: true,
+  },
+  {
     key: 'session_management',
     label: 'Quản lý phiên đăng nhập',
     description:

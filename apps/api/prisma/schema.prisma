@@ -111,6 +111,26 @@ model User {
   apiTokens     ApiToken[]
   projectAccess ProjectMember[]
   sessions      Session[]
+  oauthIdentities OAuthIdentity[]
+}
+
+// Danh tính OAuth (GitHub/GitLab/Bitbucket) gắn vào tài khoản — 1 user nhiều nhà.
+// Token mã hoá at-rest; GitLab/Bitbucket sau này dùng thêm refreshToken/expiresAt.
+model OAuthIdentity {
+  id              String      @id @default(cuid())
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId          String
+  provider        GitProvider
+  providerUserId  String      // id user phía provider (bất biến)
+  login           String      // username phía provider (hiển thị)
+  accessTokenEnc  String
+  refreshTokenEnc String?
+  tokenExpiresAt  DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@unique([provider, providerUserId])
+  @@index([userId])
 }
 
 // Phiên đăng nhập (JWT nhúng sid) — để xem "thiết bị đang đăng nhập" + đăng xuất từ xa.

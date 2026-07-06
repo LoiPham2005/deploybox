@@ -4,6 +4,7 @@ import { authApi } from '@/lib/api';
 import { serverGet } from '@/lib/api-server';
 import { Card } from '@/components/ui/card';
 import { AccountForm } from '@/features/auth/account-form';
+import { OauthConnections } from '@/features/auth/oauth-connections';
 import { SessionsPanel } from '@/features/auth/sessions-panel';
 import { TelegramConnect } from '@/features/auth/telegram-connect';
 
@@ -12,7 +13,11 @@ export default async function AccountPage() {
   if (!token) redirect('/login');
 
   const me = await authApi.me(token).catch(() => redirect('/api/session/clear'));
-  const sessions = await serverGet.sessions().catch(() => []);
+  const [sessions, identities, providers] = await Promise.all([
+    serverGet.sessions().catch(() => []),
+    serverGet.oauthIdentities().catch(() => []),
+    serverGet.oauthProviders().catch(() => []),
+  ]);
 
   return (
     <div className="space-y-6 max-w-lg">
@@ -21,6 +26,11 @@ export default async function AccountPage() {
       <Card>
         <h2 className="mb-4 text-sm font-semibold text-white/70">Thông tin cá nhân</h2>
         <AccountForm user={me.user} />
+      </Card>
+
+      <Card>
+        <h2 className="mb-4 text-sm font-semibold text-white/70">Kết nối Git (OAuth)</h2>
+        <OauthConnections identities={identities} providers={providers} />
       </Card>
 
       <Card>

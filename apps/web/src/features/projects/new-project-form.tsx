@@ -7,6 +7,7 @@ import type {
   AiProjectSuggestion,
   AiRepoApp,
   CreateProjectDto,
+  GitRepoDto,
   ProjectType,
   ServerDto,
 } from '@deploybox/shared';
@@ -81,9 +82,11 @@ const TEMPLATES: Array<{
 export function NewProjectForm({
   teamId,
   servers = [],
+  githubConnected = false,
 }: {
   teamId: string;
   servers?: ServerDto[];
+  githubConnected?: boolean;
 }) {
   const router = useRouter();
   const [type, setType] = useState<ProjectType>('STATIC');
@@ -101,6 +104,12 @@ export function NewProjectForm({
   const [fetchingBranches, setFetchingBranches] = useState(false);
   const [branchError, setBranchError] = useState<string | null>(null);
   const [rootDir, setRootDir] = useState('.');
+  // 🐙 Repo picker qua OAuth GitHub
+  const [ghRepos, setGhRepos] = useState<GitRepoDto[] | null>(null);
+  const [ghLoading, setGhLoading] = useState(false);
+  const [ghError, setGhError] = useState<string | null>(null);
+  const [ghFilter, setGhFilter] = useState('');
+  const [pickedProvider, setPickedProvider] = useState<'github' | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [aiSuggestion, setAiSuggestion] = useState<AiProjectSuggestion | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
@@ -217,9 +226,13 @@ export function NewProjectForm({
     };
 
     setLoading(true);
-    const { createProjectAction } = await import('./actions');
+    const { createProjectAction, setupOauthWebhookAction } = await import('./actions');
     const res = await createProjectAction(teamId, dto);
     if (res.ok && res.data) {
+      // Repo chọn từ GitHub picker → tự gắn webhook auto-deploy (best-effort)
+      if (pickedProvider) {
+        await setupOauthWebhookAction(pickedProvider, res.data.id).catch(() => undefined);
+      }
       router.push(`/projects/${res.data.id}`);
       router.refresh();
     } else {
@@ -304,13 +317,86 @@ export function NewProjectForm({
 
       <div>
         <Label htmlFor="gitRepoUrl">Git repo URL (tùy chọn)</Label>
+
+        {/* 🐙 Chọn repo từ GitHub đã kết nối — tự điền URL + nhánh, tự gắn webhook sau khi tạo */}
+        {githubConnected ? (
+          <div className="mb-2">
+            <button
+              type="button"
+              disabled={ghLoading}
+              onClick={async () => {
+                if (ghRepos) { setGhRepos(null); return; } // toggle đóng
+                setGhLoading(true);
+                setGhError(null);
+                const { listOauthReposAction } = await import('./actions');
+                const res = await listOauthReposAction('github');
+                if (res.ok && res.data) setGhRepos(res.data);
+                else setGhError(res.ok ? 'Không tải được' : res.error);
+                setGhLoading(false);
+              }}
+              className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.04] px-3 py-1 text-xs font-medium text-white/75 transition hover:bg-white/[0.08] disabled:opacity-50"
+            >
+              🐙 {ghLoading ? 'Đang tải repo…' : ghRepos ? 'Đóng danh sách' : 'Chọn repo GitHub'}
+            </button>
+            {ghError && <p className="mt-1 text-xs text-red-400">{ghError}</p>}
+            {ghRepos && (
+              <div className="mt-2 rounded-lg border border-white/10 bg-white/[0.02] p-2">
+                <Input
+                  placeholder="Lọc repo…"
+                  value={ghFilter}
+                  onChange={(e) => setGhFilter(e.target.value)}
+                  className="mb-2"
+                />
+                <div className="max-h-48 space-y-0.5 overflow-y-auto">
+                  {ghRepos
+                    .filter((r) => r.fullName.toLowerCase().includes(ghFilter.toLowerCase()))
+                    .slice(0, 50)
+                    .map((r) => (
+                      <button
+                        key={r.fullName}
+                        type="button"
+                        onClick={() => {
+                          setGitRepoUrl(r.url);
+                          setSelectedBranch(r.defaultBranch);
+                          setPickedProvider('github');
+                          setGhRepos(null);
+                          setBranches(null);
+                          setAiSuggestion(null);
+                        }}
+                        className="flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs text-white/75 hover:bg-white/5"
+                      >
+                        <span className="truncate">{r.fullName}</span>
+                        <span className="ml-2 shrink-0 text-[10px] text-white/35">
+                          {r.private ? '🔒 private' : 'public'} · {r.defaultBranch}
+                        </span>
+                      </button>
+                    ))}
+                  {ghRepos.length === 0 && (
+                    <p className="px-2 py-1 text-xs text-white/30">Không có repo nào.</p>
+                  )}
+                </div>
+              </div>
+            )}
+            {pickedProvider && (
+              <p className="mt-1 text-[11px] text-emerald-300/80">
+                ✓ Repo GitHub đã chọn — webhook auto-deploy sẽ được gắn tự động sau khi tạo.
+              </p>
+            )}
+          </div>
+        ) : (
+          <p className="mb-2 text-[11px] text-white/35">
+            💡 <a href="/api/oauth/connect/github" className="text-indigo-400 hover:underline">Kết nối GitHub</a>{' '}
+            để chọn repo từ danh sách + tự gắn webhook (khỏi dán URL/token).
+          </p>
+        )}
+
         <Input
           id="gitRepoUrl"
           name="gitRepoUrl"
           type="url"
           placeholder="https://github.com/user/repo"
           value={gitRepoUrl}
-          onChange={(e) => { setGitRepoUrl(e.target.value); setBranches(null); setBranchError(null); setAiSuggestion(null); setAiError(null); }}
+          onChange={(e) => { setGitRepoUrl(e.target.value); setBranches(null); setBranchError(null); setAiSuggestion(null); setAiError(null); setPickedProvider(null); }}
         />
 
         {/* ✨ AI tự nhận diện cấu hình từ repo */}

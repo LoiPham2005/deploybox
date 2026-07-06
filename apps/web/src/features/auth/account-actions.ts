@@ -33,6 +33,17 @@ export async function set2faAction(enabled: boolean): Promise<ActionResult> {
   }
 }
 
+/** Gỡ liên kết OAuth (GitHub…). */
+export async function unlinkOauthAction(provider: string): Promise<ActionResult> {
+  try {
+    await serverApi(`/auth/oauth/identities/${provider}`, { method: 'DELETE' });
+    revalidatePath('/account');
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Gỡ liên kết thất bại' };
+  }
+}
+
 /** Đăng xuất 1 phiên (thiết bị) từ xa. */
 export async function revokeSessionAction(sessionId: string): Promise<ActionResult> {
   try {

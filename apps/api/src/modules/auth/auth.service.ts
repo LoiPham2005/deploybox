@@ -67,8 +67,9 @@ export class AuthService {
     private readonly sessions: SessionsService,
   ) {}
 
-  /** Cấp token kèm phiên đăng nhập mới (để xem thiết bị + đăng xuất từ xa). */
-  private async issueSession(user: UserRow, meta?: LoginMeta): Promise<AuthResponse> {
+  /** Cấp token kèm phiên đăng nhập mới (để xem thiết bị + đăng xuất từ xa).
+   *  Public vì OAuth (đăng nhập GitHub…) cũng cấp phiên qua đường này. */
+  async issueSession(user: UserRow, meta?: LoginMeta): Promise<AuthResponse> {
     const session = await this.sessions.create(user.id, meta?.userAgent, meta?.ip);
     return {
       user: this.toUserDto(user),
@@ -98,11 +99,36 @@ export class AuthService {
     }
   }
 
+  /**
+   * Tạo user qua OAuth (không mật khẩu). Caller PHẢI tự kiểm mã mời/flag trước.
+   * Trả user để cấp phiên.
+   */
+  async createUserForOAuth(
+    email: string,
+    name?: string | null,
+    avatarUrl?: string | null,
+  ) {
+    if (!this.flags.isEnabled('signup_enabled')) {
+      throw new ForbiddenException(
+        'Đăng ký tài khoản mới đang tắt (Admin → Tính năng hệ thống).',
+      );
+    }
+    const existing = await this.prisma.user.findUnique({ where: { email } });
+    if (existing) throw new ConflictException('Email đã được sử dụng');
+    const user = await this.createUserWithTeam(email, name, null);
+    if (avatarUrl) {
+      await this.prisma.user
+        .update({ where: { id: user.id }, data: { avatarUrl } })
+        .catch(() => undefined);
+    }
+    return user;
+  }
+
   /** Tạo user + personal team (dùng chung cho register thẳng và verify OTP). */
   private async createUserWithTeam(
     email: string,
     name: string | null | undefined,
-    passwordHash: string,
+    passwordHash: string | null, // null = tài khoản OAuth (không mật khẩu)
   ) {
     return this.prisma.$transaction(async (tx) => {
       const u = await tx.user.create({

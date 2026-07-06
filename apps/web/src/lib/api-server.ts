@@ -5,6 +5,8 @@ import type {
   CronJobDto,
   ManagedDatabaseDto,
   MetricPointDto,
+  OAuthIdentityDto,
+  OAuthProviderStatusDto,
   PreviewDto,
   UptimeStatusDto,
   DeploymentView,
@@ -71,4 +73,6 @@ export const serverGet = {
     serverApi<MetricPointDto[]>(`/projects/${projectId}/metrics/history?hours=${hours}`),
   uptime: (projectId: string) =>
     serverApi<UptimeStatusDto>(`/projects/${projectId}/uptime`),
+  oauthIdentities: () => serverApi<OAuthIdentityDto[]>('/auth/oauth/identities'),
+  oauthProviders: () => serverApi<OAuthProviderStatusDto[]>('/auth/oauth/providers'),
 };
