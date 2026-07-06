@@ -8,11 +8,18 @@ const API = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000') + '/api
  * Bắt đầu "Kết nối GitHub…" từ trang Tài khoản: cần JWT (cookie httpOnly web),
  * nên web server gọi API lấy URL authorize (state gắn userId) rồi redirect browser.
  */
+/** Origin THẬT của web sau proxy — req.nextUrl.origin trả localhost:3000 khi self-host sau Caddy. */
+function realOrigin(req: NextRequest): string {
+  const proto = req.headers.get('x-forwarded-proto') ?? 'https';
+  const host = req.headers.get('x-forwarded-host') ?? req.headers.get('host') ?? 'localhost:3000';
+  return `${proto}://${host}`;
+}
+
 export async function GET(
   req: NextRequest,
   { params }: { params: { provider: string } },
 ) {
-  const to = (path: string) => NextResponse.redirect(new URL(path, req.nextUrl.origin));
+  const to = (path: string) => NextResponse.redirect(new URL(path, realOrigin(req)));
   const token = cookies().get(SESSION_COOKIE)?.value;
   if (!token) return to('/login');
 
