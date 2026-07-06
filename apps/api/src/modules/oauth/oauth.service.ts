@@ -422,7 +422,12 @@ export class OauthService {
     );
     await this.prisma.project.update({
       where: { id: project.id },
-      data: { gitProvider: PROVIDER_TO_ENUM[a.key] },
+      data: {
+        gitProvider: PROVIDER_TO_ENUM[a.key],
+        // Project chưa có git token → dùng luôn token OAuth để clone được repo private
+        // (git-auth.util nhận prefix gho_/glpat…; token mã hoá at-rest như thường)
+        ...(project.gitToken ? {} : { gitToken: this.crypto.encrypt(token) }),
+      },
     }).catch(() => undefined);
     return { ok: true };
   }

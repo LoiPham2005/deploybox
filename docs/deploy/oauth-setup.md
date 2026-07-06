@@ -9,7 +9,7 @@ Giá trị dùng chung (production sneakup.io.vn):
 | Trường | Giá trị |
 |---|---|
 | Homepage / Website | `https://sneakup.io.vn` |
-| **Callback / Redirect URL** | `https://api.sneakup.io.vn/api/v1/auth/oauth/<nhà>/callback` |
+| **Callback / Redirect URL** | `https://api.sneakup.io.vn/api/v1/auth/oauth/<nhà>/callback` | 
 
 (`<nhà>` = `github` \| `gitlab` \| `bitbucket`. Dev local thì thay bằng `http://localhost:4000/...`.)
 

@@ -36,6 +36,11 @@ export function EditProjectForm({ project }: { project: ProjectDetailDto }) {
   // Loại project — đổi được để hiện đúng field (STATIC: output dir; BACKEND: cổng + lệnh chạy)
   const [type, setType] = useState(project.type);
 
+  // Git token: CHỈ gửi khi user thật sự gõ vào ô (touched) — nếu không, lần Lưu
+  // nào cũng gửi chuỗi rỗng và backend hiểu nhầm là "xoá token" (bug đã gặp).
+  const [gitTokenVal, setGitTokenVal] = useState('');
+  const [gitTokenTouched, setGitTokenTouched] = useState(false);
+
   // Branch picker — dùng token đã lưu của project
   const [selectedBranch, setSelectedBranch] = useState(project.gitBranch);
   const [branches, setBranches] = useState<RemoteBranch[] | null>(null);
@@ -83,8 +88,8 @@ export function EditProjectForm({ project }: { project: ProjectDetailDto }) {
           : undefined,
       buildImage: type === 'MOBILE' ? (s('buildImage') ?? '') : undefined,
       artifactPath: type === 'MOBILE' ? (s('artifactPath') ?? '') : undefined,
-      // gitToken: undefined = không đổi, '' = xóa, giá trị = cập nhật
-      gitToken: f.has('gitToken') ? (s('gitToken') ?? '') : undefined,
+      // gitToken: undefined = không đổi (chưa đụng ô), '' = xóa (gõ rồi xoá), giá trị = cập nhật
+      gitToken: gitTokenTouched ? gitTokenVal.trim() : undefined,
       notifyUrl: s('notifyUrl') ?? '',
       autoDeploy: f.get('autoDeploy') === 'on',
       sleepEnabled: f.get('sleepEnabled') === 'on',
@@ -143,8 +148,9 @@ export function EditProjectForm({ project }: { project: ProjectDetailDto }) {
         </Label>
         <Input
           id="gitToken"
-          name="gitToken"
           type="password"
+          value={gitTokenVal}
+          onChange={(e) => { setGitTokenVal(e.target.value); setGitTokenTouched(true); }}
           placeholder={project.hasGitToken ? '••••••••  (để trống = giữ nguyên, nhập mới = cập nhật)' : 'ghp_xxxx hoặc gitlab-token…'}
           autoComplete="off"
         />
