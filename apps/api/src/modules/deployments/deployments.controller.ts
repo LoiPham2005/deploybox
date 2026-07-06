@@ -72,6 +72,15 @@ export class DeploymentsController {
     return this.deployments.sleepProject(user.sub, projectId);
   }
 
+  /** Đánh thức app đang ngủ (nút UI). */
+  @Post('projects/:projectId/wake')
+  wakeProject(
+    @CurrentUser() user: JwtPayload,
+    @Param('projectId') projectId: string,
+  ) {
+    return this.deployments.wakeProject(user.sub, projectId);
+  }
+
   @Get('projects/:projectId/deployments')
   list(
     @CurrentUser() user: JwtPayload,

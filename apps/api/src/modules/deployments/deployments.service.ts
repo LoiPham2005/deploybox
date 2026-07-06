@@ -219,6 +219,15 @@ export class DeploymentsService {
     return { ok: await this.sleepSvc.sleep(projectId) };
   }
 
+  /** Đánh thức app đang ngủ từ nút UI (bình thường request đầu vào URL cũng tự đánh thức). */
+  async wakeProject(
+    userId: string,
+    projectId: string,
+  ): Promise<{ ok: boolean }> {
+    const project = await this.loadOwnedProject(userId, projectId, 'MEMBER');
+    return { ok: await this.sleepSvc.wake(project.slug) };
+  }
+
   async list(
     userId: string,
     projectId: string,

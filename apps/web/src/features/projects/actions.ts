@@ -177,6 +177,19 @@ export async function sleepProjectAction(
   }
 }
 
+/** Đánh thức app đang ngủ (nút "Đánh thức"). */
+export async function wakeProjectAction(
+  projectId: string,
+): Promise<ActionResult> {
+  try {
+    await serverApi(`/projects/${projectId}/wake`, { method: 'POST' });
+    revalidatePath(`/projects/${projectId}`);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Đánh thức thất bại' };
+  }
+}
+
 export async function rollbackAction(
   deploymentId: string,
 ): Promise<ActionResult<DeploymentDetail>> {

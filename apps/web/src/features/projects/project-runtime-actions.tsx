@@ -6,6 +6,7 @@ import {
   redeployProjectAction,
   sleepProjectAction,
   stopProjectAction,
+  wakeProjectAction,
 } from './actions';
 import { Button } from '@/components/ui/button';
 
@@ -19,10 +20,13 @@ export function ProjectRuntimeActions({
   projectId,
   canDeploy,
   canSleep,
+  sleeping = false,
 }: {
   projectId: string;
   canDeploy: boolean;
   canSleep: boolean;
+  /** App đang SLEEPING → nút "Ngủ" đổi thành "Đánh thức". */
+  sleeping?: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
@@ -54,15 +58,26 @@ export function ProjectRuntimeActions({
       >
         {busy === 'redeploy' ? '…' : 'Redeploy'}
       </Button>
-      {canSleep && (
+      {sleeping ? (
         <Button
           variant="ghost"
-          onClick={() => run('sleep', () => sleepProjectAction(projectId))}
+          onClick={() => run('wake', () => wakeProjectAction(projectId))}
           disabled={busy !== null}
-          className="px-2 py-1 text-xs"
+          className="px-2 py-1 text-xs text-emerald-300"
         >
-          {busy === 'sleep' ? '…' : 'Ngủ'}
+          {busy === 'wake' ? 'Đang đánh thức…' : '⏰ Đánh thức'}
         </Button>
+      ) : (
+        canSleep && (
+          <Button
+            variant="ghost"
+            onClick={() => run('sleep', () => sleepProjectAction(projectId))}
+            disabled={busy !== null}
+            className="px-2 py-1 text-xs"
+          >
+            {busy === 'sleep' ? '…' : 'Ngủ'}
+          </Button>
+        )
       )}
       <Button
         variant="ghost"

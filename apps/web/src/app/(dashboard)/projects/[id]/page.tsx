@@ -182,6 +182,7 @@ export default async function ProjectDetailPage({
             projectId={project.id}
             canDeploy={deployable}
             canSleep={project.type === 'BACKEND'}
+            sleeping={project.deployments[0]?.status === 'SLEEPING'}
           />
         </div>
         {project.deployments.length === 0 ? (
