@@ -20,14 +20,17 @@ export function ProjectRuntimeActions({
   projectId,
   canDeploy,
   canSleep,
-  sleeping = false,
+  status,
 }: {
   projectId: string;
   canDeploy: boolean;
   canSleep: boolean;
-  /** App đang SLEEPING → nút "Ngủ" đổi thành "Đánh thức". */
-  sleeping?: boolean;
+  /** Trạng thái bản deploy mới nhất — quyết định hiện nút gì. */
+  status?: string;
 }) {
+  const sleeping = status === 'SLEEPING';
+  // Đã dừng/thất bại/huỷ → app không chạy → nút chính là "Chạy lại"
+  const stopped = status === 'STOPPED' || status === 'FAILED' || status === 'CANCELLED';
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -45,6 +48,22 @@ export function ProjectRuntimeActions({
     } else if (res.error) {
       setError(res.error);
     }
+  }
+
+  // App đã dừng → chỉ cần 1 nút "Chạy lại" nổi bật (Redeploy = build lại + chạy)
+  if (stopped) {
+    return (
+      <div className="flex items-center gap-2">
+        {error && <span className="text-xs text-red-400">{error}</span>}
+        <Button
+          onClick={() => run('redeploy', () => redeployProjectAction(projectId))}
+          disabled={!canDeploy || busy !== null}
+          className="px-3 py-1 text-xs text-emerald-300"
+        >
+          {busy === 'redeploy' ? 'Đang chạy lại…' : '▶ Chạy lại'}
+        </Button>
+      </div>
+    );
   }
 
   return (
