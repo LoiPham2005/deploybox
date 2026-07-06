@@ -18,6 +18,24 @@ export interface UserDto {
   name?: string | null;
   avatarUrl?: string | null;
   role?: UserRole;
+  twoFactorEnabled?: boolean;
+}
+
+/** Login đúng mật khẩu nhưng tài khoản bật 2FA → cần nhập OTP email (bước 2). */
+export interface TwoFactorChallenge {
+  requires2fa: true;
+}
+
+/** 1 dòng nhật ký hoạt động (Admin xem ai làm gì lúc nào). */
+export interface AuditLogDto {
+  id: string;
+  userEmail?: string | null;
+  method: string;
+  path: string;
+  action: string; // nhãn tiếng Việt suy từ route
+  status: number;
+  ip?: string | null;
+  createdAt: string;
 }
 
 export interface TeamDto {

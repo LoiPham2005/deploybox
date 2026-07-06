@@ -31,6 +31,20 @@ export const KNOWN_FLAGS: {
     default: true,
   },
   {
+    key: 'audit_log',
+    label: 'Nhật ký hoạt động (audit log)',
+    description:
+      'Ghi ai deploy / đổi env / xoá project… (không lưu nội dung body — không lộ secret). Xem ở Admin. Tắt: ngừng ghi (log cũ giữ nguyên).',
+    default: true,
+  },
+  {
+    key: 'two_factor_auth',
+    label: 'Đăng nhập 2 lớp (2FA)',
+    description:
+      'User bật 2FA trong Tài khoản → login đúng mật khẩu phải nhập thêm OTP email. Tắt: bỏ qua bước OTP toàn hệ thống (trạng thái từng user vẫn giữ).',
+    default: true,
+  },
+  {
     key: 'auth_rate_limit',
     label: 'Rate-limit đăng nhập',
     description:

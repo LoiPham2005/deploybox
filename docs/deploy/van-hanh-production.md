@@ -38,7 +38,11 @@ tail -5 /opt/deploybox-backups/backup.log
 
 ## 2. Backup & khôi phục DB (thứ quý nhất trên server)
 
-**Cơ chế đang chạy:** cron `/etc/cron.d/deploybox-backup` gọi `/usr/local/bin/deploybox-backup.sh` lúc **3h sáng** → `pg_dump` toàn bộ DB Supabase → nén gzip → `/opt/deploybox-backups/db-YYYY-MM-DD-HHMM.sql.gz` → tự xoá bản quá 7 ngày. DB 11MB → mỗi bản ~44KB, không đáng kể.
+**Cơ chế đang chạy:** cron `/etc/cron.d/deploybox-backup` gọi `/usr/local/bin/deploybox-backup.sh` lúc **3h sáng** (bản lưu script: [deploybox-backup.sh](deploybox-backup.sh)) → tự xoá bản quá 7 ngày. Gồm 2 phần:
+1. **DB nền tảng** (Supabase): `pg_dump` toàn bộ → `db-YYYY-MM-DD-HHMM.sql.gz` (~44KB).
+2. **DB user** (Database 1-click, container `deploybox-db-*`): mỗi Postgres một bản `user-<container>-YYYY-MM-DD.sql.gz`, Redis một bản `.rdb.gz`.
+
+Khôi phục DB user: `gunzip -c user-<cn>-<ngày>.sql.gz | docker exec -i <cn> psql -U app app`.
 
 **Chạy backup tay bất kỳ lúc nào** (vd trước khi làm gì nguy hiểm với DB):
 ```bash

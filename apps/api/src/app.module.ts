@@ -8,6 +8,7 @@ import { MetricsModule } from './infra/metrics/metrics.module';
 import { PrismaModule } from './infra/prisma/prisma.module';
 import { FeatureFlagsModule } from './infra/feature-flags/feature-flags.module';
 import { FeatureFlagsService } from './infra/feature-flags/feature-flags.service';
+import { AuditModule } from './infra/audit/audit.module';
 import { AiModule } from './infra/ai/ai.module';
 import { MailModule } from './infra/mail/mail.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -66,6 +67,7 @@ const REDIS_URL = process.env.REDIS_URL ?? '';
     }),
     PrismaModule,
     FeatureFlagsModule,
+    AuditModule,
     AiModule,
     MailModule,
     CryptoModule,

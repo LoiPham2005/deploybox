@@ -8,7 +8,9 @@ import {
   loginSchema,
   registerSchema,
   resetPasswordSchema,
+  toggle2faSchema,
   updateMeSchema,
+  verifyLoginOtpSchema,
   verifyRegisterSchema,
   type ChangePasswordDto,
   type CreateTokenDto,
@@ -16,7 +18,9 @@ import {
   type LoginDto,
   type RegisterDto,
   type ResetPasswordDto,
+  type Toggle2faDto,
   type UpdateMeDto,
+  type VerifyLoginOtpDto,
   type VerifyRegisterDto,
 } from '@deploybox/shared';
 import { AuthService } from './auth.service';
@@ -75,6 +79,24 @@ export class AuthController {
   @Post('login')
   login(@Body(new ZodValidationPipe(loginSchema)) dto: LoginDto) {
     return this.auth.login(dto);
+  }
+
+  /** 2FA bước 2: nhập OTP email sau khi login đúng mật khẩu. */
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Post('login/verify-otp')
+  verifyLoginOtp(@Body(new ZodValidationPipe(verifyLoginOtpSchema)) dto: VerifyLoginOtpDto) {
+    return this.auth.verifyLoginOtp(dto);
+  }
+
+  /** Bật/tắt 2FA cho tài khoản của mình. */
+  @UseGuards(JwtAuthGuard)
+  @Post('me/2fa')
+  set2fa(
+    @CurrentUser() user: JwtPayload,
+    @Body(new ZodValidationPipe(toggle2faSchema)) dto: Toggle2faDto,
+  ) {
+    return this.auth.set2fa(user.sub, dto.enabled);
   }
 
   @Post('logout')

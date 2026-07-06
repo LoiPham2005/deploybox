@@ -104,6 +104,9 @@ model User {
   telegramChatId   String?
   telegramLinkCode String? @unique
 
+  // 2FA: bật = sau khi đúng mật khẩu phải nhập thêm OTP gửi qua email
+  twoFactorEnabled Boolean @default(false)
+
   memberships   TeamMember[]
   apiTokens     ApiToken[]
   projectAccess ProjectMember[]
@@ -373,10 +376,27 @@ model Setting {
 // Mã OTP gửi qua email (xác thực đăng ký / quên mật khẩu).
 // Không lưu mã thô — chỉ sha256. Đăng ký: user CHỈ được tạo sau khi verify OTP,
 // thông tin đăng ký (name + passwordHash) giữ tạm trong payload.
+// 📝 Nhật ký hoạt động: ai làm gì lúc nào (mọi request ghi/sửa/xoá có đăng nhập).
+// KHÔNG lưu body request (env value, mật khẩu… không được lọt vào log).
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  userEmail String?
+  method    String   // POST/PATCH/PUT/DELETE
+  path      String   // đường dẫn cụ thể (đã cắt query string)
+  action    String   // nhãn tiếng Việt suy từ route (vd "Deploy project")
+  status    Int      // HTTP status trả về
+  ip        String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt(sort: Desc)])
+  @@index([userId])
+}
+
 model EmailOtp {
   id        String   @id @default(cuid())
   email     String
-  purpose   String   // "register" | "reset"
+  purpose   String   // "register" | "reset" | "login" (2FA)
   codeHash  String
   payload   String?  // register: JSON { name, passwordHash }
   attempts  Int      @default(0)

@@ -4,6 +4,7 @@ import { AdminGuard } from './admin.guard';
 import { AdminService } from './admin.service';
 import { FeatureFlagsService } from '../../infra/feature-flags/feature-flags.service';
 import { AiService } from '../../infra/ai/ai.service';
+import { AuditService } from '../../infra/audit/audit.service';
 import { ReportService } from '../deployments/report.service';
 
 @UseGuards(JwtAuthGuard, AdminGuard)
@@ -13,8 +14,15 @@ export class AdminController {
     private readonly admin: AdminService,
     private readonly flags: FeatureFlagsService,
     private readonly ai: AiService,
+    private readonly audit: AuditService,
     private readonly report: ReportService,
   ) {}
+
+  /** 📝 Nhật ký hoạt động: ai làm gì lúc nào (?limit=100&email=lọc). */
+  @Get('audit')
+  auditList(@Query('limit') limit?: string, @Query('email') email?: string) {
+    return this.audit.list(limit ? parseInt(limit, 10) || 100 : 100, email || undefined);
+  }
 
   /** Xem trước báo cáo ngày/tuần (?days=1|7) — không gửi Telegram. */
   @Get('report')

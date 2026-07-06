@@ -5,6 +5,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
+import { createHash } from 'crypto';
 import { AuthService } from './auth.service';
 
 async function userRow(password: string, name: string | null = null) {
@@ -78,6 +79,49 @@ describe('AuthService', () => {
       }),
     ).rejects.toBeInstanceOf(ForbiddenException);
     expect(prisma.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('login: user bật 2FA + SMTP có → trả requires2fa, KHÔNG trả token', async () => {
+    const row = await userRow('correct', 'A');
+    const prisma = {
+      user: { findUnique: vi.fn().mockResolvedValue({ ...row, twoFactorEnabled: true }) },
+      emailOtp: {
+        findUnique: vi.fn().mockResolvedValue(null),
+        deleteMany: vi.fn().mockResolvedValue(undefined),
+        upsert: vi.fn().mockResolvedValue(undefined),
+      },
+    };
+    const jwt = { sign: vi.fn().mockReturnValue('token') };
+    const mail2fa = {
+      isConfigured: () => true,
+      send: vi.fn().mockResolvedValue(undefined),
+      otpHtml: vi.fn().mockReturnValue('<html>'),
+    } as never;
+    const svc = new AuthService(prisma as never, jwt as never, { get: () => '' } as never, mail2fa, flagsStub);
+    const r = await svc.login({ email: 'a@b.com', password: 'correct' });
+    expect(r).toEqual({ requires2fa: true });
+    expect(prisma.emailOtp.upsert).toHaveBeenCalledOnce(); // đã phát OTP
+    expect(jwt.sign).not.toHaveBeenCalled(); // chưa cấp token
+  });
+
+  it('verifyLoginOtp: mã đúng → cấp token', async () => {
+    const row = await userRow('correct', 'A');
+    const codeHash = createHash('sha256').update('123456').digest('hex');
+    const prisma = {
+      user: { findUnique: vi.fn().mockResolvedValue({ ...row, twoFactorEnabled: true }) },
+      emailOtp: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: 'otp1', codeHash, attempts: 0,
+          expiresAt: new Date(Date.now() + 60_000),
+        }),
+        delete: vi.fn().mockResolvedValue(undefined),
+      },
+    };
+    const jwt = { sign: vi.fn().mockReturnValue('token2fa') };
+    const svc = new AuthService(prisma as never, jwt as never, { get: () => '' } as never, mailStub, flagsStub);
+    const r = await svc.verifyLoginOtp({ email: 'a@b.com', code: '123456' });
+    expect(r.accessToken).toBe('token2fa');
+    expect(prisma.emailOtp.delete).toHaveBeenCalled(); // mã dùng 1 lần
   });
 
   it('register: flag signup_enabled TẮT → Forbidden dù mã mời đúng', async () => {

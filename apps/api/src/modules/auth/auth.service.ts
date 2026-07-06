@@ -16,9 +16,11 @@ import type {
   MeResponse,
   RegisterDto,
   ResetPasswordDto,
+  TwoFactorChallenge,
   UpdateMeDto,
   UserDto,
   UserRole,
+  VerifyLoginOtpDto,
   VerifyRegisterDto,
 } from '@deploybox/shared';
 import { PrismaService } from '../../infra/prisma/prisma.service';
@@ -44,6 +46,7 @@ type UserRow = {
   name: string | null;
   avatarUrl: string | null;
   role: UserRole;
+  twoFactorEnabled?: boolean;
 };
 
 @Injectable()
@@ -130,13 +133,18 @@ export class AuthService {
     return createHash('sha256').update(code).digest('hex');
   }
 
-  /** Tạo/ghi đè OTP cho (email, purpose), gửi mail. Chặn gửi lại trong 60s. */
+  /**
+   * Tạo/ghi đè OTP cho (email, purpose), gửi mail. Chặn gửi lại trong 60s.
+   * quietResend: đang trong cửa sổ 60s thì trả ok luôn (mã cũ còn hiệu lực,
+   * không gửi mail mới) — dùng cho 2FA login để user bấm đăng nhập lại không bị lỗi.
+   */
   private async issueOtp(
     email: string,
-    purpose: 'register' | 'reset',
+    purpose: 'register' | 'reset' | 'login',
     payload: string | null,
     mailTitle: string,
     mailNote: string,
+    quietResend = false,
   ): Promise<{ ok: true }> {
     if (!this.mail.isConfigured()) {
       throw new BadRequestException(
@@ -147,6 +155,7 @@ export class AuthService {
       where: { email_purpose: { email, purpose } },
     });
     if (existing && Date.now() - existing.createdAt.getTime() < OTP_RESEND_MS) {
+      if (quietResend) return { ok: true };
       const wait = Math.ceil(
         (OTP_RESEND_MS - (Date.now() - existing.createdAt.getTime())) / 1000,
       );
@@ -186,7 +195,7 @@ export class AuthService {
   /** Đọc + kiểm OTP. Đúng thì trả row (caller xử lý tiếp và xoá row). */
   private async consumeOtp(
     email: string,
-    purpose: 'register' | 'reset',
+    purpose: 'register' | 'reset' | 'login',
     code: string,
   ) {
     const row = await this.prisma.emailOtp.findUnique({
@@ -279,7 +288,7 @@ export class AuthService {
     return { ok: true };
   }
 
-  async login(dto: LoginDto): Promise<AuthResponse> {
+  async login(dto: LoginDto): Promise<AuthResponse | TwoFactorChallenge> {
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email },
     });
@@ -289,10 +298,53 @@ export class AuthService {
     ) {
       throw new UnauthorizedException('Email hoặc mật khẩu không đúng');
     }
+    // 2FA: user bật + flag hệ thống bật + có SMTP → gửi OTP, chưa cấp token vội.
+    // (SMTP hỏng thì cho đăng nhập thẳng — không khoá cửa toàn bộ user vì mail chết.)
+    if (
+      (user as { twoFactorEnabled?: boolean }).twoFactorEnabled &&
+      this.flags.isEnabled('two_factor_auth') &&
+      this.mail.isConfigured()
+    ) {
+      await this.issueOtp(
+        user.email,
+        'login',
+        null,
+        'Mã đăng nhập DeployBox (2FA)',
+        `Ai đó vừa đăng nhập tài khoản <b>${user.email}</b> bằng đúng mật khẩu. Nếu là bạn, nhập mã bên dưới để hoàn tất. Nếu không phải bạn — đổi mật khẩu ngay.`,
+        true, // trong 60s đăng nhập lại → dùng mã cũ, không lỗi
+      );
+      return { requires2fa: true };
+    }
     return {
       user: this.toUserDto(user),
       accessToken: this.sign(user.id, user.email),
     };
+  }
+
+  /** 2FA bước 2: OTP đúng → cấp token thật. */
+  async verifyLoginOtp(dto: VerifyLoginOtpDto): Promise<AuthResponse> {
+    const row = await this.consumeOtp(dto.email, 'login', dto.code);
+    const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    if (!user) throw new UnauthorizedException('Tài khoản không còn tồn tại');
+    await this.prisma.emailOtp.delete({ where: { id: row.id } }).catch(() => undefined);
+    return {
+      user: this.toUserDto(user),
+      accessToken: this.sign(user.id, user.email),
+    };
+  }
+
+  /** Bật/tắt 2FA cho chính mình (cần đang đăng nhập). */
+  async set2fa(userId: string, enabled: boolean): Promise<UserDto> {
+    if (enabled && !this.mail.isConfigured()) {
+      throw new BadRequestException(
+        'Server chưa cấu hình email (SMTP) — chưa bật được 2FA qua email.',
+      );
+    }
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: { twoFactorEnabled: enabled },
+    });
+    return this.toUserDto(user);
   }
 
   async me(userId: string): Promise<MeResponse> {
@@ -380,6 +432,13 @@ export class AuthService {
   }
 
   private toUserDto(u: UserRow): UserDto {
-    return { id: u.id, email: u.email, name: u.name, avatarUrl: u.avatarUrl, role: u.role };
+    return {
+      id: u.id,
+      email: u.email,
+      name: u.name,
+      avatarUrl: u.avatarUrl,
+      role: u.role,
+      twoFactorEnabled: u.twoFactorEnabled ?? false,
+    };
   }
 }

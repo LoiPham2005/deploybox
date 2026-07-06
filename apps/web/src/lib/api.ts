@@ -4,6 +4,7 @@ import type {
   LoginDto,
   MeResponse,
   RegisterDto,
+  TwoFactorChallenge,
 } from '@deploybox/shared';
 
 const BASE =
@@ -47,7 +48,11 @@ export async function apiGet<T>(path: string, token?: string): Promise<T> {
 }
 
 export const authApi = {
-  login: (dto: LoginDto) => apiPost<AuthResponse>('/auth/login', dto),
+  // Tài khoản bật 2FA → login trả { requires2fa: true }, cần verifyLoginOtp bước 2
+  login: (dto: LoginDto) =>
+    apiPost<AuthResponse | TwoFactorChallenge>('/auth/login', dto),
+  verifyLoginOtp: (dto: { email: string; code: string }) =>
+    apiPost<AuthResponse>('/auth/login/verify-otp', dto),
   register: (dto: RegisterDto) => apiPost<AuthResponse>('/auth/register', dto),
   me: (token: string) => apiGet<MeResponse>('/auth/me', token),
   // OTP qua email (đăng ký + quên mật khẩu) — endpoint public, gọi thẳng từ client

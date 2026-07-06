@@ -35,19 +35,33 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // 2FA: đúng mật khẩu nhưng tài khoản bật 2FA → chuyển bước nhập OTP email
+  const [otpStep, setOtpStep] = useState(false);
+  const [otp, setOtp] = useState('');
+
+  async function finishLogin(accessToken: string) {
+    await fetch('/api/session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: accessToken }),
+    });
+    router.push('/dashboard');
+    router.refresh();
+  }
 
   async function doLogin(loginEmail: string, loginPassword: string) {
     setError(null);
     setLoading(true);
     try {
-      const { accessToken } = await authApi.login({ email: loginEmail, password: loginPassword });
-      await fetch('/api/session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: accessToken }),
-      });
-      router.push('/dashboard');
-      router.refresh();
+      const res = await authApi.login({ email: loginEmail, password: loginPassword });
+      if ('requires2fa' in res) {
+        // Chưa có token — server đã gửi OTP về email
+        setOtpStep(true);
+        setOtp('');
+        setLoading(false);
+        return;
+      }
+      await finishLogin(res.accessToken);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Đăng nhập thất bại');
       setLoading(false);
@@ -59,10 +73,74 @@ export default function LoginPage() {
     await doLogin(email, password);
   }
 
+  async function onSubmitOtp(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    try {
+      const res = await authApi.verifyLoginOtp({ email, code: otp });
+      await finishLogin(res.accessToken);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Xác thực thất bại');
+      setLoading(false);
+    }
+  }
+
   async function onQuickLogin(quickEmail: string) {
     setEmail(quickEmail);
     setPassword('changeme');
     await doLogin(quickEmail, 'changeme');
+  }
+
+  // ── Bước 2 (2FA): nhập mã OTP đã gửi về email ──
+  if (otpStep) {
+    return (
+      <div className="space-y-5">
+        <div>
+          <h1 className="text-xl font-semibold">Xác thực 2 lớp</h1>
+          <p className="mt-1 text-sm text-white/50">
+            Đã gửi mã 6 số tới <b className="text-white/80">{email}</b> — nhập để hoàn tất đăng nhập.
+          </p>
+        </div>
+        <form onSubmit={onSubmitOtp} className="space-y-4">
+          <div>
+            <Label htmlFor="otp">Mã OTP</Label>
+            <Input
+              id="otp"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={6}
+              value={otp}
+              onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+              placeholder="123456"
+              autoFocus
+              required
+            />
+          </div>
+          {error && <p className="text-sm text-red-400">{error}</p>}
+          <Button type="submit" disabled={loading || otp.length !== 6} className="w-full">
+            {loading ? 'Đang xác thực…' : 'Xác nhận'}
+          </Button>
+          <div className="flex justify-between text-sm">
+            <button
+              type="button"
+              onClick={() => { setOtpStep(false); setError(null); }}
+              className="text-white/50 hover:underline"
+            >
+              ← Quay lại
+            </button>
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => doLogin(email, password)}
+              className="text-indigo-400 hover:underline disabled:opacity-40"
+            >
+              Gửi lại mã
+            </button>
+          </div>
+        </form>
+      </div>
+    );
   }
 
   return (

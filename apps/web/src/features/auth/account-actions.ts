@@ -19,6 +19,20 @@ export async function updateNameAction(name: string): Promise<ActionResult> {
   }
 }
 
+/** Bật/tắt 2FA (OTP email khi đăng nhập). */
+export async function set2faAction(enabled: boolean): Promise<ActionResult> {
+  try {
+    await serverApi('/auth/me/2fa', {
+      method: 'POST',
+      body: JSON.stringify({ enabled }),
+    });
+    revalidatePath('/account');
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Thao tác thất bại' };
+  }
+}
+
 /** Đổi mật khẩu (chạy server-side nên đọc được cookie httpOnly). */
 export async function changePasswordAction(
   currentPassword: string,

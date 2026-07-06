@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { isAdminRole, type AiConfigStatus, type UserRole } from '@deploybox/shared';
+import { isAdminRole, type AiConfigStatus, type AuditLogDto, type UserRole } from '@deploybox/shared';
 import { getToken } from '@/lib/auth';
 import { authApi } from '@/lib/api';
 import { serverApi } from '@/lib/api-server';
@@ -47,12 +47,13 @@ export default async function AdminPage() {
   const me = await authApi.me(token).catch(() => redirect('/api/session/clear'));
   if (!isAdminRole(me.user.role)) redirect('/dashboard');
 
-  const [stats, users, features, aiConfig, aiUsage] = await Promise.all([
+  const [stats, users, features, aiConfig, aiUsage, audit] = await Promise.all([
     serverApi<AdminStats>('/admin/stats').catch(() => ({ users: 0, teams: 0, projects: 0 })),
     serverApi<AdminUser[]>('/admin/users').catch(() => [] as AdminUser[]),
     serverApi<Feature[]>('/admin/features').catch(() => [] as Feature[]),
     serverApi<AiConfigStatus>('/admin/ai').catch(() => null),
     serverApi<AiUsageSummary>('/admin/ai-usage?days=30').catch(() => null),
+    serverApi<AuditLogDto[]>('/admin/audit?limit=50').catch(() => [] as AuditLogDto[]),
   ]);
 
   return (
@@ -190,6 +191,53 @@ export default async function AdminPage() {
             );
           })}
         </div>
+      </Card>
+
+      {/* 📝 Nhật ký hoạt động */}
+      <Card>
+        <h2 className="mb-1 text-sm font-semibold text-white/70">📝 Nhật ký hoạt động</h2>
+        <p className="mb-3 text-xs text-white/40">
+          50 thao tác ghi/sửa/xoá gần nhất của mọi người dùng (không lưu nội dung — không lộ
+          secret). Giữ 90 ngày. Tắt/bật ở &quot;Tính năng hệ thống&quot;.
+        </p>
+        {audit.length === 0 ? (
+          <p className="text-xs text-white/30">Chưa có hoạt động nào được ghi.</p>
+        ) : (
+          <div className="max-h-96 overflow-auto">
+            <table className="w-full text-xs">
+              <thead className="sticky top-0 bg-[#0b0d12] text-white/40">
+                <tr className="border-b border-white/10 text-left">
+                  <th className="py-1.5 pr-3">Lúc</th>
+                  <th className="py-1.5 pr-3">Ai</th>
+                  <th className="py-1.5 pr-3">Hành động</th>
+                  <th className="py-1.5 pr-3">Đường dẫn</th>
+                  <th className="py-1.5 text-right">Kết quả</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5 text-white/70">
+                {audit.map((a) => (
+                  <tr key={a.id}>
+                    <td className="whitespace-nowrap py-1.5 pr-3 text-white/40">
+                      {new Date(a.createdAt).toLocaleString('vi-VN', { hour12: false })}
+                    </td>
+                    <td className="py-1.5 pr-3">{a.userEmail ?? '—'}</td>
+                    <td className="py-1.5 pr-3">{a.action}</td>
+                    <td className="max-w-[220px] truncate py-1.5 pr-3 text-white/40">
+                      {a.method} {a.path.replace('/api/v1', '')}
+                    </td>
+                    <td
+                      className={`py-1.5 text-right ${
+                        a.status < 400 ? 'text-emerald-300' : 'text-red-400'
+                      }`}
+                    >
+                      {a.status}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Card>
     </div>
   );

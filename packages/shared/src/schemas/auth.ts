@@ -33,6 +33,18 @@ export const resetPasswordSchema = z.object({
 });
 export type ResetPasswordDto = z.infer<typeof resetPasswordSchema>;
 
+// ── 2FA: xác thực bước 2 khi đăng nhập (OTP email) ──
+export const verifyLoginOtpSchema = z.object({
+  email: z.string().email(),
+  code: z.string().regex(/^\d{6}$/, 'Mã OTP gồm 6 chữ số'),
+});
+export type VerifyLoginOtpDto = z.infer<typeof verifyLoginOtpSchema>;
+
+export const toggle2faSchema = z.object({
+  enabled: z.boolean(),
+});
+export type Toggle2faDto = z.infer<typeof toggle2faSchema>;
+
 export const updateMeSchema = z.object({
   name: z.string().min(1).max(80).optional(),
 });
