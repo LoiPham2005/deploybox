@@ -14,6 +14,8 @@ import { EditProjectForm } from '@/features/projects/edit-project-form';
 import { ProjectRuntimeActions } from '@/features/projects/project-runtime-actions';
 import { DomainManager } from '@/features/projects/domain-manager';
 import { MetricsCard } from '@/features/projects/metrics-card';
+import { MetricsHistory } from '@/features/projects/metrics-history';
+import { UptimePanel } from '@/features/projects/uptime-panel';
 import { RollbackButton } from '@/features/deployments/rollback-button';
 import { WebhookHistory } from '@/features/projects/webhook-history';
 import { DeployApiSnippet } from '@/features/projects/deploy-api-snippet';
@@ -34,20 +36,27 @@ export default async function ProjectDetailPage({
     notFound();
   }
 
-  const [me, env, webhookEvents, cron, databases, previews] = await Promise.all([
-    serverGet.me().catch(() => null),
-    serverGet.env(project.id).catch(() => []),
-    serverGet.webhookEvents(project.id).catch(() => []),
-    project.type === 'BACKEND'
-      ? serverGet.cron(project.id).catch(() => [])
-      : Promise.resolve([]),
-    project.type === 'BACKEND'
-      ? serverGet.databases(project.id).catch(() => [])
-      : Promise.resolve([]),
-    project.type !== 'MOBILE'
-      ? serverGet.previews(project.id).catch(() => [])
-      : Promise.resolve([]),
-  ]);
+  const [me, env, webhookEvents, cron, databases, previews, metricsHistory, uptime] =
+    await Promise.all([
+      serverGet.me().catch(() => null),
+      serverGet.env(project.id).catch(() => []),
+      serverGet.webhookEvents(project.id).catch(() => []),
+      project.type === 'BACKEND'
+        ? serverGet.cron(project.id).catch(() => [])
+        : Promise.resolve([]),
+      project.type === 'BACKEND'
+        ? serverGet.databases(project.id).catch(() => [])
+        : Promise.resolve([]),
+      project.type !== 'MOBILE'
+        ? serverGet.previews(project.id).catch(() => [])
+        : Promise.resolve([]),
+      project.type === 'BACKEND'
+        ? serverGet.metricsHistory(project.id).catch(() => [])
+        : Promise.resolve([]),
+      project.type === 'BACKEND'
+        ? serverGet.uptime(project.id).catch(() => null)
+        : Promise.resolve(null),
+    ]);
 
   const userRole = me?.teams.find((t) => t.id === project.teamId)?.role ?? 'MEMBER';
   const canRollback = userRole === 'OWNER';
@@ -226,6 +235,24 @@ export default async function ProjectDetailPage({
         </h2>
         <EnvManager projectId={project.id} vars={env} />
       </Card>
+
+      {project.type === 'BACKEND' && (
+        <Card>
+          <h2 className="mb-3 text-sm font-semibold text-white/70">
+            📈 CPU / RAM theo thời gian
+          </h2>
+          <MetricsHistory projectId={project.id} initial={metricsHistory} />
+        </Card>
+      )}
+
+      {project.type === 'BACKEND' && uptime && (
+        <Card>
+          <h2 className="mb-3 text-sm font-semibold text-white/70">
+            Canh app (uptime)
+          </h2>
+          <UptimePanel initial={uptime} />
+        </Card>
+      )}
 
       {project.type === 'BACKEND' && (
         <Card>

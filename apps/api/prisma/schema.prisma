@@ -236,6 +236,8 @@ model Project {
   members        ProjectMember[]
   cronJobs       CronJob[]
   databases      ManagedDatabase[]
+  metricSamples  MetricSample[]
+  incidents      AppIncident[]
 
   @@unique([teamId, slug])
   @@index([teamId])
@@ -392,6 +394,30 @@ model Setting {
 // Mã OTP gửi qua email (xác thực đăng ký / quên mật khẩu).
 // Không lưu mã thô — chỉ sha256. Đăng ký: user CHỈ được tạo sau khi verify OTP,
 // thông tin đăng ký (name + passwordHash) giữ tạm trong payload.
+// 📈 Mẫu CPU/RAM mỗi phút của app BACKEND đang chạy (C1) — giữ 7 ngày, tự dọn.
+model MetricSample {
+  id        String   @id @default(cuid())
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId String
+  at        DateTime @default(now())
+  cpuPct    Float?   // % CPU (docker: chính xác; host-run: xấp xỉ qua ps)
+  memMb     Float    // RAM đang dùng (MB)
+
+  @@index([projectId, at])
+}
+
+// 🔴 Sự cố app không trả lời HTTP (C2) — mở khi phát hiện DOWN, đóng khi hồi phục.
+model AppIncident {
+  id        String    @id @default(cuid())
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId String
+  startedAt DateTime  @default(now())
+  endedAt   DateTime? // null = đang down
+  reason    String?   // lỗi lần check cuối (timeout / HTTP 5xx…)
+
+  @@index([projectId, startedAt(sort: Desc)])
+}
+
 // 📝 Nhật ký hoạt động: ai làm gì lúc nào (mọi request ghi/sửa/xoá có đăng nhập).
 // KHÔNG lưu body request (env value, mật khẩu… không được lọt vào log).
 model AuditLog {

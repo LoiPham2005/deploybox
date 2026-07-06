@@ -4,7 +4,9 @@ import type {
   ApiTokenDto,
   CronJobDto,
   ManagedDatabaseDto,
+  MetricPointDto,
   PreviewDto,
+  UptimeStatusDto,
   DeploymentView,
   EnvVarDto,
   MeResponse,
@@ -65,4 +67,8 @@ export const serverGet = {
   servers: (teamId: string) =>
     serverApi<ServerDto[]>(`/teams/${teamId}/servers`),
   sessions: () => serverApi<SessionDto[]>('/auth/sessions'),
+  metricsHistory: (projectId: string, hours = 24) =>
+    serverApi<MetricPointDto[]>(`/projects/${projectId}/metrics/history?hours=${hours}`),
+  uptime: (projectId: string) =>
+    serverApi<UptimeStatusDto>(`/projects/${projectId}/uptime`),
 };

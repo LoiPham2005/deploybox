@@ -26,6 +26,27 @@ export interface TwoFactorChallenge {
   requires2fa: true;
 }
 
+/** 1 điểm dữ liệu CPU/RAM (đã gộp bucket) cho biểu đồ lịch sử. */
+export interface MetricPointDto {
+  at: string; // ISO time (đầu bucket)
+  cpuPct: number | null; // % CPU — null nếu không đo được
+  memMb: number; // MB RAM
+}
+
+/** 1 sự cố app không trả lời HTTP. */
+export interface AppIncidentDto {
+  id: string;
+  startedAt: string;
+  endedAt?: string | null; // null = đang down
+  reason?: string | null;
+}
+
+/** Trạng thái canh app + sự cố gần nhất. */
+export interface UptimeStatusDto {
+  isDown: boolean;
+  incidents: AppIncidentDto[];
+}
+
 /** 1 phiên đăng nhập (thiết bị) của tài khoản. */
 export interface SessionDto {
   id: string;

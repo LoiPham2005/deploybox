@@ -73,6 +73,20 @@ export const KNOWN_FLAGS: {
     default: true,
   },
   {
+    key: 'app_uptime_monitor',
+    label: 'Canh app user (uptime)',
+    description:
+      'Mỗi phút gọi thử app BACKEND đang chạy; 3 phút liền không trả lời → báo Telegram + ghi sự cố; hồi phục → báo lại. Tắt: không canh.',
+    default: true,
+  },
+  {
+    key: 'metrics_history',
+    label: 'Lịch sử CPU/RAM',
+    description:
+      'Lưu mẫu CPU/RAM mỗi phút của app đang chạy (giữ 7 ngày) → biểu đồ ở trang project. Tắt: ngừng lưu (dữ liệu cũ giữ nguyên).',
+    default: true,
+  },
+  {
     key: 'deploy_hooks',
     label: 'Hook trước/sau deploy',
     description:
