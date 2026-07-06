@@ -96,6 +96,11 @@ export class OauthService {
 
   // ── helpers ────────────────────────────────────────────────────────────────
 
+  /** Nhà này có đang được bật không: nút tổng oauth_login VÀ nút con oauth_<nhà>. */
+  private providerEnabled(key: OAuthProviderKey): boolean {
+    return this.flags.isEnabled('oauth_login') && this.flags.isEnabled(`oauth_${key}`);
+  }
+
   private adapter(key: string): OAuthProviderAdapter {
     const a = this.providers.get(key as OAuthProviderKey);
     if (!a) throw new NotFoundException(`Chưa hỗ trợ OAuth "${key}"`);
@@ -104,8 +109,10 @@ export class OauthService {
         `OAuth ${key} chưa cấu hình (thiếu client id/secret trong .env)`,
       );
     }
-    if (!this.flags.isEnabled('oauth_login')) {
-      throw new BadRequestException('Đăng nhập OAuth đang tắt (Admin → Tính năng hệ thống).');
+    if (!this.providerEnabled(a.key)) {
+      throw new BadRequestException(
+        `Đăng nhập ${a.key} đang tắt (Admin → Tính năng hệ thống).`,
+      );
     }
     return a;
   }
@@ -142,12 +149,11 @@ export class OauthService {
 
   /** Trạng thái từng nhà (web quyết định hiện nút nào). */
   providerStatuses(): OAuthProviderStatusDto[] {
-    const enabled = this.flags.isEnabled('oauth_login');
     const all: OAuthProviderKey[] = ['github', 'gitlab', 'bitbucket'];
     return all.map((key) => ({
       provider: key,
       configured: this.providers.get(key)?.configured() ?? false,
-      enabled,
+      enabled: this.providerEnabled(key), // nút tổng VÀ nút con của nhà đó
     }));
   }
 

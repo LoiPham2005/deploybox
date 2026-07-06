@@ -32,9 +32,30 @@ export const KNOWN_FLAGS: {
   },
   {
     key: 'oauth_login',
-    label: 'Đăng nhập OAuth (GitHub/GitLab/Bitbucket)',
+    label: 'Đăng nhập OAuth — NÚT TỔNG',
     description:
-      'Nút đăng nhập OAuth + kết nối tài khoản + chọn repo từ danh sách + tự gắn webhook. Nhà nào có CLIENT_ID/SECRET trong .env thì nhà đó hiện. Tắt: ẩn toàn bộ.',
+      'Tắt nút này = tắt TOÀN BỘ OAuth (đăng nhập + kết nối + chọn repo) của cả 3 nhà bên dưới. Trạng thái từng nút con vẫn giữ, bật tổng lại là về như cũ.',
+    default: true,
+  },
+  {
+    key: 'oauth_github',
+    label: 'OAuth · GitHub',
+    description:
+      'Đăng nhập/kết nối GitHub + chọn repo + auto-webhook. Cần GITHUB_OAUTH_CLIENT_ID/SECRET trong .env. Tắt: user chỉ-có-GitHub sẽ không đăng nhập được.',
+    default: true,
+  },
+  {
+    key: 'oauth_gitlab',
+    label: 'OAuth · GitLab',
+    description:
+      'Đăng nhập/kết nối GitLab. Cần GITLAB_OAUTH_CLIENT_ID/SECRET trong .env (self-host: thêm GITLAB_OAUTH_BASE_URL).',
+    default: true,
+  },
+  {
+    key: 'oauth_bitbucket',
+    label: 'OAuth · Bitbucket',
+    description:
+      'Đăng nhập/kết nối Bitbucket. Cần BITBUCKET_OAUTH_CLIENT_ID/SECRET trong .env (scope đặt trên consumer).',
     default: true,
   },
   {
