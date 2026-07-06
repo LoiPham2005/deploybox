@@ -10,7 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { resolve } from 'path';
-import type { AppIncidentDto, MetricPointDto, UptimeStatusDto } from '@deploybox/shared';
+import type { AppIncidentDto, MetricPointDto, OverviewItemDto, UptimeStatusDto } from '@deploybox/shared';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 import { DockerService } from '../../infra/docker/docker.service';
 import { HostBackendBuilder } from '../../infra/builder/host-backend.builder';
@@ -31,7 +31,11 @@ interface WatchedProject {
   teamId: string;
   internalPort: number;
   useDocker: boolean;
+  memoryMb: number; // hạn RAM cấu hình — mốc so ngưỡng cảnh báo
 }
+
+const RAM_WARN_RATIO = 0.8; // dùng ≥ 80% hạn RAM → cảnh báo
+const RAM_WARN_COOLDOWN_MS = 30 * 60_000; // 30 phút/app, tránh spam
 
 /** "123.4MiB / 512MiB" → 123.4 (MB). Hỗ trợ KiB/MiB/GiB. */
 export function parseMemToMb(s: string): number | null {
@@ -60,6 +64,8 @@ export class MonitorService implements OnApplicationBootstrap, OnModuleDestroy {
   private sweeping = false;
   /** projectId → số lần check fail liên tiếp */
   private fails = new Map<string, number>();
+  /** projectId → lần cảnh báo RAM cao gần nhất (cooldown) */
+  private ramWarnedAt = new Map<string, number>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -115,7 +121,7 @@ export class MonitorService implements OnApplicationBootstrap, OnModuleDestroy {
         },
         select: {
           id: true, slug: true, name: true, teamId: true,
-          internalPort: true, useDocker: true,
+          internalPort: true, useDocker: true, memoryMb: true,
         },
       });
       for (const p of projects) {
@@ -169,6 +175,29 @@ export class MonitorService implements OnApplicationBootstrap, OnModuleDestroy {
     await this.prisma.metricSample.create({
       data: { projectId: p.id, cpuPct, memMb: Math.round(memMb * 10) / 10 },
     });
+    await this.checkRamThreshold(p, memMb).catch(() => undefined);
+  }
+
+  /** ⚠️ RAM ≥ 80% hạn cấu hình → báo Telegram TRƯỚC khi OOM (cooldown 30ph/app). */
+  private async checkRamThreshold(p: WatchedProject, memMb: number): Promise<void> {
+    if (!this.flags.isEnabled('ram_threshold_alert')) return;
+    if (!p.memoryMb || p.memoryMb <= 0) return;
+    const ratio = memMb / p.memoryMb;
+    if (ratio < RAM_WARN_RATIO) {
+      // Đã xuống dưới ngưỡng → reset để lần vọt lên sau còn báo lại
+      this.ramWarnedAt.delete(p.id);
+      return;
+    }
+    const last = this.ramWarnedAt.get(p.id) ?? 0;
+    if (Date.now() - last < RAM_WARN_COOLDOWN_MS) return;
+    this.ramWarnedAt.set(p.id, Date.now());
+    const pct = Math.round(ratio * 100);
+    await this.notifyTeam(
+      p.teamId,
+      `⚠️ <b>${p.name}</b> đang dùng <b>${Math.round(memMb)} MB / ${p.memoryMb} MB</b> RAM (${pct}%).\n` +
+        `Sắp chạm hạn — cân nhắc tăng "Giới hạn RAM" trong Sửa cấu hình, hoặc tối ưu app. ` +
+        `(Docker: chạm hạn = app bị OOM-kill; host-run: ăn RAM chung của VPS.)`,
+    );
   }
 
   // ── C2: canh app trả lời HTTP ────────────────────────────────────────────
@@ -314,5 +343,51 @@ export class MonitorService implements OnApplicationBootstrap, OnModuleDestroy {
       isDown: incidents.some((i) => !i.endedAt),
       incidents: incidents.map(toDto),
     };
+  }
+
+  /** URL công khai (khớp CaddyService.publicUrl) — không import Caddy để tránh vòng phụ thuộc. */
+  private publicUrl(slug: string): string {
+    const domain = this.config.get<string>('APP_DOMAIN', 'localhost');
+    const port = this.config.get<string>('PROXY_PORT', '8080');
+    return domain === 'localhost'
+      ? `http://${slug}.${domain}:${port}/`
+      : `https://${slug}.${domain}/`;
+  }
+
+  /** 📊 Tổng quan: mọi app user truy cập được + status + RAM/CPU mới nhất + đang down? */
+  async overview(userId: string): Promise<OverviewItemDto[]> {
+    const projects = await this.prisma.project.findMany({
+      where: {
+        isPreview: false,
+        OR: [
+          { team: { members: { some: { userId, role: 'OWNER' } } } },
+          { members: { some: { userId } } },
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true, name: true, slug: true, type: true, memoryMb: true,
+        deployments: { orderBy: { queuedAt: 'desc' }, take: 1, select: { status: true } },
+        metricSamples: { orderBy: { at: 'desc' }, take: 1, select: { cpuPct: true, memMb: true, at: true } },
+        incidents: { where: { endedAt: null }, take: 1, select: { id: true } },
+      },
+    });
+    return projects.map((p) => {
+      const status = p.deployments[0]?.status ?? 'NONE';
+      const s = p.metricSamples[0];
+      return {
+        id: p.id,
+        name: p.name,
+        slug: p.slug,
+        type: p.type,
+        status,
+        url: status === 'RUNNING' ? this.publicUrl(p.slug) : null,
+        cpuPct: s?.cpuPct ?? null,
+        memMb: s?.memMb ?? null,
+        memoryMb: p.memoryMb,
+        isDown: p.incidents.length > 0,
+        updatedAt: s?.at?.toISOString() ?? null,
+      };
+    });
   }
 }

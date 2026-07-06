@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   FolderOpen,
+  LayoutGrid,
   Users,
   Server,
   Key,
@@ -44,7 +45,10 @@ export function SidebarNav({ user, currentTeam }: { user: UserDto; currentTeam: 
   const sections: NavSection[] = [
     {
       title: 'Workspace',
-      items: [{ href: '/dashboard', label: 'Projects', icon: <FolderOpen size={14} />, exact: true }],
+      items: [
+        { href: '/overview', label: 'Tổng quan', icon: <LayoutGrid size={14} /> },
+        { href: '/dashboard', label: 'Projects', icon: <FolderOpen size={14} />, exact: true },
+      ],
     },
     {
       title: 'Infrastructure',

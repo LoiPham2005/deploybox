@@ -24,3 +24,15 @@ export class MonitorController {
     return this.monitor.uptime(user.sub, projectId);
   }
 }
+
+/** 📊 Tổng quan mọi app (không gắn 1 project) — route riêng ngoài prefix projects/:id. */
+@UseGuards(JwtAuthGuard)
+@Controller('overview')
+export class OverviewController {
+  constructor(private readonly monitor: MonitorService) {}
+
+  @Get()
+  overview(@CurrentUser() user: JwtPayload) {
+    return this.monitor.overview(user.sub);
+  }
+}

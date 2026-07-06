@@ -74,6 +74,21 @@ export interface UptimeStatusDto {
   incidents: AppIncidentDto[];
 }
 
+/** 1 dòng ở trang Tổng quan — mọi app + số liệu sống cùng lúc. */
+export interface OverviewItemDto {
+  id: string;
+  name: string;
+  slug: string;
+  type: ProjectType;
+  status: DeploymentStatus | 'NONE';
+  url?: string | null;
+  cpuPct?: number | null; // mẫu mới nhất
+  memMb?: number | null;
+  memoryMb: number; // hạn RAM cấu hình
+  isDown: boolean; // uptime monitor đang báo down
+  updatedAt?: string | null; // thời điểm mẫu mới nhất
+}
+
 /** 1 phiên đăng nhập (thiết bị) của tài khoản. */
 export interface SessionDto {
   id: string;

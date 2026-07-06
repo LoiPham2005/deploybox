@@ -115,6 +115,13 @@ export const KNOWN_FLAGS: {
     default: true,
   },
   {
+    key: 'ram_threshold_alert',
+    label: 'Cảnh báo RAM cao',
+    description:
+      'App dùng ≥ 80% hạn RAM cấu hình → báo Telegram TRƯỚC khi OOM (mỗi app nhắc lại tối đa 30 phút/lần). Cần "Lịch sử CPU/RAM" bật để có số đo.',
+    default: true,
+  },
+  {
     key: 'env_lint',
     label: 'Soi env trước deploy',
     description:
