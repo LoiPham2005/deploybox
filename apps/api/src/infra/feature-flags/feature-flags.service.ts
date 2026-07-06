@@ -31,6 +31,13 @@ export const KNOWN_FLAGS: {
     default: true,
   },
   {
+    key: 'session_management',
+    label: 'Quản lý phiên đăng nhập',
+    description:
+      'Xem thiết bị đang đăng nhập + nút "Đăng xuất từ xa" (trang Tài khoản). Tắt: ẩn danh sách/nút — phiên ĐÃ thu hồi vẫn bị chặn (bảo mật).',
+    default: true,
+  },
+  {
     key: 'audit_log',
     label: 'Nhật ký hoạt động (audit log)',
     description:

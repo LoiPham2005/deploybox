@@ -33,6 +33,32 @@ export async function set2faAction(enabled: boolean): Promise<ActionResult> {
   }
 }
 
+/** Đăng xuất 1 phiên (thiết bị) từ xa. */
+export async function revokeSessionAction(sessionId: string): Promise<ActionResult> {
+  try {
+    await serverApi(`/auth/sessions/${sessionId}`, { method: 'DELETE' });
+    revalidatePath('/account');
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Đăng xuất thất bại' };
+  }
+}
+
+/** Đăng xuất mọi thiết bị khác (giữ phiên hiện tại). */
+export async function revokeOtherSessionsAction(): Promise<
+  { ok: true; revoked: number } | { ok: false; error: string }
+> {
+  try {
+    const r = await serverApi<{ revoked: number }>('/auth/sessions/others', {
+      method: 'DELETE',
+    });
+    revalidatePath('/account');
+    return { ok: true, revoked: r.revoked };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Đăng xuất thất bại' };
+  }
+}
+
 /** Đổi mật khẩu (chạy server-side nên đọc được cookie httpOnly). */
 export async function changePasswordAction(
   currentPassword: string,

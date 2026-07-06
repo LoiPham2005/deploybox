@@ -26,6 +26,16 @@ export interface TwoFactorChallenge {
   requires2fa: true;
 }
 
+/** 1 phiên đăng nhập (thiết bị) của tài khoản. */
+export interface SessionDto {
+  id: string;
+  userAgent?: string | null;
+  ip?: string | null;
+  createdAt: string;
+  lastSeenAt: string;
+  current: boolean; // phiên đang dùng để xem danh sách này
+}
+
 /** 1 dòng nhật ký hoạt động (Admin xem ai làm gì lúc nào). */
 export interface AuditLogDto {
   id: string;

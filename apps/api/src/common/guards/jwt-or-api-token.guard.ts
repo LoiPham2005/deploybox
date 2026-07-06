@@ -8,6 +8,7 @@ import { JwtService } from '@nestjs/jwt';
 import { createHash } from 'crypto';
 import type { Request } from 'express';
 import { PrismaService } from '../../infra/prisma/prisma.service';
+import { SessionsService } from '../../infra/sessions/sessions.service';
 import type { JwtPayload } from './jwt-auth.guard';
 
 /**
@@ -21,6 +22,7 @@ export class JwtOrApiTokenGuard implements CanActivate {
   constructor(
     private readonly jwt: JwtService,
     private readonly prisma: PrismaService,
+    private readonly sessions: SessionsService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -52,12 +54,17 @@ export class JwtOrApiTokenGuard implements CanActivate {
     }
 
     // ----- JWT (web app) -----
+    let payload: JwtPayload;
     try {
-      const payload = await this.jwt.verifyAsync<JwtPayload>(raw);
-      (req as Request & { user: JwtPayload }).user = payload;
-      return true;
+      payload = await this.jwt.verifyAsync<JwtPayload>(raw);
     } catch {
       throw new UnauthorizedException('Token không hợp lệ hoặc đã hết hạn');
     }
+    // Phiên bị "Đăng xuất từ xa" → token chết dù chữ ký còn hạn
+    if (payload.sid && !(await this.sessions.isActive(payload.sid))) {
+      throw new UnauthorizedException('Phiên đã bị đăng xuất — hãy đăng nhập lại');
+    }
+    (req as Request & { user: JwtPayload }).user = payload;
+    return true;
   }
 }

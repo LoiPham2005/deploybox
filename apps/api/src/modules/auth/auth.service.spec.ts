@@ -23,6 +23,8 @@ async function userRow(password: string, name: string | null = null) {
 const mailStub = { isConfigured: () => false } as never;
 // FeatureFlags stub: mặc định mọi flag bật (signup_enabled…)
 const flagsStub = { isEnabled: () => true } as never;
+// Sessions stub: login/register tạo phiên → trả sid cố định
+const sessionsStub = { create: async () => ({ id: 'sid1' }) } as never;
 
 describe('AuthService', () => {
   it('login: sai mật khẩu → Unauthorized', async () => {
@@ -30,7 +32,7 @@ describe('AuthService', () => {
       user: { findUnique: vi.fn().mockResolvedValue(await userRow('correct')) },
     };
     const jwt = { sign: vi.fn().mockReturnValue('token') };
-    const svc = new AuthService(prisma as never, jwt as never, { get: () => '' } as never, mailStub, flagsStub);
+    const svc = new AuthService(prisma as never, jwt as never, { get: () => '' } as never, mailStub, flagsStub, sessionsStub);
     await expect(
       svc.login({ email: 'a@b.com', password: 'wrong' }),
     ).rejects.toBeInstanceOf(UnauthorizedException);
@@ -43,10 +45,20 @@ describe('AuthService', () => {
       },
     };
     const jwt = { sign: vi.fn().mockReturnValue('token123') };
-    const svc = new AuthService(prisma as never, jwt as never, { get: () => '' } as never, mailStub, flagsStub);
+    const svc = new AuthService(prisma as never, jwt as never, { get: () => '' } as never, mailStub, flagsStub, sessionsStub);
     const r = await svc.login({ email: 'a@b.com', password: 'correct' });
     expect(r.accessToken).toBe('token123');
     expect(r.user.email).toBe('a@b.com');
+  });
+
+  it('login: token cấp ra gắn sid phiên (để đăng xuất từ xa được)', async () => {
+    const prisma = {
+      user: { findUnique: vi.fn().mockResolvedValue(await userRow('correct')) },
+    };
+    const jwt = { sign: vi.fn().mockReturnValue('tok') };
+    const svc = new AuthService(prisma as never, jwt as never, { get: () => '' } as never, mailStub, flagsStub, sessionsStub);
+    await svc.login({ email: 'a@b.com', password: 'correct' });
+    expect(jwt.sign).toHaveBeenCalledWith(expect.objectContaining({ sid: 'sid1' }));
   });
 
   it('register: email đã tồn tại → Conflict', async () => {
@@ -54,7 +66,7 @@ describe('AuthService', () => {
       user: { findUnique: vi.fn().mockResolvedValue({ id: 'existing' }) },
     };
     const jwt = { sign: vi.fn() };
-    const svc = new AuthService(prisma as never, jwt as never, { get: () => '' } as never, mailStub, flagsStub);
+    const svc = new AuthService(prisma as never, jwt as never, { get: () => '' } as never, mailStub, flagsStub, sessionsStub);
     await expect(
       svc.register({ email: 'a@b.com', password: 'longpassword' }),
     ).rejects.toBeInstanceOf(ConflictException);
@@ -70,6 +82,7 @@ describe('AuthService', () => {
       config as never,
       mailStub,
       flagsStub,
+      sessionsStub,
     );
     await expect(
       svc.register({
@@ -97,7 +110,7 @@ describe('AuthService', () => {
       send: vi.fn().mockResolvedValue(undefined),
       otpHtml: vi.fn().mockReturnValue('<html>'),
     } as never;
-    const svc = new AuthService(prisma as never, jwt as never, { get: () => '' } as never, mail2fa, flagsStub);
+    const svc = new AuthService(prisma as never, jwt as never, { get: () => '' } as never, mail2fa, flagsStub, sessionsStub);
     const r = await svc.login({ email: 'a@b.com', password: 'correct' });
     expect(r).toEqual({ requires2fa: true });
     expect(prisma.emailOtp.upsert).toHaveBeenCalledOnce(); // đã phát OTP
@@ -118,7 +131,7 @@ describe('AuthService', () => {
       },
     };
     const jwt = { sign: vi.fn().mockReturnValue('token2fa') };
-    const svc = new AuthService(prisma as never, jwt as never, { get: () => '' } as never, mailStub, flagsStub);
+    const svc = new AuthService(prisma as never, jwt as never, { get: () => '' } as never, mailStub, flagsStub, sessionsStub);
     const r = await svc.verifyLoginOtp({ email: 'a@b.com', code: '123456' });
     expect(r.accessToken).toBe('token2fa');
     expect(prisma.emailOtp.delete).toHaveBeenCalled(); // mã dùng 1 lần
@@ -135,6 +148,7 @@ describe('AuthService', () => {
       config as never,
       mailStub,
       flagsOff,
+      sessionsStub,
     );
     await expect(
       svc.register({

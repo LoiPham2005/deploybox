@@ -1,6 +1,19 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Res, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Req,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
-import type { Response } from 'express';
+import { JwtService } from '@nestjs/jwt';
+import type { Request, Response } from 'express';
 import {
   changePasswordSchema,
   createTokenSchema,
@@ -23,23 +36,42 @@ import {
   type VerifyLoginOtpDto,
   type VerifyRegisterDto,
 } from '@deploybox/shared';
-import { AuthService } from './auth.service';
+import { AuthService, type LoginMeta } from './auth.service';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import {
   JwtAuthGuard,
   type JwtPayload,
 } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { SessionsService } from '../../infra/sessions/sessions.service';
+import { FeatureFlagsService } from '../../infra/feature-flags/feature-flags.service';
+
+/** Rút user-agent + IP thật (sau proxy) từ request — để ghi phiên đăng nhập. */
+function loginMeta(req: Request): LoginMeta {
+  const fwd = req.headers['x-forwarded-for'];
+  return {
+    userAgent: typeof req.headers['user-agent'] === 'string' ? req.headers['user-agent'] : undefined,
+    ip: (typeof fwd === 'string' ? fwd.split(',')[0].trim() : undefined) ?? req.ip,
+  };
+}
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    private readonly sessions: SessionsService,
+    private readonly jwtSvc: JwtService,
+    private readonly flags: FeatureFlagsService,
+  ) {}
 
   @UseGuards(ThrottlerGuard)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('register')
-  register(@Body(new ZodValidationPipe(registerSchema)) dto: RegisterDto) {
-    return this.auth.register(dto);
+  register(
+    @Body(new ZodValidationPipe(registerSchema)) dto: RegisterDto,
+    @Req() req: Request,
+  ) {
+    return this.auth.register(dto, loginMeta(req));
   }
 
   /** Đăng ký B1: gửi mã OTP về email (user chưa được tạo). */
@@ -54,8 +86,11 @@ export class AuthController {
   @UseGuards(ThrottlerGuard)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('register/verify')
-  verifyRegister(@Body(new ZodValidationPipe(verifyRegisterSchema)) dto: VerifyRegisterDto) {
-    return this.auth.verifyRegister(dto);
+  verifyRegister(
+    @Body(new ZodValidationPipe(verifyRegisterSchema)) dto: VerifyRegisterDto,
+    @Req() req: Request,
+  ) {
+    return this.auth.verifyRegister(dto, loginMeta(req));
   }
 
   /** Quên mật khẩu B1: gửi mã OTP về email (nếu tồn tại — luôn trả ok). */
@@ -77,16 +112,22 @@ export class AuthController {
   @UseGuards(ThrottlerGuard)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('login')
-  login(@Body(new ZodValidationPipe(loginSchema)) dto: LoginDto) {
-    return this.auth.login(dto);
+  login(
+    @Body(new ZodValidationPipe(loginSchema)) dto: LoginDto,
+    @Req() req: Request,
+  ) {
+    return this.auth.login(dto, loginMeta(req));
   }
 
   /** 2FA bước 2: nhập OTP email sau khi login đúng mật khẩu. */
   @UseGuards(ThrottlerGuard)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('login/verify-otp')
-  verifyLoginOtp(@Body(new ZodValidationPipe(verifyLoginOtpSchema)) dto: VerifyLoginOtpDto) {
-    return this.auth.verifyLoginOtp(dto);
+  verifyLoginOtp(
+    @Body(new ZodValidationPipe(verifyLoginOtpSchema)) dto: VerifyLoginOtpDto,
+    @Req() req: Request,
+  ) {
+    return this.auth.verifyLoginOtp(dto, loginMeta(req));
   }
 
   /** Bật/tắt 2FA cho tài khoản của mình. */
@@ -100,9 +141,53 @@ export class AuthController {
   }
 
   @Post('logout')
-  logout(@Res({ passthrough: true }) res: Response) {
+  async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     res.clearCookie('db_token', { httpOnly: true, sameSite: 'lax', path: '/' });
+    // Best-effort: thu hồi luôn phiên của token này (không bắt buộc token hợp lệ)
+    const auth = req.headers.authorization;
+    if (auth?.startsWith('Bearer ')) {
+      try {
+        const payload = await this.jwtSvc.verifyAsync<JwtPayload>(auth.slice(7));
+        if (payload.sid) await this.sessions.revoke(payload.sub, payload.sid);
+      } catch {
+        /* token hỏng/hết hạn — kệ, logout vẫn ok */
+      }
+    }
     return { ok: true };
+  }
+
+  // ── Phiên đăng nhập: xem thiết bị + đăng xuất từ xa ──
+
+  private assertSessionsOn(): void {
+    if (!this.flags.isEnabled('session_management')) {
+      throw new BadRequestException(
+        'Tính năng "Quản lý phiên đăng nhập" đang tắt (Admin → Tính năng hệ thống).',
+      );
+    }
+  }
+
+  /** Danh sách thiết bị đang đăng nhập tài khoản này. */
+  @UseGuards(JwtAuthGuard)
+  @Get('sessions')
+  listSessions(@CurrentUser() user: JwtPayload) {
+    this.assertSessionsOn();
+    return this.sessions.list(user.sub, user.sid);
+  }
+
+  /** Đăng xuất mọi thiết bị KHÁC (giữ phiên hiện tại). Khai báo TRƯỚC :id. */
+  @UseGuards(JwtAuthGuard)
+  @Delete('sessions/others')
+  revokeOtherSessions(@CurrentUser() user: JwtPayload) {
+    this.assertSessionsOn();
+    return this.sessions.revokeOthers(user.sub, user.sid);
+  }
+
+  /** Đăng xuất 1 thiết bị (phiên của chính mình). */
+  @UseGuards(JwtAuthGuard)
+  @Delete('sessions/:id')
+  revokeSession(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
+    this.assertSessionsOn();
+    return this.sessions.revoke(user.sub, id);
   }
 
   @UseGuards(JwtAuthGuard)

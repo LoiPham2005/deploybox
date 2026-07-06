@@ -26,6 +26,7 @@ import type {
 import { PrismaService } from '../../infra/prisma/prisma.service';
 import { MailService } from '../../infra/mail/mail.service';
 import { FeatureFlagsService } from '../../infra/feature-flags/feature-flags.service';
+import { SessionsService } from '../../infra/sessions/sessions.service';
 
 const OTP_TTL_MS = 10 * 60 * 1000; // mã sống 10 phút
 const OTP_RESEND_MS = 60 * 1000; // 60s mới được gửi lại
@@ -49,6 +50,12 @@ type UserRow = {
   twoFactorEnabled?: boolean;
 };
 
+/** Thông tin thiết bị lúc đăng nhập (controller lấy từ request) — để ghi phiên. */
+export interface LoginMeta {
+  userAgent?: string;
+  ip?: string;
+}
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -57,7 +64,17 @@ export class AuthService {
     private readonly config: ConfigService,
     private readonly mail: MailService,
     private readonly flags: FeatureFlagsService,
+    private readonly sessions: SessionsService,
   ) {}
+
+  /** Cấp token kèm phiên đăng nhập mới (để xem thiết bị + đăng xuất từ xa). */
+  private async issueSession(user: UserRow, meta?: LoginMeta): Promise<AuthResponse> {
+    const session = await this.sessions.create(user.id, meta?.userAgent, meta?.ip);
+    return {
+      user: this.toUserDto(user),
+      accessToken: this.sign(user.id, user.email, session.id),
+    };
+  }
 
   /** Kiểm tra mã mời + email chưa dùng (dùng chung cho register thẳng và register OTP). */
   private async assertCanRegister(dto: RegisterDto): Promise<void> {
@@ -106,7 +123,7 @@ export class AuthService {
     });
   }
 
-  async register(dto: RegisterDto): Promise<AuthResponse> {
+  async register(dto: RegisterDto, meta?: LoginMeta): Promise<AuthResponse> {
     // Server có cấu hình email → bắt buộc đi luồng OTP, chặn đăng ký thẳng (email bừa).
     if (this.mail.isConfigured()) {
       throw new BadRequestException(
@@ -116,10 +133,7 @@ export class AuthService {
     await this.assertCanRegister(dto);
     const passwordHash = await bcrypt.hash(dto.password, 10);
     const user = await this.createUserWithTeam(dto.email, dto.name, passwordHash);
-    return {
-      user: this.toUserDto(user),
-      accessToken: this.sign(user.id, user.email),
-    };
+    return this.issueSession(user, meta);
   }
 
   // ─── OTP qua email ────────────────────────────────────────────────────────
@@ -239,7 +253,7 @@ export class AuthService {
   }
 
   /** B2 đăng ký: OTP đúng → tạo tài khoản thật + đăng nhập luôn. */
-  async verifyRegister(dto: VerifyRegisterDto): Promise<AuthResponse> {
+  async verifyRegister(dto: VerifyRegisterDto, meta?: LoginMeta): Promise<AuthResponse> {
     const row = await this.consumeOtp(dto.email, 'register', dto.code);
     const payload = JSON.parse(row.payload ?? '{}') as {
       name: string | null;
@@ -256,10 +270,7 @@ export class AuthService {
     }
     const user = await this.createUserWithTeam(dto.email, payload.name, payload.passwordHash);
     await this.prisma.emailOtp.delete({ where: { id: row.id } }).catch(() => undefined);
-    return {
-      user: this.toUserDto(user),
-      accessToken: this.sign(user.id, user.email),
-    };
+    return this.issueSession(user, meta);
   }
 
   /** Quên mật khẩu B1: gửi OTP nếu email tồn tại. Luôn trả ok (không lộ email nào có tài khoản). */
@@ -288,7 +299,7 @@ export class AuthService {
     return { ok: true };
   }
 
-  async login(dto: LoginDto): Promise<AuthResponse | TwoFactorChallenge> {
+  async login(dto: LoginDto, meta?: LoginMeta): Promise<AuthResponse | TwoFactorChallenge> {
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email },
     });
@@ -315,22 +326,16 @@ export class AuthService {
       );
       return { requires2fa: true };
     }
-    return {
-      user: this.toUserDto(user),
-      accessToken: this.sign(user.id, user.email),
-    };
+    return this.issueSession(user, meta);
   }
 
   /** 2FA bước 2: OTP đúng → cấp token thật. */
-  async verifyLoginOtp(dto: VerifyLoginOtpDto): Promise<AuthResponse> {
+  async verifyLoginOtp(dto: VerifyLoginOtpDto, meta?: LoginMeta): Promise<AuthResponse> {
     const row = await this.consumeOtp(dto.email, 'login', dto.code);
     const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
     if (!user) throw new UnauthorizedException('Tài khoản không còn tồn tại');
     await this.prisma.emailOtp.delete({ where: { id: row.id } }).catch(() => undefined);
-    return {
-      user: this.toUserDto(user),
-      accessToken: this.sign(user.id, user.email),
-    };
+    return this.issueSession(user, meta);
   }
 
   /** Bật/tắt 2FA cho chính mình (cần đang đăng nhập). */
@@ -427,8 +432,8 @@ export class AuthService {
     return { ok: true };
   }
 
-  private sign(sub: string, email: string): string {
-    return this.jwt.sign({ sub, email });
+  private sign(sub: string, email: string, sid?: string): string {
+    return this.jwt.sign({ sub, email, ...(sid ? { sid } : {}) });
   }
 
   private toUserDto(u: UserRow): UserDto {

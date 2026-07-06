@@ -110,6 +110,22 @@ model User {
   memberships   TeamMember[]
   apiTokens     ApiToken[]
   projectAccess ProjectMember[]
+  sessions      Session[]
+}
+
+// Phiên đăng nhập (JWT nhúng sid) — để xem "thiết bị đang đăng nhập" + đăng xuất từ xa.
+model Session {
+  id         String    @id @default(cuid())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String
+  userAgent  String?
+  ip         String?
+  createdAt  DateTime  @default(now())
+  lastSeenAt DateTime  @default(now())
+  revokedAt  DateTime? // đặt = đăng xuất từ xa; guard từ chối token mang sid này
+
+  @@index([userId])
+  @@index([lastSeenAt])
 }
 
 model Team {

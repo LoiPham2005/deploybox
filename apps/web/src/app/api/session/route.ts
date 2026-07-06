@@ -17,8 +17,18 @@ export async function POST(req: Request) {
   return NextResponse.json({ ok: true });
 }
 
-// Đăng xuất
+// Đăng xuất: thu hồi phiên phía API (best-effort) rồi xoá cookie
 export async function DELETE() {
+  const token = cookies().get(SESSION_COOKIE)?.value;
+  if (token) {
+    const base =
+      (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000') + '/api/v1';
+    await fetch(`${base}/auth/logout`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(3000),
+    }).catch(() => undefined);
+  }
   cookies().delete(SESSION_COOKIE);
   return NextResponse.json({ ok: true });
 }

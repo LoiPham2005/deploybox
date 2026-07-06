@@ -12,6 +12,7 @@ import type {
   ProjectDetailDto,
   ProjectSummary,
   ServerDto,
+  SessionDto,
   TeamMemberDto,
   WebhookEventDto,
 } from '@deploybox/shared';
@@ -63,4 +64,5 @@ export const serverGet = {
     serverApi<PreviewDto[]>(`/projects/${projectId}/previews`),
   servers: (teamId: string) =>
     serverApi<ServerDto[]>(`/teams/${teamId}/servers`),
+  sessions: () => serverApi<SessionDto[]>('/auth/sessions'),
 };
