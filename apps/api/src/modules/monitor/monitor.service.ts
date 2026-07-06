@@ -141,12 +141,29 @@ export class MonitorService implements OnApplicationBootstrap, OnModuleDestroy {
     } else {
       const pid = await this.hostBackend.getPid(this.dataDir(), p.slug);
       if (!pid) return;
-      const out = await execFileAsync('ps', ['-o', 'rss=,%cpu=', '-p', String(pid)])
-        .then((r) => r.stdout.trim())
-        .catch(() => '');
-      const [rssKb, cpu] = out.split(/\s+/).map((x) => parseFloat(x));
-      if (Number.isFinite(rssKb) && rssKb > 0) memMb = rssKb / 1024;
-      if (Number.isFinite(cpu)) cpuPct = cpu;
+      // pidfile là `sh -c` wrapper (~2MB) — app node thật là CON của nó
+      // → cộng cả cây (pid + con trực tiếp) mới ra RAM/CPU thật của app
+      const ps = (args: string[]) =>
+        execFileAsync('ps', args).then((r) => r.stdout).catch(() => '');
+      const [own, kids] = await Promise.all([
+        ps(['-o', 'rss=,%cpu=', '-p', String(pid)]),
+        ps(['-o', 'rss=,%cpu=', '--ppid', String(pid)]), // Linux; máy khác fail thì bỏ qua
+      ]);
+      let rssKb = 0;
+      let cpu = 0;
+      let seen = false;
+      for (const line of `${own}\n${kids}`.split('\n')) {
+        const [r, c] = line.trim().split(/\s+/).map((x) => parseFloat(x));
+        if (Number.isFinite(r) && r > 0) {
+          rssKb += r;
+          seen = true;
+          if (Number.isFinite(c)) cpu += c;
+        }
+      }
+      if (seen) {
+        memMb = rssKb / 1024;
+        cpuPct = Math.round(cpu * 10) / 10;
+      }
     }
     if (memMb == null) return;
     await this.prisma.metricSample.create({
