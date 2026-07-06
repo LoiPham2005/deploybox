@@ -140,7 +140,7 @@ export function TeamMembersManager({
                     <button
                       type="button"
                       onClick={() => setExpanded(isOpen ? null : m.userId)}
-                      className="flex items-center gap-1 rounded-md border border-white/10 px-2 py-1 text-xs text-white/60 hover:border-white/30 hover:text-white"
+                      className="flex items-center gap-1 rounded-md border border-white/[0.06] px-2 py-1 text-xs text-white/60 hover:border-white/30 hover:text-white"
                     >
                       <FolderOpen size={12} />
                       {granted.size === projects.length && projects.length > 0
@@ -166,7 +166,7 @@ export function TeamMembersManager({
 
               {/* Panel phân quyền project */}
               {isOwner && isMemberRole && isOpen && (
-                <div className="mt-3 rounded-lg border border-white/10 bg-white/[0.02] p-3">
+                <div className="mt-3 rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
                   <div className="mb-2 flex items-center justify-between">
                     <p className="text-xs font-medium text-white/60">
                       Project mà thành viên này được xem
@@ -231,7 +231,7 @@ export function TeamMembersManager({
       </ul>
 
       {isOwner && (
-        <div className="border-t border-white/10 pt-4">
+        <div className="border-t border-white/[0.06] pt-4">
           {canInvite ? (
             <>
               <p className="mb-2 text-xs text-white/50">Mời thành viên (phải đăng ký trước)</p>
@@ -253,7 +253,7 @@ export function TeamMembersManager({
               </p>
             </>
           ) : (
-            <div className="rounded-md border border-white/10 bg-white/5 px-4 py-3">
+            <div className="rounded-md border border-white/[0.06] bg-white/5 px-4 py-3">
               <p className="text-sm text-white/60">
                 Nâng cấp Pro để mời thêm thành viên vào team.
               </p>

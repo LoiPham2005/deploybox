@@ -203,7 +203,7 @@ export function EditProjectForm({ project }: { project: ProjectDetailDto }) {
                 type="button"
                 onClick={fetchBranches}
                 disabled={fetchingBranches}
-                className="shrink-0 rounded-md border border-white/10 px-2.5 py-1.5 text-xs text-white/60 hover:border-white/30 hover:text-white disabled:opacity-40"
+                className="shrink-0 rounded-md border border-white/[0.06] px-2.5 py-1.5 text-xs text-white/60 hover:border-white/30 hover:text-white disabled:opacity-40"
               >
                 {fetchingBranches ? '…' : 'Lấy branches'}
               </button>
@@ -260,7 +260,7 @@ export function EditProjectForm({ project }: { project: ProjectDetailDto }) {
             />
           </div>
           {/* Toggle: dùng Docker hay chạy thẳng node trên máy */}
-          <div className="sm:col-span-2 rounded-lg border border-white/10 bg-white/[0.02] p-3">
+          <div className="sm:col-span-2 rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
             <label className="flex items-start gap-2.5 text-sm">
               <input
                 type="checkbox"

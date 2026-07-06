@@ -211,7 +211,7 @@ export default function LoginPage() {
 
       {/* Đăng nhập nhanh (dev) — ĐANG TẮT. Muốn bật lại: đổi false thành true. */}
       {false && (
-        <div className="rounded-xl border border-white/8 bg-white/[0.02] p-3">
+        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3">
           <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-widest text-white/25">
             Đăng nhập nhanh (dev)
           </p>

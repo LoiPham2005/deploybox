@@ -95,7 +95,7 @@ export function ApiTokensManager({ initialTokens }: { initialTokens: ApiTokenDto
         </ul>
       )}
 
-      <div className="border-t border-white/10 pt-4">
+      <div className="border-t border-white/[0.06] pt-4">
         <p className="mb-2 text-xs text-white/50">Tạo token mới</p>
         <div className="flex gap-2">
           <Input

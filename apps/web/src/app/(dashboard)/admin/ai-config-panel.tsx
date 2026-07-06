@@ -57,7 +57,7 @@ export function AiConfigPanel({ config }: { config: AiConfigStatus }) {
             className={`rounded-lg border px-3 py-2 text-left text-sm transition ${
               provider === p.id
                 ? 'border-sky-400/60 bg-sky-500/10'
-                : 'border-white/10 bg-white/[0.03] hover:border-white/20'
+                : 'border-white/[0.06] bg-white/[0.03] hover:border-white/20'
             }`}
           >
             <span className="font-medium text-white/85">{p.label}</span>
@@ -85,7 +85,7 @@ export function AiConfigPanel({ config }: { config: AiConfigStatus }) {
             setSaved(false);
           }}
           placeholder="Nhập tên model…"
-          className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white/85 outline-none focus:border-sky-400/50"
+          className="w-full rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-2 text-sm text-white/85 outline-none focus:border-sky-400/50"
         />
         <datalist id={`ai-models-${provider}`}>
           {current?.suggestedModels.map((m) => (

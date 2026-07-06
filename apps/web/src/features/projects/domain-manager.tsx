@@ -182,7 +182,7 @@ export function DomainManager({
       {error && <p className="text-sm text-red-400">{error}</p>}
 
       {instructions && (
-        <div className="space-y-1 rounded border border-white/10 bg-white/[0.02] p-3 text-xs text-white/60">
+        <div className="space-y-1 rounded border border-white/[0.06] bg-white/[0.02] p-3 text-xs text-white/60">
           <p className="font-medium text-white/80">Trỏ DNS rồi bấm “verify”:</p>
           <p>
             • {instructions.dnsInstructions.type}{' '}

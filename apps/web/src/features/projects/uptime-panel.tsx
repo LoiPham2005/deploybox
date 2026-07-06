@@ -49,7 +49,7 @@ export function UptimePanel({ initial }: { initial: UptimeStatusDto }) {
           {initial.incidents.map((i) => (
             <div
               key={i.id}
-              className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-xs"
+              className="flex items-center justify-between gap-2 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-xs"
             >
               <div className="min-w-0">
                 <span className={i.endedAt ? 'text-white/70' : 'font-medium text-red-400'}>

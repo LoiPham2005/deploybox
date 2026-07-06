@@ -181,7 +181,7 @@ export function EnvManager({
       {vars.length === 0 ? (
         <p className="text-sm text-white/40">Chưa có biến môi trường.</p>
       ) : (
-        <div className="rounded-lg border border-white/8">
+        <div className="rounded-lg border border-white/[0.06]">
           {/* Header: số lượng + thu gọn + Sửa tất cả */}
           <div className="flex items-center justify-between gap-2 px-3 py-2">
             <button
@@ -195,7 +195,7 @@ export function EnvManager({
             <button
               type="button"
               onClick={editAll}
-              className="flex items-center gap-1 rounded-md border border-white/10 px-2 py-1 text-xs text-indigo-400 hover:border-indigo-500/40 hover:text-indigo-300"
+              className="flex items-center gap-1 rounded-md border border-white/[0.06] px-2 py-1 text-xs text-indigo-400 hover:border-indigo-500/40 hover:text-indigo-300"
               title="Đổ tất cả về dạng .env để sửa hàng loạt"
             >
               <Pencil size={12} /> Sửa tất cả (.env)
@@ -204,7 +204,7 @@ export function EnvManager({
 
           {/* Danh sách — cuộn được, chỉ hiện khi mở */}
           {listOpen && (
-          <ul className="max-h-72 space-y-1 overflow-y-auto border-t border-white/8 p-2 text-sm">
+          <ul className="max-h-72 space-y-1 overflow-y-auto border-t border-white/[0.06] p-2 text-sm">
           {vars.map((v) => {
             const isEditing = editKey === v.key;
             return (
@@ -305,7 +305,7 @@ export function EnvManager({
           <Upload size={13} /> Import nhiều biến từ file .env (kéo-thả hoặc dán)
         </button>
       ) : (
-        <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3 space-y-3">
+        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 space-y-3">
           <div className="flex items-center justify-between">
             <p className="flex items-center gap-1.5 text-xs font-semibold text-white/70">
               <FileText size={13} /> Import từ .env
@@ -344,7 +344,7 @@ export function EnvManager({
 
           {/* Nút chọn file thủ công */}
           <div className="flex flex-wrap items-center gap-2">
-            <label className="cursor-pointer rounded-md border border-white/10 px-2.5 py-1.5 text-xs text-white/60 hover:border-white/30 hover:text-white">
+            <label className="cursor-pointer rounded-md border border-white/[0.06] px-2.5 py-1.5 text-xs text-white/60 hover:border-white/30 hover:text-white">
               Chọn file…
               <input
                 type="file"

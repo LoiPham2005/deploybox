@@ -76,8 +76,8 @@ export function CopilotWidget() {
 
       {/* Khung chat */}
       {open && (
-        <div className="fixed bottom-20 right-5 z-40 flex h-[480px] w-[360px] max-w-[calc(100vw-2.5rem)] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#12151c] shadow-2xl shadow-black/50">
-          <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3">
+        <div className="fixed bottom-20 right-5 z-40 flex h-[480px] w-[360px] max-w-[calc(100vw-2.5rem)] flex-col overflow-hidden rounded-2xl border border-white/[0.06] bg-[#12151c] shadow-2xl shadow-black/50">
+          <div className="flex items-center gap-2 border-b border-white/[0.06] px-4 py-3">
             <Bot size={16} className="text-indigo-400" />
             <p className="text-sm font-semibold text-white/85">DeployBox Copilot</p>
           </div>
@@ -136,13 +136,13 @@ export function CopilotWidget() {
               e.preventDefault();
               void send();
             }}
-            className="flex items-center gap-2 border-t border-white/10 p-2.5"
+            className="flex items-center gap-2 border-t border-white/[0.06] p-2.5"
           >
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Hỏi Copilot…"
-              className="min-w-0 flex-1 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white/85 outline-none focus:border-indigo-400/50"
+              className="min-w-0 flex-1 rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-2 text-sm text-white/85 outline-none focus:border-indigo-400/50"
             />
             <button
               type="submit"

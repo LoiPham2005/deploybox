@@ -157,7 +157,7 @@ export function ServersManager({
 
       {/* Add form */}
       {canManage && (
-        <div className="border-t border-white/10 pt-4">
+        <div className="border-t border-white/[0.06] pt-4">
           {!showForm ? (
             <Button variant="ghost" onClick={() => setShowForm(true)} className="text-sm">
               + Thêm server
@@ -177,7 +177,7 @@ export function ServersManager({
                       className={`rounded-full border px-3 py-1 text-xs transition ${
                         type === t
                           ? 'border-indigo-500 bg-indigo-500/20 text-indigo-300'
-                          : 'border-white/10 text-white/50 hover:border-white/30'
+                          : 'border-white/[0.06] text-white/50 hover:border-white/30'
                       }`}
                     >
                       {t === 'LOCAL' ? 'Local (máy này)' : 'Remote (VPS/SSH)'}
@@ -235,7 +235,7 @@ export function ServersManager({
                       placeholder="-----BEGIN OPENSSH PRIVATE KEY-----&#10;..."
                       value={sshKey}
                       onChange={(e) => setSshKey(e.target.value)}
-                      className="w-full rounded-md border border-white/10 bg-white/5 px-3 py-2 font-mono text-xs text-white placeholder-white/20 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      className="w-full rounded-md border border-white/[0.06] bg-white/5 px-3 py-2 font-mono text-xs text-white placeholder-white/20 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                     />
                     <p className="mt-1 text-xs text-white/30">
                       Key sẽ được mã hóa AES-256 trước khi lưu.

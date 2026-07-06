@@ -61,7 +61,7 @@ export function ProjectsGrid({ projects }: { projects: ProjectSummary[] }) {
 
   if (projects.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-white/10 py-20 text-center">
+      <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-white/[0.06] py-20 text-center">
         <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/5">
           <FolderOpen size={22} className="text-white/30" />
         </div>
@@ -89,7 +89,7 @@ export function ProjectsGrid({ projects }: { projects: ProjectSummary[] }) {
             placeholder="Tìm project…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="h-8 w-full rounded-lg border border-white/10 bg-white/5 pl-8 pr-3 text-xs text-white placeholder-white/30 focus:border-white/25 focus:outline-none"
+            className="h-8 w-full rounded-lg border border-white/[0.06] bg-white/5 pl-8 pr-3 text-xs text-white placeholder-white/30 focus:border-white/25 focus:outline-none"
           />
         </div>
 

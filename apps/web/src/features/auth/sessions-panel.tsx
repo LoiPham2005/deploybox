@@ -67,7 +67,7 @@ export function SessionsPanel({ initial }: { initial: SessionDto[] }) {
           {initial.map((s) => (
             <div
               key={s.id}
-              className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.02] p-3 text-sm"
+              className="flex items-center justify-between gap-3 rounded-lg border border-white/[0.06] bg-white/[0.02] p-3 text-sm"
             >
               <div className="min-w-0">
                 <span className="font-medium text-white/85">{deviceLabel(s.userAgent)}</span>

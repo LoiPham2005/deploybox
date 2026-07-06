@@ -62,7 +62,7 @@ export function MetricsCard({ projectId }: { projectId: string }) {
   if (error || stats === null) return null;
 
   return (
-    <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-sm">
+    <div className="rounded-lg border border-white/[0.06] bg-white/5 px-4 py-3 text-sm">
       <div className="flex flex-wrap items-center gap-6">
         <span className="text-white/40">Container</span>
         <div className="flex items-center gap-2">

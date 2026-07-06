@@ -85,7 +85,7 @@ export function DatabasePanel({
           {dbs.map((db) => (
             <div
               key={db.id}
-              className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-white/[0.02] p-3 text-sm"
+              className="flex items-center justify-between gap-2 rounded-lg border border-white/[0.06] bg-white/[0.02] p-3 text-sm"
             >
               <div className="min-w-0">
                 <span className="font-medium text-white/85">{db.name}</span>
@@ -116,7 +116,7 @@ export function DatabasePanel({
       )}
 
       {/* tạo mới */}
-      <form onSubmit={add} className="space-y-2 rounded-lg border border-white/10 p-3">
+      <form onSubmit={add} className="space-y-2 rounded-lg border border-white/[0.06] p-3">
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           <div>
             <Label htmlFor="dbEngine">Loại</Label>
@@ -124,7 +124,7 @@ export function DatabasePanel({
               id="dbEngine"
               value={engine}
               onChange={(e) => setEngine(e.target.value as 'POSTGRES' | 'REDIS')}
-              className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white/85 outline-none focus:border-sky-400/50"
+              className="w-full rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-2 text-sm text-white/85 outline-none focus:border-sky-400/50"
             >
               <option value="POSTGRES">PostgreSQL 16</option>
               <option value="REDIS">Redis 7</option>

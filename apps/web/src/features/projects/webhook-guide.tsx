@@ -22,13 +22,13 @@ function CopyField({ label, value }: { label: string; value: string }) {
     <div>
       <p className="mb-1 text-[11px] font-medium text-white/40">{label}</p>
       <div className="flex items-center gap-2">
-        <code className="flex-1 truncate rounded-md border border-white/10 bg-black/40 px-2.5 py-1.5 text-xs text-white/80">
+        <code className="flex-1 truncate rounded-md border border-white/[0.06] bg-black/40 px-2.5 py-1.5 text-xs text-white/80">
           {value}
         </code>
         <button
           type="button"
           onClick={copy}
-          className="flex shrink-0 items-center gap-1 rounded-md border border-white/10 px-2.5 py-1.5 text-xs text-white/60 hover:border-white/30 hover:text-white"
+          className="flex shrink-0 items-center gap-1 rounded-md border border-white/[0.06] px-2.5 py-1.5 text-xs text-white/60 hover:border-white/30 hover:text-white"
         >
           {copied ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
           {copied ? 'Đã copy' : 'Copy'}
@@ -68,7 +68,7 @@ export function WebhookGuide({
   return (
     <div className="space-y-4">
       {/* URL + Secret dùng chung cho mọi provider */}
-      <div className="space-y-2.5 rounded-lg border border-white/10 bg-white/[0.02] p-3">
+      <div className="space-y-2.5 rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
         <CopyField label="Payload URL" value={webhookUrl} />
         <CopyField label="Secret" value={secret} />
       </div>
@@ -83,7 +83,7 @@ export function WebhookGuide({
             className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
               tab === p.id
                 ? 'border-indigo-500 bg-indigo-500/15 text-indigo-300'
-                : 'border-white/10 text-white/50 hover:border-white/25 hover:text-white/80'
+                : 'border-white/[0.06] text-white/50 hover:border-white/25 hover:text-white/80'
             }`}
           >
             <span>{p.emoji}</span>
@@ -93,7 +93,7 @@ export function WebhookGuide({
       </div>
 
       {/* Hướng dẫn từng bước */}
-      <div className="rounded-lg border border-white/8 bg-white/[0.02] p-3.5">
+      <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3.5">
         {tab === 'github' && (
           <ol className="space-y-2.5">
             <Step n={1}>Mở repo trên GitHub → tab <B>Settings</B></Step>

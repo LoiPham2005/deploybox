@@ -85,7 +85,7 @@ export function AccountForm({ user }: { user: UserDto }) {
         </div>
       </form>
 
-      <div className="border-t border-white/10 pt-4">
+      <div className="border-t border-white/[0.06] pt-4">
         <h3 className="mb-3 text-sm font-medium text-white/70">Đổi mật khẩu</h3>
         <form onSubmit={onChangePassword} className="space-y-3">
           <div>
@@ -118,7 +118,7 @@ export function AccountForm({ user }: { user: UserDto }) {
         </form>
       </div>
 
-      <div className="border-t border-white/10 pt-4">
+      <div className="border-t border-white/[0.06] pt-4">
         <h3 className="mb-1 text-sm font-medium text-white/70">Xác thực 2 lớp (2FA)</h3>
         <p className="mb-3 text-xs text-white/40">
           Bật: sau khi nhập đúng mật khẩu, phải nhập thêm mã OTP gửi về email — ai lấy được mật

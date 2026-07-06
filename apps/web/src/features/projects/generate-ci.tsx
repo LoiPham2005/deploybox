@@ -35,8 +35,8 @@ export function GenerateCi({ projectId }: { projectId: string }) {
       </Button>
       {error && <p className="mt-1 text-xs text-red-400">{error}</p>}
       {yaml && (
-        <div className="mt-2 rounded-lg border border-white/10 bg-black/40">
-          <div className="flex items-center justify-between border-b border-white/10 px-3 py-1.5">
+        <div className="mt-2 rounded-lg border border-white/[0.06] bg-black/40">
+          <div className="flex items-center justify-between border-b border-white/[0.06] px-3 py-1.5">
             <span className="text-[11px] text-white/40">.github/workflows/deploy.yml</span>
             <button type="button" onClick={copy} className="flex items-center gap-1 text-[11px] text-white/50 hover:text-white">
               {copied ? <Check size={12} /> : <Copy size={12} />} {copied ? 'Đã copy' : 'Copy'}

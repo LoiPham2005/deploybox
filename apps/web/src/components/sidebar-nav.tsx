@@ -136,9 +136,9 @@ export function PlanBadge({
   return (
     <Link
       href="/settings/billing"
-      className="group flex items-center gap-2.5 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5 transition-all hover:border-indigo-500/30 hover:bg-indigo-500/5"
+      className="group flex items-center gap-2.5 rounded-xl border border-white/[0.06] bg-white/[0.03] px-3 py-2.5 transition-all hover:border-indigo-500/30 hover:bg-indigo-500/5"
     >
-      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-white/10 bg-white/5">
+      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-white/[0.06] bg-white/5">
         <span className="text-[10px] font-bold text-white/30">F</span>
       </div>
       <div className="min-w-0 flex-1">

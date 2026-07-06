@@ -38,7 +38,7 @@ export function PreviewPanel({
           {initial.map((p) => (
             <div
               key={p.id}
-              className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-white/[0.02] p-3 text-sm"
+              className="flex items-center justify-between gap-2 rounded-lg border border-white/[0.06] bg-white/[0.02] p-3 text-sm"
             >
               <div className="min-w-0">
                 <span className="font-medium text-white/85">PR #{p.prNumber}</span>

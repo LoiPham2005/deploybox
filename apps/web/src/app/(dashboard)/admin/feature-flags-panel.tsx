@@ -114,7 +114,7 @@ export function FeatureFlagsPanel({ features }: { features: Feature[] }) {
 
           {/* Các nút AI con — mờ đi khi tắt nút tổng (trạng thái vẫn giữ) */}
           {aiChildren.length > 0 && (
-            <div className="mt-3 space-y-3 border-l border-white/10 pl-3">
+            <div className="mt-3 space-y-3 border-l border-white/[0.06] pl-3">
               {!masterOn && (
                 <p className="text-[11px] text-amber-300/80">
                   Nút tổng đang TẮT — mọi tính năng AI bên dưới đều không chạy (trạng

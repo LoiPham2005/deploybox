@@ -84,7 +84,7 @@ function ConfirmDialog({
       />
       {/* Panel */}
       <div
-        className="relative w-full max-w-md rounded-2xl border border-white/10 bg-[#12151c] p-5 shadow-2xl shadow-black/50"
+        className="relative w-full max-w-md rounded-2xl border border-white/[0.06] bg-[#12151c] p-5 shadow-2xl shadow-black/50"
         style={{ animation: 'cd-pop .18s ease-out' }}
       >
         <div className="flex items-start gap-3">

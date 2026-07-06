@@ -87,7 +87,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
           <div className="hidden lg:flex items-center gap-2 text-sm text-white/40">
             <span>{currentTeam?.name}</span>
             {currentTeam?.isPersonal && (
-              <span className="rounded-full border border-white/10 px-1.5 py-0.5 text-[10px] text-white/25">
+              <span className="rounded-full border border-white/[0.06] px-1.5 py-0.5 text-[10px] text-white/25">
                 Cá nhân
               </span>
             )}

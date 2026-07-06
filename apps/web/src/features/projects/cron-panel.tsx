@@ -96,7 +96,7 @@ export function CronPanel({
           {jobs.map((j) => (
             <div
               key={j.id}
-              className="rounded-lg border border-white/10 bg-white/[0.02] p-3 text-sm"
+              className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3 text-sm"
             >
               <div className="flex items-center justify-between gap-2">
                 <div className="min-w-0">
@@ -159,7 +159,7 @@ export function CronPanel({
       )}
 
       {/* Thêm mới */}
-      <form onSubmit={add} className="space-y-2 rounded-lg border border-white/10 p-3">
+      <form onSubmit={add} className="space-y-2 rounded-lg border border-white/[0.06] p-3">
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <div>
             <Label htmlFor="cronName">Tên</Label>

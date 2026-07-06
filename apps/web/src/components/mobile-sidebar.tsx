@@ -191,7 +191,7 @@ export function MobileSidebarTrigger({
             <Link
               href="/settings/billing"
               onClick={() => setOpen(false)}
-              className="mb-2 flex items-center gap-2 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2 hover:border-indigo-500/30"
+              className="mb-2 flex items-center gap-2 rounded-xl border border-white/[0.06] bg-white/[0.03] px-3 py-2 hover:border-indigo-500/30"
             >
               <span className="text-xs font-semibold text-white/40">FREE</span>
               <span className="ml-auto text-xs text-indigo-400">Nâng cấp →</span>

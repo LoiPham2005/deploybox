@@ -15,8 +15,8 @@ function CopyBlock({ label, code }: { label: string; code: string }) {
     setTimeout(() => setCopied(false), 1500);
   }
   return (
-    <div className="rounded-lg border border-white/10 bg-black/40">
-      <div className="flex items-center justify-between border-b border-white/8 px-3 py-1.5">
+    <div className="rounded-lg border border-white/[0.06] bg-black/40">
+      <div className="flex items-center justify-between border-b border-white/[0.06] px-3 py-1.5">
         <span className="text-[11px] font-medium text-white/40">{label}</span>
         <button
           type="button"

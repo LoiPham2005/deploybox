@@ -8,7 +8,8 @@ export function Card({
   return (
     <div
       className={cn(
-        'rounded-xl border border-white/10 bg-white/[0.03] p-6',
+        // Viền dịu (không trắng gắt) + nền rất nhẹ — đỡ chói khi lồng nhiều lớp
+        'rounded-xl border border-white/[0.06] bg-white/[0.02] p-6',
         className,
       )}
       {...props}

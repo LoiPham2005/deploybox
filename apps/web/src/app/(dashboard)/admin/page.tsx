@@ -119,7 +119,7 @@ export default async function AdminPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead className="text-white/40">
-                  <tr className="border-b border-white/10 text-left">
+                  <tr className="border-b border-white/[0.06] text-left">
                     <th className="py-1.5 pr-3">Tính năng</th>
                     <th className="py-1.5 pr-3">Model</th>
                     <th className="py-1.5 pr-3 text-right">Lượt</th>
@@ -206,7 +206,7 @@ export default async function AdminPage() {
           <div className="max-h-96 overflow-auto">
             <table className="w-full text-xs">
               <thead className="sticky top-0 bg-[#0b0d12] text-white/40">
-                <tr className="border-b border-white/10 text-left">
+                <tr className="border-b border-white/[0.06] text-left">
                   <th className="py-1.5 pr-3">Lúc</th>
                   <th className="py-1.5 pr-3">Ai</th>
                   <th className="py-1.5 pr-3">Hành động</th>

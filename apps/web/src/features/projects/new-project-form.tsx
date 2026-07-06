@@ -104,6 +104,19 @@ export function NewProjectForm({
   const [loading, setLoading] = useState(false);
   const [templateApplied, setTemplateApplied] = useState<string | null>(null);
   const [fields, setFields] = useState<Record<string, string>>({});
+  // Mobile: chọn định dạng output → tự điền lệnh build + đường dẫn file
+  const [mobileFormat, setMobileFormat] = useState<'apk' | 'aab'>('apk');
+  function pickMobileFormat(fmt: 'apk' | 'aab') {
+    setMobileFormat(fmt);
+    setFields((f) => ({
+      ...f,
+      buildCommand: fmt === 'apk' ? 'flutter build apk --release' : 'flutter build appbundle --release',
+      artifactPath:
+        fmt === 'apk'
+          ? 'build/app/outputs/flutter-apk/app-release.apk'
+          : 'build/app/outputs/bundle/release/app-release.aab',
+    }));
+  }
   const [gitRepoUrl, setGitRepoUrl] = useState('');
   const [gitToken, setGitToken] = useState('');
   const [authMode, setAuthMode] = useState('auto');
@@ -277,7 +290,7 @@ export function NewProjectForm({
               className={`rounded-full border px-3 py-1 text-xs transition ${
                 templateApplied === t.label
                   ? 'border-indigo-500 bg-indigo-500/20 text-indigo-300'
-                  : 'border-white/10 text-white/50 hover:border-white/30 hover:text-white/80'
+                  : 'border-white/[0.06] text-white/50 hover:border-white/30 hover:text-white/80'
               }`}
             >
               {t.label}
@@ -299,10 +312,15 @@ export function NewProjectForm({
           value={type}
           onChange={(e) => setType(e.target.value as ProjectType)}
         >
-          <option value="STATIC">Web tĩnh (React/Vue/Flutter Web…)</option>
-          <option value="BACKEND">Web có backend (Node/Python…)</option>
-          <option value="MOBILE">App mobile (Flutter APK/AAB)</option>
+          <option value="STATIC">🌐 Web tĩnh — build ra HTML/JS (React, Vue, Vite, Next export)</option>
+          <option value="BACKEND">🖥️ Server / SSR — chạy liên tục (API Node/Python, Next.js SSR)</option>
+          <option value="MOBILE">📱 Mobile — build file cài đặt (Flutter APK/AAB)</option>
         </Select>
+        <p className="mt-1 text-xs text-white/40">
+          {type === 'STATIC' && 'Frontend không cần server riêng → chọn loại này (nhẹ, nhanh).'}
+          {type === 'BACKEND' && 'App cần một tiến trình chạy liên tục — kể cả frontend Next.js SSR (vì nó chạy Node).'}
+          {type === 'MOBILE' && 'Không phục vụ web — chỉ build ra file APK/AAB để tải về cài.'}
+        </p>
       </div>
 
       {servers.length > 0 && (
@@ -360,7 +378,7 @@ export function NewProjectForm({
             </div>
             {ghError && <p className="mt-1 text-xs text-red-400">{ghError}</p>}
             {ghRepos && (
-              <div className="mt-2 rounded-lg border border-white/10 bg-white/[0.02] p-2">
+              <div className="mt-2 rounded-lg border border-white/[0.06] bg-white/[0.02] p-2">
                 <Input
                   placeholder="Lọc repo…"
                   value={ghFilter}
@@ -530,7 +548,7 @@ export function NewProjectForm({
                   className={`rounded-full border px-2 py-0.5 text-[10px] font-medium transition ${
                     authMode === m.value
                       ? 'border-indigo-500 bg-indigo-500/20 text-indigo-300'
-                      : 'border-white/10 text-white/35 hover:border-white/25 hover:text-white/60'
+                      : 'border-white/[0.06] text-white/35 hover:border-white/25 hover:text-white/60'
                   }`}
                 >
                   {m.label}
@@ -570,7 +588,7 @@ export function NewProjectForm({
                 className={`group flex items-start gap-2 rounded-lg border px-2.5 py-2 transition ${
                   provider === g.id
                     ? 'border-indigo-500/50 bg-indigo-500/10'
-                    : 'border-white/8 bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.04]'
+                    : 'border-white/[0.06] bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.04]'
                 }`}
               >
                 <span className="mt-0.5 shrink-0 text-sm">{g.emoji}</span>
@@ -630,7 +648,7 @@ export function NewProjectForm({
                   type="button"
                   onClick={fetchBranches}
                   disabled={fetchingBranches}
-                  className="shrink-0 rounded-md border border-white/10 px-2.5 py-1.5 text-xs text-white/60 hover:border-white/30 hover:text-white disabled:opacity-40"
+                  className="shrink-0 rounded-md border border-white/[0.06] px-2.5 py-1.5 text-xs text-white/60 hover:border-white/30 hover:text-white disabled:opacity-40"
                 >
                   {fetchingBranches ? '…' : 'Lấy branches'}
                 </button>
@@ -711,6 +729,36 @@ export function NewProjectForm({
 
       {type === 'MOBILE' && (
         <div className="space-y-3">
+          {/* Chọn định dạng output — tự điền lệnh build + đường dẫn file */}
+          <div>
+            <Label>Định dạng output</Label>
+            <div className="mt-1 flex gap-2">
+              <button
+                type="button"
+                onClick={() => pickMobileFormat('apk')}
+                className={`flex-1 rounded-lg border px-3 py-2 text-left text-xs transition ${
+                  mobileFormat === 'apk'
+                    ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300'
+                    : 'border-white/[0.08] text-white/60 hover:border-white/20'
+                }`}
+              >
+                <div className="font-semibold">📦 APK</div>
+                <div className="mt-0.5 text-[11px] opacity-70">Cài trực tiếp / chia sẻ file</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => pickMobileFormat('aab')}
+                className={`flex-1 rounded-lg border px-3 py-2 text-left text-xs transition ${
+                  mobileFormat === 'aab'
+                    ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300'
+                    : 'border-white/[0.08] text-white/60 hover:border-white/20'
+                }`}
+              >
+                <div className="font-semibold">🏪 AAB</div>
+                <div className="mt-0.5 text-[11px] opacity-70">Đẩy lên Google Play Store</div>
+              </button>
+            </div>
+          </div>
           <div>
             <Label htmlFor="buildCommand">Lệnh build</Label>
             <Input
@@ -721,7 +769,7 @@ export function NewProjectForm({
               onChange={(e) => setFields((f) => ({ ...f, buildCommand: e.target.value }))}
             />
             <p className="mt-1 text-xs text-white/40">
-              Dùng <code>flutter build appbundle --release</code> để tạo AAB lên Play Store
+              Tự điền theo lựa chọn trên — sửa tay nếu cần flavor (vd <code>--flavor prod</code>)
             </p>
           </div>
           <div>

@@ -10,7 +10,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
             <LogoMark size={44} />
           </div>
         </div>
-        <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-6 shadow-2xl">
+        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6 shadow-2xl">
           {children}
         </div>
       </div>

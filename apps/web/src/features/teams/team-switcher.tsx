@@ -41,7 +41,7 @@ export function TeamSwitcher({ teams, currentTeamId }: { teams: TeamDto[]; curre
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
 
           {/* Dropdown */}
-          <div className="absolute left-0 top-full z-50 mt-1.5 w-full min-w-[200px] rounded-xl border border-white/10 bg-zinc-900/95 py-1.5 shadow-2xl backdrop-blur-sm">
+          <div className="absolute left-0 top-full z-50 mt-1.5 w-full min-w-[200px] rounded-xl border border-white/[0.06] bg-zinc-900/95 py-1.5 shadow-2xl backdrop-blur-sm">
             <p className="px-3 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-widest text-white/25">
               Chuyển workspace
             </p>
