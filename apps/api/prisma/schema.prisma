@@ -227,7 +227,7 @@ model Project {
   artifactPath   String?
 
   // Cách chạy BACKEND: true = build Docker (cần Dockerfile); false = chạy node thẳng trên máy
-  useDocker      Boolean      @default(true)
+  useDocker      Boolean      @default(false)
 
   // Preview deploy theo Pull Request
   previewEnabled  Boolean     @default(false) // parent: bật tạo preview cho mỗi PR

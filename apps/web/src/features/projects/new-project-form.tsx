@@ -71,7 +71,10 @@ const TEMPLATES: Array<{
   artifactPath?: string;
 }> = [
   { label: 'React / Vite',      type: 'STATIC',  buildCommand: 'npm run build',           outputDir: 'dist' },
-  { label: 'Next.js',           type: 'STATIC',  buildCommand: 'npm run build && npm run export', outputDir: 'out' },
+  { label: 'Next.js (static export)', type: 'STATIC', buildCommand: 'npm run build && npm run export', outputDir: 'out' },
+  { label: 'Next.js SSR (standalone)', type: 'BACKEND',
+    buildCommand: 'npm run build && cp -r .next/static .next/standalone/.next/ && (cp -r public .next/standalone/ 2>/dev/null || true)',
+    startCommand: 'HOSTNAME=0.0.0.0 node .next/standalone/server.js', internalPort: 3000 },
   { label: 'Vue / Nuxt static', type: 'STATIC',  buildCommand: 'npm run generate',         outputDir: '.output/public' },
   { label: 'Node / Express',    type: 'BACKEND', buildCommand: 'npm run build',           startCommand: 'node dist/index.js', internalPort: 3000 },
   { label: 'Python / FastAPI',  type: 'BACKEND', startCommand: 'uvicorn main:app --host 0.0.0.0 --port 8000', internalPort: 8000 },

@@ -1,6 +1,7 @@
 import { BadRequestException, Body, Controller, Param, Post, UseGuards } from '@nestjs/common';
 import type { AiProjectSuggestion } from '@deploybox/shared';
 import { GitService, type RemoteBranch } from './git.service';
+import { buildRepoHints } from './repo-hints.util';
 import { AiService } from '../../infra/ai/ai.service';
 import { FeatureFlagsService } from '../../infra/feature-flags/feature-flags.service';
 import {
@@ -45,6 +46,7 @@ export class GitController {
       branch: body.branch,
       tree: snapshot.tree,
       files: snapshot.files,
+      hints: buildRepoHints(snapshot.tree, snapshot.files),
     });
     return { ...suggestion, secretWarnings: snapshot.secretWarnings };
   }

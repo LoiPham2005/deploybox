@@ -1,9 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { spawn } from 'child_process';
 import { access, mkdir, readFile, rm, writeFile } from 'fs/promises';
 import { openSync } from 'fs';
 import { join } from 'path';
 import type { BuildLogger } from './host-static.builder';
+import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
+import { autofixStartCommand } from './start-autofix.util';
 
 export interface HostBackendInput {
   deploymentId: string;
@@ -30,6 +32,8 @@ export interface HostBackendInput {
  */
 @Injectable()
 export class HostBackendBuilder {
+  constructor(@Optional() private readonly flags?: FeatureFlagsService) {}
+
   private pidFile(dataDir: string, slug: string): string {
     return join(dataDir, 'run', `${slug}.pid`);
   }
@@ -140,7 +144,15 @@ export class HostBackendBuilder {
   ): Promise<{ pid: number; port: number }> {
     await this.stop(input.dataDir, input.slug, log);
 
-    const startCmd = input.startCommand || 'node dist/main.js';
+    let startCmd = input.startCommand || 'node dist/main.js';
+    // 🔧 Build xuất main.js ra chỗ khác khai báo (vd dist/src/main) → tự dò + sửa
+    if (this.flags?.isEnabled('start_autofix') ?? true) {
+      const fixed = await autofixStartCommand(startCmd, workDir).catch(() => null);
+      if (fixed?.fixed) {
+        startCmd = fixed.cmd;
+        log(`🔧 Tự sửa lệnh chạy: "${fixed.fixed.from}" không tồn tại → "${fixed.fixed.to}" (file thật sau build)`, 'stdout');
+      }
+    }
     log(`$ ${startCmd}  (PORT=${input.internalPort})`, 'stdout');
     const logPath = this.runtimeLog(input.dataDir, input.slug);
     await mkdir(join(input.dataDir, 'runtime-logs'), { recursive: true });

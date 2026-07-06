@@ -21,6 +21,7 @@ import { SshService } from '../../infra/ssh/ssh.service';
 import { EnvService } from '../env/env.service';
 import { buildGitAuthUrl } from '../../common/git-auth.util';
 import { maskSecrets, opsTip } from '../git/secret-scan.util';
+import { lintEnvValues } from './env-lint.util';
 import type { BuildJobData } from './queue.constants';
 
 /**
@@ -59,6 +60,18 @@ export class BuildRunnerService {
     return members
       .map((m) => m.user.telegramChatId)
       .filter((x): x is string => !!x);
+  }
+
+  /** 🔎 Cảnh báo env đáng ngờ (localhost/ngrok/thiếu https) vào build log — không chặn. */
+  private lintEnv(env: Record<string, string>, log: BuildLogger): void {
+    if (!this.flags.isEnabled('env_lint')) return;
+    const warns = lintEnvValues(env);
+    for (const w of warns.slice(0, 8)) {
+      log(`🔎 Env đáng ngờ: ${w.key} — ${w.issue}`, 'stderr');
+    }
+    if (warns.length) {
+      log('   → Sửa ở tab Env rồi Deploy lại nếu đây là nhầm lẫn (env local dán lên production).', 'stderr');
+    }
   }
 
   /**
@@ -210,6 +223,7 @@ export class BuildRunnerService {
           );
         }
         const buildEnv = await this.env.resolveForPhase(project.id, 'build');
+        this.lintEnv(buildEnv, log);
         const { fileName } = await this.mobileBuilder.build(
           {
             deploymentId,
@@ -238,6 +252,7 @@ export class BuildRunnerService {
         });
       } else if (project.type === 'STATIC') {
         const buildEnv = await this.env.resolveForPhase(project.id, 'build');
+        this.lintEnv(buildEnv, log);
         const { releaseDir } = await this.builder.build(
           {
             deploymentId,
@@ -265,6 +280,7 @@ export class BuildRunnerService {
       } else if ((project as any).useDocker === false) {
         // BACKEND chạy thẳng trên host (không Docker)
         const runtimeEnv = await this.env.resolveForPhase(project.id, 'runtime');
+        this.lintEnv(runtimeEnv, log);
         const { pid } = await this.hostBackend.run(
           {
             deploymentId,
@@ -291,6 +307,7 @@ export class BuildRunnerService {
         });
       } else {
         const runtimeEnv = await this.env.resolveForPhase(project.id, 'runtime');
+        this.lintEnv(runtimeEnv, log);
         const { containerId, imageTag } = await this.dockerEngine.build(
           {
             deploymentId,

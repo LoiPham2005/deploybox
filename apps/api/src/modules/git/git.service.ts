@@ -12,6 +12,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import type { ProjectCheckResult } from '@deploybox/shared';
 import { buildGitAuthUrl, type GitAuthMode } from '../../common/git-auth.util';
+import { buildRepoHints } from './repo-hints.util';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
 import { AiService } from '../../infra/ai/ai.service';
@@ -44,8 +45,11 @@ const KEY_FILES = new Set([
   'go.mod', 'composer.json', 'Dockerfile', 'docker-compose.yml',
   'next.config.js', 'next.config.mjs', 'next.config.ts',
   'vite.config.js', 'vite.config.ts', 'nuxt.config.ts',
-  'nest-cli.json', 'angular.json', 'index.html', '.env.example',
+  'nest-cli.json', 'angular.json', 'index.html', '.env.example', '.env.sample',
   'build.gradle', 'build.gradle.kts', // android/app/build.gradle → phát hiện flavor
+  // Đọc thêm để đoán ĐÚNG lệnh build/start (vd NestJS dist/src/main, Next standalone)
+  'tsconfig.json', 'tsconfig.build.json', 'schema.prisma',
+  'svelte.config.js', 'astro.config.mjs', 'remix.config.js', 'Procfile',
 ]);
 const SKIP_DIRS = new Set([
   '.git', 'node_modules', 'dist', 'build', 'out', '.next', '.nuxt',
@@ -96,6 +100,7 @@ export class GitService {
       branch: project.gitBranch,
       tree: snapshot.tree,
       files: snapshot.files,
+      hints: buildRepoHints(snapshot.tree, snapshot.files),
     });
 
     const envKeys = suggestion.envKeys.slice(0, 30);

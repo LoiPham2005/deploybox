@@ -77,6 +77,9 @@ export default async function DeploymentPage({
               <Button>Mở site</Button>
             </a>
           </div>
+          <p className="mt-2 text-[11px] text-white/30">
+            🔒 Subdomain mới cần ~1 phút cấp chứng chỉ HTTPS lần đầu — thấy lỗi SSL thì đợi chút rồi tải lại.
+          </p>
         </Card>
       )}
 

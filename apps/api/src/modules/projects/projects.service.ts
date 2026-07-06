@@ -237,7 +237,8 @@ export class ProjectsService {
         internalPort: dto.internalPort ?? 3000,
         notifyUrl: dto.notifyUrl || null,
         serverId: dto.serverId || null,
-        useDocker: dto.useDocker ?? true,
+        // Mặc định KHÔNG Docker — host-run là chế độ chính của hệ này (user hay quên tắt checkbox)
+        useDocker: dto.useDocker ?? false,
         requiredEnvKeys: dto.requiredEnvKeys ?? [],
         webhookSecret: randomBytes(16).toString('hex'),
         // mỗi project có sẵn một subdomain managed mặc định

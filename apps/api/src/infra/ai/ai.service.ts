@@ -129,6 +129,11 @@ Quy tắc QUAN TRỌNG:
 - Project dùng Prisma → buildCommand phải có "npx prisma generate && " đằng trước.
 - internalPort: tìm trong code/config (main.ts, .env.example PORT…); không rõ thì dùng mặc định framework (Next 3000, NestJS 3000, FastAPI 8000).
 - Next.js KHÔNG có "output: export" → BACKEND (SSR) với startCommand "npm run start" (hoặc "next start").
+- Next.js có "output: standalone" → BACKEND, internalPort 3000, và PHẢI dùng đúng cặp lệnh:
+  buildCommand: npm run build && cp -r .next/static .next/standalone/.next/ && (cp -r public .next/standalone/ 2>/dev/null || true)
+  startCommand: HOSTNAME=0.0.0.0 node .next/standalone/server.js
+- installCommand PHẢI khớp lockfile: pnpm-lock.yaml → pnpm, yarn.lock → yarn, bun.lockb → bun, package-lock.json → npm ci.
+- Nếu có mục "KẾT LUẬN ĐÃ PHÂN TÍCH SẴN" trong input: các dòng đó do code phân tích chắc chắn — ƯU TIÊN TIN chúng hơn suy đoán của bạn khi mâu thuẫn.
 - buildImage (MOBILE): CHỈ dùng image công khai CÓ THẬT trên registry, vd "ghcr.io/cirruslabs/flutter:stable" hoặc "cirrusci/flutter:stable". Không tự bịa tên image.
 - MOBILE có flavor (android/app/build.gradle có productFlavors) → buildCommand kèm --flavor và artifactPath đúng tên file flavor (vd app-prod-release.apk).
 - LUÔN điền framework (tên framework chính) và reason (1–2 câu tiếng Việt) — không để trống.
@@ -142,6 +147,8 @@ export interface AnalyzeRepoInput {
   branch?: string;
   tree: string;
   files: Record<string, string>;
+  /** Kết luận deterministic từ code (lockfile, standalone, NestJS main path…) — AI ưu tiên tin. */
+  hints?: string;
 }
 
 /** Schema cho hỏi đáp tự do (Telegram bot). */
@@ -464,6 +471,9 @@ export class AiService {
       '',
       'NỘI DUNG FILE CHÌA KHÓA:',
       fileBlocks || '(không đọc được file nào)',
+      ...(input.hints
+        ? ['', 'KẾT LUẬN ĐÃ PHÂN TÍCH SẴN (deterministic — ưu tiên tin):', input.hints]
+        : []),
       '',
       'Hãy đề xuất cấu hình deploy theo schema JSON yêu cầu. Nhớ: không dùng placeholder,',
       'chỉ dùng giá trị cụ thể đọc được từ repo.',

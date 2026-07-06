@@ -94,6 +94,20 @@ export const KNOWN_FLAGS: {
     default: true,
   },
   {
+    key: 'env_lint',
+    label: 'Soi env trước deploy',
+    description:
+      'Cảnh báo trong build log khi env trông như dán từ máy dev: URL thiếu https, localhost trong biến public, ngrok/tunnel tạm. Chỉ cảnh báo, không chặn.',
+    default: true,
+  },
+  {
+    key: 'start_autofix',
+    label: 'Tự sửa lệnh chạy sai đường dẫn',
+    description:
+      'App host-run khai "node dist/main" mà build xuất ra dist/src/main.js (hay ngược lại) → tự dò file thật và sửa lệnh, ghi rõ vào log. Tắt: chạy y nguyên lệnh khai.',
+    default: true,
+  },
+  {
     key: 'deploy_hooks',
     label: 'Hook trước/sau deploy',
     description:
