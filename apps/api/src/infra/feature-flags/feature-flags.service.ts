@@ -80,6 +80,13 @@ export const KNOWN_FLAGS: {
     default: true,
   },
   {
+    key: 'signup_require_code',
+    label: 'Bắt buộc mã mời khi đăng ký',
+    description:
+      'Bật: đăng ký phải nhập đúng mã mời (SIGNUP_CODE trong .env). TẮT: ai cũng đăng ký được không cần mã — ⚠️ NGUY HIỂM vì host chạy code không sandbox, người lạ đăng ký xong có thể deploy code tuỳ ý lên VPS. Chỉ tắt khi thật sự muốn mở công khai.',
+    default: true,
+  },
+  {
     key: 'auth_rate_limit',
     label: 'Rate-limit đăng nhập',
     description:

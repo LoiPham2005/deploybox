@@ -137,6 +137,21 @@ describe('AuthService', () => {
     expect(prisma.emailOtp.delete).toHaveBeenCalled(); // mã dùng 1 lần
   });
 
+  it('register: tắt signup_require_code → khỏi cần mã mời (dù SIGNUP_CODE có đặt)', async () => {
+    const prisma = {
+      user: { findUnique: vi.fn().mockResolvedValue(null) },
+      $transaction: vi.fn().mockResolvedValue({ id: 'u9', email: 'a@b.com', name: null, avatarUrl: null, role: 'USER' }),
+    };
+    const jwt = { sign: vi.fn().mockReturnValue('tok') };
+    const config = { get: () => 'SECRET-CODE' }; // .env vẫn có SIGNUP_CODE
+    // Bật mọi flag TRỪ signup_require_code (admin đã tắt bắt buộc mã)
+    const flagsNoCode = { isEnabled: (k: string) => k !== 'signup_require_code' } as never;
+    const svc = new AuthService(prisma as never, jwt as never, config as never, mailStub, flagsNoCode, sessionsStub);
+    // Không truyền signupCode mà vẫn qua được (không ném Forbidden)
+    const r = await svc.register({ email: 'a@b.com', password: 'longpassword' });
+    expect(r.accessToken).toBeDefined();
+  });
+
   it('register: flag signup_enabled TẮT → Forbidden dù mã mời đúng', async () => {
     const prisma = { user: { findUnique: vi.fn() } };
     const jwt = { sign: vi.fn() };

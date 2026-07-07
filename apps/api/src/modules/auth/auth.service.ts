@@ -85,8 +85,14 @@ export class AuthService {
         'Đăng ký tài khoản mới đang tắt (Admin → Tính năng hệ thống).',
       );
     }
+    // Mã mời: chỉ bắt buộc khi có SIGNUP_CODE VÀ admin bật cờ "Bắt buộc mã mời".
+    // Tắt cờ ở Admin = đăng ký khỏi cần mã (mở công khai — tự chịu rủi ro host no-sandbox).
     const required = this.config.get<string>('SIGNUP_CODE', '');
-    if (required && dto.signupCode !== required) {
+    if (
+      required &&
+      this.flags.isEnabled('signup_require_code') &&
+      dto.signupCode !== required
+    ) {
       throw new ForbiddenException(
         'Mã mời không đúng — liên hệ admin để được cấp',
       );
