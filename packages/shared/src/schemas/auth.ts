@@ -1,33 +1,41 @@
 import { z } from 'zod';
 
+// Email dùng chung: bỏ khoảng trắng + chữ thường TRƯỚC khi validate → hết cảnh
+// đăng ký "A@Gmail.com" rồi đăng nhập "a@gmail.com" báo sai mật khẩu.
+const emailField = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .email('Email không hợp lệ');
+
 export const registerSchema = z.object({
-  email: z.string().email(),
+  email: emailField,
   password: z.string().min(8, 'Mật khẩu tối thiểu 8 ký tự'),
-  name: z.string().min(1).max(80).optional(),
+  name: z.string().trim().min(1).max(80).optional(),
   signupCode: z.string().optional(),
 });
 export type RegisterDto = z.infer<typeof registerSchema>;
 
 export const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(1),
+  email: emailField,
+  password: z.string().min(1, 'Nhập mật khẩu'),
 });
 export type LoginDto = z.infer<typeof loginSchema>;
 
 // ── OTP qua email (xác thực đăng ký + quên mật khẩu) ──
 export const verifyRegisterSchema = z.object({
-  email: z.string().email(),
+  email: emailField,
   code: z.string().regex(/^\d{6}$/, 'Mã OTP gồm 6 chữ số'),
 });
 export type VerifyRegisterDto = z.infer<typeof verifyRegisterSchema>;
 
 export const forgotPasswordSchema = z.object({
-  email: z.string().email(),
+  email: emailField,
 });
 export type ForgotPasswordDto = z.infer<typeof forgotPasswordSchema>;
 
 export const resetPasswordSchema = z.object({
-  email: z.string().email(),
+  email: emailField,
   code: z.string().regex(/^\d{6}$/, 'Mã OTP gồm 6 chữ số'),
   newPassword: z.string().min(8, 'Mật khẩu tối thiểu 8 ký tự'),
 });
@@ -35,7 +43,7 @@ export type ResetPasswordDto = z.infer<typeof resetPasswordSchema>;
 
 // ── 2FA: xác thực bước 2 khi đăng nhập (OTP email) ──
 export const verifyLoginOtpSchema = z.object({
-  email: z.string().email(),
+  email: emailField,
   code: z.string().regex(/^\d{6}$/, 'Mã OTP gồm 6 chữ số'),
 });
 export type VerifyLoginOtpDto = z.infer<typeof verifyLoginOtpSchema>;
@@ -62,7 +70,7 @@ export const createTokenSchema = z.object({
 export type CreateTokenDto = z.infer<typeof createTokenSchema>;
 
 export const inviteMemberSchema = z.object({
-  email: z.string().email(),
+  email: emailField,
   role: z.enum(['MEMBER']).default('MEMBER'),
 });
 export type InviteMemberDto = z.infer<typeof inviteMemberSchema>;
