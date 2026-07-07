@@ -146,12 +146,25 @@ export class DeploymentsService {
     this.dispatch({ deploymentId: deployment.id });
   }
 
+  /** Direct mode: nối tiếp các build (1 build/lúc) — tránh nhiều build cùng ăn RAM → OOM app khác. */
+  private buildChain: Promise<void> = Promise.resolve();
+  private queuedBuilds = 0;
+
   private dispatch(data: BuildJobData): void {
     if (this.buildQueue) {
+      // Có Redis → BullMQ tự quản concurrency
       void this.buildQueue.add('build', data, { removeOnComplete: 50, removeOnFail: 50 });
-    } else {
-      setImmediate(() => this.runner.run(data).catch((e) => this.logger.error(e)));
+      return;
     }
+    // Không Redis → hàng đợi trong tiến trình, chạy TUẦN TỰ
+    this.queuedBuilds++;
+    if (this.queuedBuilds > 1) {
+      this.logger.log(`Build đang bận — xếp hàng (còn ${this.queuedBuilds - 1} chờ trước)`);
+    }
+    this.buildChain = this.buildChain
+      .catch(() => undefined) // 1 build lỗi không chặn build sau
+      .then(() => this.runner.run(data).catch((e) => this.logger.error(e)))
+      .finally(() => { this.queuedBuilds--; });
   }
 
   private async enqueue(

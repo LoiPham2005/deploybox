@@ -62,6 +62,36 @@ export class BuildRunnerService {
       .filter((x): x is string => !!x);
   }
 
+  /**
+   * ⏳ Chờ RAM đủ trước khi build nặng (install/build ngốn RAM, dễ OOM app đang chạy trên
+   * VPS nhỏ). Đọc MemAvailable từ /proc/meminfo; dưới ngưỡng thì chờ tối đa ~60s rồi build
+   * dù sao (không kẹt vô hạn). Máy không phải Linux → bỏ qua.
+   */
+  private async waitForRam(log: BuildLogger): Promise<void> {
+    const MIN_MB = 350; // cần ~350MB trống mới yên tâm install/build
+    const readAvailMb = async (): Promise<number | null> => {
+      try {
+        const meminfo = await readFile('/proc/meminfo', 'utf8');
+        const m = meminfo.match(/MemAvailable:\s+(\d+)\s+kB/);
+        return m ? Math.round(parseInt(m[1], 10) / 1024) : null;
+      } catch {
+        return null; // không phải Linux
+      }
+    };
+    const first = await readAvailMb();
+    if (first == null || first >= MIN_MB) return; // đủ hoặc không đo được → build luôn
+    log(`⏳ RAM trống thấp (${first}MB < ${MIN_MB}MB) — chờ tối đa 60s cho RAM hồi trước khi build…`, 'stderr');
+    for (let i = 0; i < 12; i++) {
+      await new Promise((r) => setTimeout(r, 5000));
+      const avail = await readAvailMb();
+      if (avail == null || avail >= MIN_MB) {
+        log(`✓ RAM đã đủ (${avail ?? '?'}MB) — bắt đầu build.`, 'stdout');
+        return;
+      }
+    }
+    log('⚠️ RAM vẫn thấp sau 60s — build tiếp (theo dõi app khác nếu bị chậm).', 'stderr');
+  }
+
   /** 🔎 Cảnh báo env đáng ngờ (localhost/ngrok/thiếu https) vào build log — không chặn. */
   private lintEnv(env: Record<string, string>, log: BuildLogger): void {
     if (!this.flags.isEnabled('env_lint')) return;
@@ -153,6 +183,10 @@ export class BuildRunnerService {
         data: { status: 'BUILDING', startedAt: new Date() },
       });
       log('=== BẮT ĐẦU BUILD ===', 'stdout');
+
+      // ⏳ Chờ RAM đủ (VPS nhỏ) — kèm serialize build ở DeploymentsService = không còn
+      // build chồng nhau ăn hết RAM làm sập app đang chạy.
+      if (!rollbackOf) await this.waitForRam(log);
 
       // 🛡️ Gác lệnh phá dữ liệu: chặn deploy nếu lệnh cấu hình chứa lệnh nguy hiểm.
       // Cố ý dùng → admin tắt flag "Gác lệnh phá dữ liệu" rồi deploy lại.
