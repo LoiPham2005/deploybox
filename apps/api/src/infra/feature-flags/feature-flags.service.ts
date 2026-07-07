@@ -143,6 +143,13 @@ export const KNOWN_FLAGS: {
     default: true,
   },
   {
+    key: 'safe_deploy',
+    label: 'Deploy an toàn (health-gate)',
+    description:
+      'App host-run: chạy thử bản mới ở cổng tạm TRƯỚC; đạt health check mới thay bản cũ. Bản mới hỏng → GIỮ bản cũ đang chạy, app không sập. App cố định cổng (không đọc PORT) tự bỏ qua. Tắt: deploy thẳng như cũ.',
+    default: true,
+  },
+  {
     key: 'deploy_hooks',
     label: 'Hook trước/sau deploy',
     description:

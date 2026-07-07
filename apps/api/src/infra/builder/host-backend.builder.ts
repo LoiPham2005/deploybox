@@ -1,7 +1,7 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { spawn } from 'child_process';
 import { access, mkdir, readFile, rm, writeFile } from 'fs/promises';
-import { openSync } from 'fs';
+import { openSync, closeSync } from 'fs';
 import { join } from 'path';
 import type { BuildLogger } from './host-static.builder';
 import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
@@ -135,15 +135,67 @@ export class HostBackendBuilder {
     return this.spawnApp(workDir, runEnv, input, log);
   }
 
-  /** Stop process cũ rồi spawn lệnh chạy mới (detached) + verify còn sống. */
+  /** Cổng tạm để chạy thử bản mới (blue-green) — lệch xa cổng thật, kẹp trong dải hợp lệ. */
+  private altPort(port: number): number {
+    const alt = port < 45000 ? port + 20000 : port - 20000;
+    return Math.min(64000, Math.max(1024, alt));
+  }
+
+  /** Spawn 1 process detached chạy startCmd (ghi log ra logPath). Trả pid. */
+  private launch(workDir: string, env: NodeJS.ProcessEnv, startCmd: string, logPath: string): number {
+    const logFd = openSync(logPath, 'w'); // ghi mới mỗi lần chạy
+    try {
+      const child = spawn('sh', ['-c', startCmd], {
+        cwd: workDir, env, detached: true, stdio: ['ignore', logFd, logFd],
+      });
+      child.unref();
+      if (!child.pid) throw new Error('Không spawn được process chạy app');
+      return child.pid;
+    } finally {
+      closeSync(logFd); // child đã dup fd riêng — đóng bản của parent, tránh rò
+    }
+  }
+
+  /** Kill 1 process (cả group). */
+  private killTree(pid: number): void {
+    try { process.kill(-pid, 'SIGKILL'); }
+    catch { try { process.kill(pid, 'SIGKILL'); } catch { /* đã chết */ } }
+  }
+
+  /**
+   * 🩺 Chạy thử bản mới ở cổng tạm, đợi ~18s:
+   * - process chết → 'unhealthy'
+   * - HTTP < 500 → 'healthy' (app trả lời)
+   * - hết giờ mà còn sống: gặp 5xx → 'unhealthy'; không trả HTTP → 'alive' (chấp nhận — app có thể không phải HTTP)
+   */
+  private async healthProbe(port: number, pid: number): Promise<'healthy' | 'alive' | 'unhealthy'> {
+    let saw5xx = false;
+    for (let i = 0; i < 9; i++) {
+      await new Promise((r) => setTimeout(r, 2000));
+      if (!this.alive(pid)) return 'unhealthy';
+      try {
+        const res = await fetch(`http://127.0.0.1:${port}/`, {
+          signal: AbortSignal.timeout(2500), redirect: 'manual',
+        });
+        if (res.status < 500) return 'healthy';
+        saw5xx = true;
+      } catch { /* chưa trả lời — thử lại */ }
+    }
+    if (!this.alive(pid)) return 'unhealthy';
+    return saw5xx ? 'unhealthy' : 'alive';
+  }
+
+  /**
+   * Deploy bản mới. Mặc định (safe_deploy): chạy thử bản mới ở cổng TẠM trong khi bản cũ
+   * vẫn phục vụ; đạt health check mới dừng cũ + chạy bản mới ở cổng thật. Bản mới hỏng →
+   * GIỮ bản cũ, app không sập. App cố định cổng (đụng cổng cũ) → tự bỏ qua, deploy thẳng.
+   */
   private async spawnApp(
     workDir: string,
     runEnv: NodeJS.ProcessEnv,
     input: Pick<HostBackendInput, 'slug' | 'startCommand' | 'internalPort' | 'dataDir'>,
     log: BuildLogger,
   ): Promise<{ pid: number; port: number }> {
-    await this.stop(input.dataDir, input.slug, log);
-
     let startCmd = input.startCommand || 'node dist/main.js';
     // 🔧 Build xuất main.js ra chỗ khác khai báo (vd dist/src/main) → tự dò + sửa
     if (this.flags?.isEnabled('start_autofix') ?? true) {
@@ -153,37 +205,54 @@ export class HostBackendBuilder {
         log(`🔧 Tự sửa lệnh chạy: "${fixed.fixed.from}" không tồn tại → "${fixed.fixed.to}" (file thật sau build)`, 'stdout');
       }
     }
-    log(`$ ${startCmd}  (PORT=${input.internalPort})`, 'stdout');
-    const logPath = this.runtimeLog(input.dataDir, input.slug);
     await mkdir(join(input.dataDir, 'runtime-logs'), { recursive: true });
     await mkdir(join(input.dataDir, 'run'), { recursive: true });
-    const logFd = openSync(logPath, 'w'); // ghi mới mỗi lần chạy — không lẫn log cũ
 
-    const child = spawn('sh', ['-c', startCmd], {
-      cwd: workDir,
-      env: runEnv,
-      detached: true,
-      stdio: ['ignore', logFd, logFd],
-    });
-    child.unref();
-    if (!child.pid) throw new Error('Không spawn được process chạy app');
-    await writeFile(this.pidFile(input.dataDir, input.slug), String(child.pid));
+    // 🩺 Health-gate: có bản cũ đang chạy + cờ bật → thử bản mới ở cổng tạm trước
+    const gate = this.flags?.isEnabled('safe_deploy') ?? true;
+    if (gate && (await this.isRunning(input.dataDir, input.slug))) {
+      const tempPort = this.altPort(input.internalPort);
+      const candLog = this.runtimeLog(input.dataDir, input.slug) + '.candidate';
+      log(`🩺 Health-gate: chạy thử bản mới ở cổng tạm ${tempPort} (bản cũ vẫn phục vụ)…`, 'stdout');
+      const candPid = this.launch(workDir, { ...runEnv, PORT: String(tempPort) }, startCmd, candLog);
+      const verdict = await this.healthProbe(tempPort, candPid);
+      this.killTree(candPid); // dọn bản thử dù đạt hay không
+      await new Promise((r) => setTimeout(r, 500)); // cho cổng tạm giải phóng
+      if (verdict === 'unhealthy') {
+        const errLog = await readFile(candLog, 'utf8').catch(() => '');
+        if (/eaddrinuse|address already in use|listen eacces/i.test(errLog)) {
+          // App cố định cổng (không đọc PORT env) → không thử ở cổng tạm được → deploy thẳng
+          log('⚠️ App có vẻ cố định cổng (không theo PORT env) → bỏ health-gate, deploy trực tiếp.', 'stderr');
+        } else {
+          const tail = errLog.split('\n')
+            .filter((l) => /error|exception|validation|cannot find|eaddr|listen/i.test(l))
+            .slice(-6).join('\n') || errLog.slice(-800);
+          throw new Error(`Bản mới KHÔNG lên được (health check thất bại) — GIỮ bản cũ đang chạy, app không sập.\n${tail}`);
+        }
+      } else {
+        log(`✓ Bản mới ${verdict === 'healthy' ? 'trả lời OK' : 'khởi động ổn'} — chuyển sang bản mới…`, 'stdout');
+      }
+    }
+
+    // Commit: dừng bản cũ → chạy bản mới ở cổng thật
+    await this.stop(input.dataDir, input.slug, log);
+    log(`$ ${startCmd}  (PORT=${input.internalPort})`, 'stdout');
+    const logPath = this.runtimeLog(input.dataDir, input.slug);
+    const pid = this.launch(workDir, runEnv, startCmd, logPath);
+    await writeFile(this.pidFile(input.dataDir, input.slug), String(pid));
 
     // Đợi 2.5s rồi kiểm tra process còn sống
     await new Promise((r) => setTimeout(r, 2500));
-    if (!this.alive(child.pid)) {
+    if (!this.alive(pid)) {
       const full = await readFile(logPath, 'utf8').catch(() => '');
-      // Ưu tiên hiện dòng lỗi thật (Error/Exception/validation) thay vì cuối stack trace
-      const errLines = full
-        .split('\n')
+      const errLines = full.split('\n')
         .filter((l) => /error|exception|validation|cannot find|econnrefused|listen eaddr/i.test(l))
-        .slice(-6)
-        .join('\n');
+        .slice(-6).join('\n');
       const detail = errLines || full.slice(-1000);
       throw new Error(`App tắt ngay sau khi chạy. Lỗi:\n${detail}`);
     }
-    log(`App đang chạy ở port ${input.internalPort} (PID ${child.pid})`, 'stdout');
-    return { pid: child.pid, port: input.internalPort };
+    log(`App đang chạy ở port ${input.internalPort} (PID ${pid})`, 'stdout');
+    return { pid, port: input.internalPort };
   }
 
   /** Process host-run của slug có đang chạy không (đọc PID file + kiểm tra alive). */
