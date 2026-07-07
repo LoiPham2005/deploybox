@@ -295,6 +295,7 @@ export class BuildRunnerService {
             repoUrlDisplay: project.gitRepoUrl!,
             branch: project.gitBranch,
             rootDir: project.rootDir,
+            installCommand: project.installCommand,
             buildCommand: project.buildCommand,
             outputDir: project.outputDir,
             env: buildEnv,

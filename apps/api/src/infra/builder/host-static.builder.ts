@@ -12,6 +12,7 @@ export interface StaticBuildInput {
   repoUrlDisplay?: string;
   branch: string;
   rootDir: string;
+  installCommand?: string | null;
   buildCommand?: string | null;
   outputDir?: string | null;
   env?: Record<string, string>;
@@ -52,9 +53,14 @@ export class HostStaticBuilder {
 
     if (input.buildCommand) {
       if (await this.exists(join(appDir, 'package.json'))) {
-        const installCmd = (await this.exists(join(appDir, 'package-lock.json')))
-          ? 'npm ci'
-          : 'npm install';
+        // --include=dev BẮT BUỘC: Vite/CRA/Vue để vite/typescript/plugin trong
+        // devDependencies; process DeployBox chạy NODE_ENV=production nên npm sẽ
+        // bỏ devDeps → "vite: not found". Cờ này ép cài cả devDeps.
+        const installCmd =
+          input.installCommand ||
+          ((await this.exists(join(appDir, 'package-lock.json')))
+            ? 'npm ci --include=dev'
+            : 'npm install --include=dev');
         log(`$ ${installCmd}`, 'stdout');
         await this.run('sh', ['-c', installCmd], appDir, log, buildEnv, input.signal);
       }
