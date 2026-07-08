@@ -162,9 +162,18 @@ export class HostRunReconcilerService
     // Chỉ xét phần MỚI ghi thêm; nếu quá lớn thì lấy 64KB cuối
     const start = buf.length - prev > 64_000 ? buf.length - 64_000 : prev;
     const fresh = buf.subarray(start).toString('utf8');
+    // Bỏ qua log request 4xx (404/401/403…) + "Cannot GET /" — đây là lỗi phía
+    // CLIENT (sai URL / chưa đăng nhập), KHÔNG phải app crash. Nếu không loại, mấy
+    // dòng 404 chứa chữ "error" trong JSON sẽ làm cảnh báo sớm kêu oan.
+    // App hỏng THẬT là 5xx / exception / stack trace → vẫn bắt.
+    const isClient4xx = (l: string): boolean =>
+      /\b4\d\d\b/.test(l) ||
+      /Cannot (GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\b/i.test(l);
     const errLines = fresh
       .split('\n')
-      .filter((l) => /\b(error|exception|fatal|unhandled)\b/i.test(l));
+      .filter(
+        (l) => /\b(error|exception|fatal|unhandled)\b/i.test(l) && !isClient4xx(l),
+      );
     if (errLines.length < 8) return;
 
     const now = Date.now();
