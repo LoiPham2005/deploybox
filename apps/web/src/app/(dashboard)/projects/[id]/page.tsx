@@ -4,6 +4,7 @@ import type { ProjectDetailDto } from '@deploybox/shared';
 import { serverGet } from '@/lib/api-server';
 import { Card } from '@/components/ui/card';
 import { StatusBadge } from '@/components/ui/status-badge';
+import { Tabs, type TabItem } from '@/components/ui/tabs';
 import { DeleteProjectButton } from '@/features/projects/delete-project-button';
 import { DeployButton } from '@/features/deployments/deploy-button';
 import { EnvManager } from '@/features/projects/env-manager';
@@ -72,39 +73,9 @@ export default async function ProjectDetailPage({
     : 'Thêm Git repo URL trước khi deploy';
   const isSleeping = project.deployments[0]?.status === 'SLEEPING';
 
-  return (
+  // ─── TAB: Tổng quan ─────────────────────────────────────────────────────
+  const overviewTab = (
     <div className="space-y-6">
-      <div>
-        <Link
-          href="/dashboard"
-          className="text-sm text-white/50 hover:underline"
-        >
-          ← Projects
-        </Link>
-        <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-          <div>
-            <h1 className="text-xl font-semibold">{project.name}</h1>
-            <p className="mt-1 text-sm text-white/40">
-              {primary ? `https://${primary.hostname}` : project.slug}
-            </p>
-          </div>
-          <DeployButton
-            projectId={project.id}
-            disabled={!deployable}
-            hint={deployHint}
-          />
-        </div>
-      </div>
-
-      {isSleeping && (
-        <div className="rounded-md border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm text-blue-300">
-          <span className="font-medium">Project đang ngủ (SLEEPING).</span>{' '}
-          Gửi bất kỳ request HTTP nào tới URL của project để tự động wake up.
-        </div>
-      )}
-
-      {latestRunning && <MetricsCard projectId={project.id} />}
-
       <Card>
         <h2 className="mb-3 text-sm font-semibold text-white/70">Cấu hình</h2>
         <dl className="grid grid-cols-1 gap-x-8 sm:grid-cols-2">
@@ -129,6 +100,9 @@ export default async function ProjectDetailPage({
             </>
           )}
         </dl>
+        <p className="mt-3 text-xs text-white/30">
+          Sửa các giá trị này ở tab <span className="text-white/50">Cấu hình</span>.
+        </p>
       </Card>
 
       <Card className="border-sky-500/15">
@@ -139,30 +113,6 @@ export default async function ProjectDetailPage({
           hasRepo={!!project.gitRepoUrl}
         />
         <OpsAdvice projectId={project.id} />
-      </Card>
-
-      <Card>
-        <h2 className="mb-3 text-sm font-semibold text-white/70">Domains</h2>
-        <DomainManager projectId={project.id} domains={project.domains} />
-      </Card>
-
-      <Card>
-        <h2 className="mb-3 text-sm font-semibold text-white/70">
-          Webhook — tự deploy khi git push
-        </h2>
-        <WebhookGuide
-          webhookUrl={project.webhookUrl}
-          webhookSecret={project.webhookSecret ?? null}
-          gitBranch={project.gitBranch}
-        />
-      </Card>
-
-      <Card>
-        <h2 className="mb-3 text-sm font-semibold text-white/70">
-          Deploy qua API / CI-CD
-        </h2>
-        <DeployApiSnippet projectId={project.id} />
-        <GenerateCi projectId={project.id} />
       </Card>
 
       <Card>
@@ -224,63 +174,39 @@ export default async function ProjectDetailPage({
           </ul>
         )}
       </Card>
+    </div>
+  );
 
-      <Card>
-        <h2 className="mb-3 text-sm font-semibold text-white/70">Webhook history</h2>
-        <WebhookHistory events={webhookEvents} />
-      </Card>
-
-      <Card>
-        <h2 className="mb-3 text-sm font-semibold text-white/70">
-          Biến môi trường
-        </h2>
-        <EnvManager projectId={project.id} vars={env} />
-      </Card>
-
-      {project.type === 'BACKEND' && (
+  // ─── TAB: Giám sát (chỉ BACKEND) ────────────────────────────────────────
+  const monitorTab =
+    project.type === 'BACKEND' ? (
+      <div className="space-y-6">
         <Card>
           <h2 className="mb-3 text-sm font-semibold text-white/70">
             📈 CPU / RAM theo thời gian
           </h2>
           <MetricsHistory projectId={project.id} initial={metricsHistory} />
         </Card>
-      )}
+        {uptime && (
+          <Card>
+            <h2 className="mb-3 text-sm font-semibold text-white/70">
+              Canh app (uptime)
+            </h2>
+            <UptimePanel initial={uptime} />
+          </Card>
+        )}
+      </div>
+    ) : null;
 
-      {project.type === 'BACKEND' && uptime && (
-        <Card>
-          <h2 className="mb-3 text-sm font-semibold text-white/70">
-            Canh app (uptime)
-          </h2>
-          <UptimePanel initial={uptime} />
-        </Card>
-      )}
-
-      {project.type === 'BACKEND' && (
-        <Card>
-          <h2 className="mb-3 text-sm font-semibold text-white/70">
-            Database (1-click)
-          </h2>
-          <DatabasePanel projectId={project.id} initial={databases} />
-        </Card>
-      )}
-
-      {project.type === 'BACKEND' && (
-        <Card>
-          <h2 className="mb-3 text-sm font-semibold text-white/70">
-            Cron — chạy lệnh định kỳ
-          </h2>
-          <CronPanel projectId={project.id} initial={cron} />
-        </Card>
-      )}
-
-      {project.type !== 'MOBILE' && (
-        <Card>
-          <h2 className="mb-3 text-sm font-semibold text-white/70">
-            Preview mỗi Pull Request
-          </h2>
-          <PreviewPanel enabled={project.previewEnabled} initial={previews} />
-        </Card>
-      )}
+  // ─── TAB: Cấu hình ──────────────────────────────────────────────────────
+  const configTab = (
+    <div className="space-y-6">
+      <Card>
+        <h2 className="mb-3 text-sm font-semibold text-white/70">
+          Biến môi trường
+        </h2>
+        <EnvManager projectId={project.id} vars={env} />
+      </Card>
 
       <Card>
         <h2 className="mb-3 text-sm font-semibold text-white/70">
@@ -295,6 +221,114 @@ export default async function ProjectDetailPage({
         </h2>
         <DeleteProjectButton projectId={project.id} />
       </Card>
+    </div>
+  );
+
+  // ─── TAB: Domain & Deploy ───────────────────────────────────────────────
+  const deployTab = (
+    <div className="space-y-6">
+      <Card>
+        <h2 className="mb-3 text-sm font-semibold text-white/70">Domains</h2>
+        <DomainManager projectId={project.id} domains={project.domains} />
+      </Card>
+
+      <Card>
+        <h2 className="mb-3 text-sm font-semibold text-white/70">
+          Webhook — tự deploy khi git push
+        </h2>
+        <WebhookGuide
+          webhookUrl={project.webhookUrl}
+          webhookSecret={project.webhookSecret ?? null}
+          gitBranch={project.gitBranch}
+        />
+      </Card>
+
+      <Card>
+        <h2 className="mb-3 text-sm font-semibold text-white/70">
+          Deploy qua API / CI-CD
+        </h2>
+        <DeployApiSnippet projectId={project.id} />
+        <GenerateCi projectId={project.id} />
+      </Card>
+
+      <Card>
+        <h2 className="mb-3 text-sm font-semibold text-white/70">Webhook history</h2>
+        <WebhookHistory events={webhookEvents} />
+      </Card>
+    </div>
+  );
+
+  // ─── TAB: Dịch vụ (Database/Cron: BACKEND · Preview: non-MOBILE) ─────────
+  const servicesTab =
+    project.type !== 'MOBILE' ? (
+      <div className="space-y-6">
+        {project.type === 'BACKEND' && (
+          <Card>
+            <h2 className="mb-3 text-sm font-semibold text-white/70">
+              Database (1-click)
+            </h2>
+            <DatabasePanel projectId={project.id} initial={databases} />
+          </Card>
+        )}
+        {project.type === 'BACKEND' && (
+          <Card>
+            <h2 className="mb-3 text-sm font-semibold text-white/70">
+              Cron — chạy lệnh định kỳ
+            </h2>
+            <CronPanel projectId={project.id} initial={cron} />
+          </Card>
+        )}
+        <Card>
+          <h2 className="mb-3 text-sm font-semibold text-white/70">
+            Preview mỗi Pull Request
+          </h2>
+          <PreviewPanel enabled={project.previewEnabled} initial={previews} />
+        </Card>
+      </div>
+    ) : null;
+
+  const tabs: TabItem[] = [
+    { id: 'overview', label: 'Tổng quan', content: overviewTab },
+    ...(monitorTab ? [{ id: 'monitor', label: 'Giám sát', content: monitorTab }] : []),
+    { id: 'config', label: 'Cấu hình', content: configTab },
+    { id: 'deploy', label: 'Domain & Deploy', content: deployTab },
+    ...(servicesTab ? [{ id: 'services', label: 'Dịch vụ', content: servicesTab }] : []),
+  ];
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <Link
+          href="/dashboard"
+          className="text-sm text-white/50 hover:underline"
+        >
+          ← Projects
+        </Link>
+        <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+          <div>
+            <h1 className="text-xl font-semibold">{project.name}</h1>
+            <p className="mt-1 text-sm text-white/40">
+              {primary ? `https://${primary.hostname}` : project.slug}
+            </p>
+          </div>
+          <DeployButton
+            projectId={project.id}
+            disabled={!deployable}
+            hint={deployHint}
+          />
+        </div>
+      </div>
+
+      {isSleeping && (
+        <div className="rounded-md border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm text-blue-300">
+          <span className="font-medium">Project đang ngủ (SLEEPING).</span>{' '}
+          Gửi bất kỳ request HTTP nào tới URL của project để tự động wake up.
+        </div>
+      )}
+
+      {latestRunning && <MetricsCard projectId={project.id} />}
+
+      <Tabs tabs={tabs} />
     </div>
   );
 }
