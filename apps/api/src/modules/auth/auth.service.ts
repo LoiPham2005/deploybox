@@ -7,8 +7,8 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import * as bcrypt from 'bcryptjs';
 import { randomBytes, randomInt, createHash } from 'crypto';
+import { hashPassword, verifyPassword, needsRehash } from '../../common/password.util';
 import type {
   ApiTokenDto,
   AuthResponse,
@@ -163,7 +163,7 @@ export class AuthService {
       );
     }
     await this.assertCanRegister(dto);
-    const passwordHash = await bcrypt.hash(dto.password, 10);
+    const passwordHash = await hashPassword(dto.password);
     const user = await this.createUserWithTeam(dto.email, dto.name, passwordHash);
     return this.issueSession(user, meta);
   }
@@ -274,7 +274,7 @@ export class AuthService {
   /** B1 đăng ký: kiểm tra thông tin, gửi OTP về email. User CHƯA được tạo. */
   async requestRegisterOtp(dto: RegisterDto): Promise<{ ok: true }> {
     await this.assertCanRegister(dto);
-    const passwordHash = await bcrypt.hash(dto.password, 10);
+    const passwordHash = await hashPassword(dto.password);
     return this.issueOtp(
       dto.email,
       'register',
@@ -325,7 +325,7 @@ export class AuthService {
     if (!user) {
       throw new BadRequestException('Tài khoản không còn tồn tại');
     }
-    const passwordHash = await bcrypt.hash(dto.newPassword, 10);
+    const passwordHash = await hashPassword(dto.newPassword);
     await this.prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
     await this.prisma.emailOtp.delete({ where: { id: row.id } }).catch(() => undefined);
     return { ok: true };
@@ -337,9 +337,22 @@ export class AuthService {
     });
     if (
       !user?.passwordHash ||
-      !(await bcrypt.compare(dto.password, user.passwordHash))
+      !(await verifyPassword(user.passwordHash, dto.password))
     ) {
       throw new UnauthorizedException('Email hoặc mật khẩu không đúng');
+    }
+    // 🔐 Mật khẩu ĐÚNG → nếu hash còn là bcrypt cũ thì nâng cấp lên argon2 ngay,
+    // âm thầm ghi đè DB (migrate dần, không ai phải đặt lại mật khẩu).
+    if (needsRehash(user.passwordHash)) {
+      try {
+        const upgraded = await hashPassword(dto.password);
+        await this.prisma.user.update({
+          where: { id: user.id },
+          data: { passwordHash: upgraded },
+        });
+      } catch {
+        /* không chặn đăng nhập — lần sau nâng cấp tiếp */
+      }
     }
     // 2FA: user bật + flag hệ thống bật + có SMTP → gửi OTP, chưa cấp token vội.
     // (SMTP hỏng thì cho đăng nhập thẳng — không khoá cửa toàn bộ user vì mail chết.)
@@ -419,10 +432,10 @@ export class AuthService {
     newPassword: string,
   ): Promise<{ ok: true }> {
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
-    if (!user.passwordHash || !(await bcrypt.compare(currentPassword, user.passwordHash))) {
+    if (!user.passwordHash || !(await verifyPassword(user.passwordHash, currentPassword))) {
       throw new BadRequestException('Mật khẩu hiện tại không đúng');
     }
-    const passwordHash = await bcrypt.hash(newPassword, 10);
+    const passwordHash = await hashPassword(newPassword);
     await this.prisma.user.update({ where: { id: userId }, data: { passwordHash } });
     return { ok: true };
   }
