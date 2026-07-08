@@ -13,6 +13,41 @@ export type Feature = {
 
 const AI_MASTER = 'ai_features';
 
+// Nhóm các cờ (không-AI) cho dễ nhìn — key nào không map thì rơi vào "Khác".
+const CATEGORY: Record<string, string> = {
+  plan_limits_enabled: 'Tài khoản & bảo mật',
+  signup_enabled: 'Tài khoản & bảo mật',
+  signup_require_code: 'Tài khoản & bảo mật',
+  auth_rate_limit: 'Tài khoản & bảo mật',
+  two_factor_auth: 'Tài khoản & bảo mật',
+  session_management: 'Tài khoản & bảo mật',
+  audit_log: 'Tài khoản & bảo mật',
+  oauth_login: 'Đăng nhập OAuth',
+  oauth_github: 'Đăng nhập OAuth',
+  oauth_gitlab: 'Đăng nhập OAuth',
+  oauth_bitbucket: 'Đăng nhập OAuth',
+  deploy_hooks: 'Tính năng deploy',
+  cron_jobs: 'Tính năng deploy',
+  managed_databases: 'Tính năng deploy',
+  cli_api: 'Tính năng deploy',
+  preview_deploys: 'Tính năng deploy',
+  env_lint: 'Tính năng deploy',
+  start_autofix: 'Tính năng deploy',
+  telegram_notifications: 'Vận hành & giám sát',
+  app_watchdog: 'Vận hành & giám sát',
+  db_backup: 'Vận hành & giám sát',
+  app_uptime_monitor: 'Vận hành & giám sát',
+  metrics_history: 'Vận hành & giám sát',
+  ram_threshold_alert: 'Vận hành & giám sát',
+};
+const CATEGORY_ORDER = [
+  'Tài khoản & bảo mật',
+  'Đăng nhập OAuth',
+  'Tính năng deploy',
+  'Vận hành & giám sát',
+  'Khác',
+];
+
 function Toggle({
   on,
   disabled,
@@ -42,7 +77,14 @@ function Toggle({
   );
 }
 
-export function FeatureFlagsPanel({ features }: { features: Feature[] }) {
+export function FeatureFlagsPanel({
+  features,
+  scope = 'all',
+}: {
+  features: Feature[];
+  /** 'general' = chỉ cờ không-AI (nhóm theo loại); 'ai' = chỉ khối AI; 'all' = cả hai. */
+  scope?: 'all' | 'general' | 'ai';
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [busyKey, setBusyKey] = useState<string | null>(null);
@@ -89,14 +131,29 @@ export function FeatureFlagsPanel({ features }: { features: Feature[] }) {
     </div>
   );
 
+  // Gom cờ general theo nhóm
+  const byCategory = new Map<string, Feature[]>();
+  for (const f of general) {
+    const cat = CATEGORY[f.key] ?? 'Khác';
+    (byCategory.get(cat) ?? byCategory.set(cat, []).get(cat)!).push(f);
+  }
+
   return (
-    <div className="space-y-3">
+    <div className="space-y-5">
       {err && <p className="text-xs text-red-400">{err}</p>}
 
-      {general.map((f) => row(f))}
+      {scope !== 'ai' &&
+        CATEGORY_ORDER.filter((c) => byCategory.has(c)).map((cat) => (
+          <div key={cat} className="space-y-3">
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-white/30">
+              {cat}
+            </p>
+            {byCategory.get(cat)!.map((f) => row(f))}
+          </div>
+        ))}
 
-      {master && (
-        <div className="mt-4 rounded-xl border border-sky-500/20 bg-sky-500/5 p-3">
+      {scope !== 'general' && master && (
+        <div className="rounded-xl border border-sky-500/20 bg-sky-500/5 p-3">
           {/* Nút tổng AI */}
           <div className="flex items-center justify-between gap-4">
             <div>

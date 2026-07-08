@@ -7,6 +7,7 @@ import { Card } from '@/components/ui/card';
 import { PlanToggle } from './plan-toggle';
 import { FeatureFlagsPanel, type Feature } from './feature-flags-panel';
 import { AiConfigPanel } from './ai-config-panel';
+import { AdminTabs } from './admin-tabs';
 
 interface AiUsageSummary {
   days: number;
@@ -56,53 +57,55 @@ export default async function AdminPage() {
     serverApi<AuditLogDto[]>('/admin/audit?limit=50').catch(() => [] as AuditLogDto[]),
   ]);
 
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold">Admin Panel</h1>
-        <p className="mt-1 text-sm text-white/40">Quản lý toàn bộ hệ thống DeployBox</p>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
-        <Card>
-          <p className="text-xs text-white/40">Tổng người dùng</p>
-          <p className="mt-1 text-3xl font-bold">{stats.users}</p>
-        </Card>
-        <Card>
-          <p className="text-xs text-white/40">Teams cá nhân</p>
-          <p className="mt-1 text-3xl font-bold">{stats.teams}</p>
-        </Card>
-        <Card>
-          <p className="text-xs text-white/40">Tổng project</p>
-          <p className="mt-1 text-3xl font-bold">{stats.projects}</p>
-        </Card>
-      </div>
-
-      {/* Tính năng hệ thống */}
+  const statsTab = (
+    <div className="grid grid-cols-3 gap-4">
       <Card>
-        <h2 className="mb-1 text-sm font-semibold text-white/70">Tính năng hệ thống</h2>
+        <p className="text-xs text-white/40">Tổng người dùng</p>
+        <p className="mt-1 text-3xl font-bold">{stats.users}</p>
+      </Card>
+      <Card>
+        <p className="text-xs text-white/40">Teams cá nhân</p>
+        <p className="mt-1 text-3xl font-bold">{stats.teams}</p>
+      </Card>
+      <Card>
+        <p className="text-xs text-white/40">Tổng project</p>
+        <p className="mt-1 text-3xl font-bold">{stats.projects}</p>
+      </Card>
+    </div>
+  );
+
+  const featuresTab = (
+    <Card>
+      <h2 className="mb-1 text-sm font-semibold text-white/70">Tính năng hệ thống</h2>
+      <p className="mb-4 text-xs text-white/40">
+        Bật/tắt tính năng toàn hệ thống (áp dụng cho mọi người dùng) — vd tắt tạm khi bảo trì.
+      </p>
+      <FeatureFlagsPanel features={features} scope="general" />
+    </Card>
+  );
+
+  const aiTab = (
+    <div className="space-y-6">
+      <Card>
+        <h2 className="mb-1 text-sm font-semibold text-white/70">Tính năng AI</h2>
         <p className="mb-4 text-xs text-white/40">
-          Bật/tắt tính năng toàn hệ thống (áp dụng cho mọi người dùng) — vd tắt tạm khi bảo trì.
+          Nút tổng + từng tính năng AI. Tắt nút tổng = tắt hết.
         </p>
-        <FeatureFlagsPanel features={features} />
+        <FeatureFlagsPanel features={features} scope="ai" />
       </Card>
 
-      {/* AI — nhà cung cấp & model */}
       {aiConfig && (
         <Card>
           <h2 className="mb-1 text-sm font-semibold text-white/70">
-            AI — nhà cung cấp &amp; model
+            Nhà cung cấp &amp; model
           </h2>
           <p className="mb-4 text-xs text-white/40">
-            Chọn Claude / ChatGPT / Gemini và model dùng cho tính năng AI (bác sĩ lỗi
-            deploy) trên toàn hệ thống. Đổi lúc nào cũng được.
+            Chọn Claude / ChatGPT / Gemini và model dùng cho tính năng AI trên toàn hệ thống.
           </p>
           <AiConfigPanel config={aiConfig} />
         </Card>
       )}
 
-      {/* 💰 Chi phí AI */}
       {aiUsage && (
         <Card>
           <h2 className="mb-1 text-sm font-semibold text-white/70">
@@ -145,12 +148,14 @@ export default async function AdminPage() {
           )}
         </Card>
       )}
+    </div>
+  );
 
-      {/* Users list */}
-      <Card>
-        <h2 className="mb-4 text-sm font-semibold text-white/70">Danh sách người dùng</h2>
-        <div className="divide-y divide-white/5">
-          {users.map((u) => {
+  const usersTab = (
+    <Card>
+      <h2 className="mb-4 text-sm font-semibold text-white/70">Danh sách người dùng</h2>
+      <div className="divide-y divide-white/5">
+        {users.map((u) => {
             const personalTeam = u.memberships[0]?.team;
             return (
               <div key={u.id} className="flex items-center justify-between gap-4 py-3 text-sm">
@@ -192,10 +197,11 @@ export default async function AdminPage() {
           })}
         </div>
       </Card>
+  );
 
-      {/* 📝 Nhật ký hoạt động */}
-      <Card>
-        <h2 className="mb-1 text-sm font-semibold text-white/70">📝 Nhật ký hoạt động</h2>
+  const auditTab = (
+    <Card>
+      <h2 className="mb-1 text-sm font-semibold text-white/70">📝 Nhật ký hoạt động</h2>
         <p className="mb-3 text-xs text-white/40">
           50 thao tác ghi/sửa/xoá gần nhất của mọi người dùng (không lưu nội dung — không lộ
           secret). Giữ 90 ngày. Tắt/bật ở &quot;Tính năng hệ thống&quot;.
@@ -238,7 +244,24 @@ export default async function AdminPage() {
             </table>
           </div>
         )}
-      </Card>
+    </Card>
+  );
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-xl font-semibold">Admin Panel</h1>
+        <p className="mt-1 text-sm text-white/40">Quản lý toàn bộ hệ thống DeployBox</p>
+      </div>
+      <AdminTabs
+        tabs={[
+          { id: 'overview', label: 'Tổng quan', content: statsTab },
+          { id: 'features', label: 'Tính năng', content: featuresTab },
+          { id: 'ai', label: 'AI', content: aiTab },
+          { id: 'users', label: 'Người dùng', content: usersTab },
+          { id: 'audit', label: 'Nhật ký', content: auditTab },
+        ]}
+      />
     </div>
   );
 }
