@@ -94,6 +94,13 @@ export const KNOWN_FLAGS: {
     default: true,
   },
   {
+    key: 'oom_protect_apps',
+    label: 'Bảo vệ app khỏi OOM khi build',
+    description:
+      'App host-run được hạ điểm OOM (-900) → khi build ngốn RAM làm máy căng, kernel giết tiến trình BUILD trước, không giết app đang chạy. Cần kèm swap đủ. Chỉ có tác dụng trên Linux.',
+    default: true,
+  },
+  {
     key: 'app_watchdog',
     label: 'Watchdog tự cứu app',
     description:

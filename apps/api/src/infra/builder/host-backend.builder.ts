@@ -205,6 +205,13 @@ export class HostBackendBuilder {
         log(`🔧 Tự sửa lệnh chạy: "${fixed.fixed.from}" không tồn tại → "${fixed.fixed.to}" (file thật sau build)`, 'stdout');
       }
     }
+    // 🛡️ Bảo vệ app khỏi OOM-killer: shell tự hạ oom_score_adj rồi fork node →
+    // node THỪA KẾ mức bảo vệ. Khi build ngốn RAM làm máy căng, kernel sẽ giết
+    // tiến trình BUILD (điểm 0) trước, KHÔNG đụng app (điểm -900). 2>/dev/null để
+    // máy không phải Linux / không đủ quyền thì lặng lẽ bỏ qua, app vẫn chạy.
+    if (this.flags?.isEnabled('oom_protect_apps') ?? true) {
+      startCmd = `echo -900 > /proc/self/oom_score_adj 2>/dev/null; ${startCmd}`;
+    }
     await mkdir(join(input.dataDir, 'runtime-logs'), { recursive: true });
     await mkdir(join(input.dataDir, 'run'), { recursive: true });
 
