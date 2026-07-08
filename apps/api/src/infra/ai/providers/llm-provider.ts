@@ -25,7 +25,8 @@ export interface LlmProvider {
   readonly id: AiProviderId;
   readonly label: string;
   readonly suggestedModels: string[];
-  isConfigured(): boolean;
+  /** Có API key hiệu lực chưa (key có thể ở DB do admin nhập hoặc .env). */
+  isConfigured(): Promise<boolean>;
   complete(opts: CompleteOpts): Promise<CompleteResult>;
   /** Gọi kèm ảnh (mọi provider hiện có đều hỗ trợ vision). */
   completeVision(opts: VisionOpts): Promise<CompleteResult>;

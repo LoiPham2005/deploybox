@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { GoogleGenAI } from '@google/genai';
 import type { CompleteOpts, CompleteResult, LlmProvider, VisionOpts } from './llm-provider';
+import { AiKeyService } from '../ai-key.service';
 
 /** Đổi JSON Schema thường → Schema của Gemini (type UPPERCASE, bỏ additionalProperties). */
 function toGeminiSchema(js: Record<string, unknown>): Record<string, unknown> {
@@ -61,25 +61,18 @@ export class GeminiProvider implements LlmProvider {
   readonly id = 'gemini' as const;
   readonly label = 'Gemini';
   readonly suggestedModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-pro'];
-  private client: GoogleGenAI | null = null;
+  constructor(private readonly keys: AiKeyService) {}
 
-  constructor(private readonly config: ConfigService) {}
-
-  private key(): string {
-    return (this.config.get<string>('GEMINI_API_KEY') ?? '').trim();
+  async isConfigured(): Promise<boolean> {
+    return !!(await this.keys.getKey('gemini'));
   }
 
-  isConfigured(): boolean {
-    return !!this.key();
-  }
-
-  private getClient(): GoogleGenAI {
-    if (!this.client) this.client = new GoogleGenAI({ apiKey: this.key() });
-    return this.client;
+  private async getClient(): Promise<GoogleGenAI> {
+    return new GoogleGenAI({ apiKey: await this.keys.getKey('gemini') });
   }
 
   async complete({ model, system, user, schema }: CompleteOpts): Promise<CompleteResult> {
-    const res = await this.getClient().models.generateContent({
+    const res = await (await this.getClient()).models.generateContent({
       model,
       contents: user,
       config: {
@@ -98,7 +91,7 @@ export class GeminiProvider implements LlmProvider {
   }
 
   async completeVision({ model, system, user, schema, imageBase64, imageMime }: VisionOpts): Promise<CompleteResult> {
-    const res = await this.getClient().models.generateContent({
+    const res = await (await this.getClient()).models.generateContent({
       model,
       contents: [{
         role: 'user',

@@ -153,7 +153,8 @@ export interface AiConfigStatus {
   providers: Array<{
     id: AiProviderId;
     label: string; // "Claude", "ChatGPT", "Gemini"
-    configured: boolean; // đã có API key trong .env chưa
+    configured: boolean; // đã có API key hiệu lực chưa (DB hoặc .env)
+    keySource: 'db' | 'env' | 'none'; // key lấy từ đâu (db = admin nhập ở UI)
     suggestedModels: string[]; // gợi ý model (vẫn cho gõ tự do)
   }>;
 }

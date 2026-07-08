@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import type { CompleteOpts, CompleteResult, LlmProvider, VisionOpts } from './llm-provider';
+import { AiKeyService } from '../ai-key.service';
 
 /** ChatGPT (OpenAI) — dùng response_format json_schema (strict). */
 @Injectable()
@@ -9,25 +9,19 @@ export class OpenaiProvider implements LlmProvider {
   readonly id = 'openai' as const;
   readonly label = 'ChatGPT';
   readonly suggestedModels = ['gpt-4o', 'gpt-4o-mini'];
-  private client: OpenAI | null = null;
 
-  constructor(private readonly config: ConfigService) {}
+  constructor(private readonly keys: AiKeyService) {}
 
-  private key(): string {
-    return (this.config.get<string>('OPENAI_API_KEY') ?? '').trim();
+  async isConfigured(): Promise<boolean> {
+    return !!(await this.keys.getKey('openai'));
   }
 
-  isConfigured(): boolean {
-    return !!this.key();
-  }
-
-  private getClient(): OpenAI {
-    if (!this.client) this.client = new OpenAI({ apiKey: this.key() });
-    return this.client;
+  private async getClient(): Promise<OpenAI> {
+    return new OpenAI({ apiKey: await this.keys.getKey('openai') });
   }
 
   async complete({ model, system, user, schema }: CompleteOpts): Promise<CompleteResult> {
-    const res = await this.getClient().chat.completions.create({
+    const res = await (await this.getClient()).chat.completions.create({
       model,
       messages: [
         { role: 'system', content: system },
@@ -48,7 +42,7 @@ export class OpenaiProvider implements LlmProvider {
   }
 
   async completeVision({ model, system, user, schema, imageBase64, imageMime }: VisionOpts): Promise<CompleteResult> {
-    const res = await this.getClient().chat.completions.create({
+    const res = await (await this.getClient()).chat.completions.create({
       model,
       messages: [
         { role: 'system', content: system },

@@ -39,6 +39,23 @@ export async function setAiConfigAction(
   }
 }
 
+/** Đặt/sửa API key cho 1 nhà cung cấp AI (apiKey rỗng = xoá → về .env). */
+export async function setAiKeyAction(
+  provider: string,
+  apiKey: string,
+): Promise<Result> {
+  try {
+    await serverApi('/admin/ai/key', {
+      method: 'PUT',
+      body: JSON.stringify({ provider, apiKey }),
+    });
+    revalidatePath('/admin');
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Lưu API key thất bại' };
+  }
+}
+
 /** Admin bật/tắt 1 tính năng hệ thống. */
 export async function toggleFeatureAction(
   key: string,

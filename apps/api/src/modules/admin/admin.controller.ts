@@ -51,6 +51,12 @@ export class AdminController {
     return this.ai.setConfig(body.provider, body.model);
   }
 
+  /** Admin đặt/sửa API key cho 1 nhà cung cấp (mã hoá, lưu DB). apiKey rỗng = xoá → về .env. */
+  @Put('ai/key')
+  setAiKey(@Body() body: { provider: string; apiKey: string }) {
+    return this.ai.setKey(body.provider, body.apiKey ?? '');
+  }
+
   @Get('features')
   features() {
     return this.flags.list();

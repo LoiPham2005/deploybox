@@ -13,6 +13,7 @@ import { errorSig } from './error-sig.util';
 import { AnthropicProvider } from './providers/anthropic.provider';
 import { OpenaiProvider } from './providers/openai.provider';
 import { GeminiProvider } from './providers/gemini.provider';
+import { AiKeyService } from './ai-key.service';
 
 const CONFIG_FIELDS = [
   'installCommand',
@@ -223,11 +224,22 @@ export class AiService {
     private readonly config: ConfigService,
     private readonly prisma: PrismaService,
     private readonly flags: FeatureFlagsService,
+    private readonly keys: AiKeyService,
     anthropic: AnthropicProvider,
     openai: OpenaiProvider,
     gemini: GeminiProvider,
   ) {
     this.providers = { anthropic, openai, gemini };
+  }
+
+  /** Admin đặt/sửa API key cho 1 nhà cung cấp (mã hoá, lưu DB). '' = xoá → về .env. */
+  async setKey(provider: string, apiKey: string): Promise<AiConfigStatus> {
+    const p = this.normProvider(provider);
+    if (provider !== p) {
+      throw new BadRequestException('Nhà cung cấp AI không hợp lệ');
+    }
+    await this.keys.setKey(p, apiKey ?? '');
+    return this.status();
   }
 
   /** Admin có bật tính năng AI không. */
@@ -315,7 +327,7 @@ export class AiService {
     }
     const cfg = await this.getConfig();
     const provider = this.providers[cfg.provider];
-    if (!provider.isConfigured()) {
+    if (!(await provider.isConfigured())) {
       throw new BadRequestException(
         `Server chưa có API key cho ${provider.label} — admin thêm key hoặc đổi nhà cung cấp.`,
       );
@@ -392,19 +404,21 @@ export class AiService {
   /** Trạng thái cho trang Admin: provider/model đang chọn + danh sách nhà cung cấp. */
   async status(): Promise<AiConfigStatus> {
     const cfg = await this.getConfig();
-    return {
-      provider: cfg.provider,
-      model: cfg.model,
-      providers: (Object.keys(this.providers) as AiProviderId[]).map((id) => {
+    const ids = Object.keys(this.providers) as AiProviderId[];
+    const providers = await Promise.all(
+      ids.map(async (id) => {
         const p = this.providers[id];
+        const source = await this.keys.source(id);
         return {
           id: p.id,
           label: p.label,
-          configured: p.isConfigured(),
+          configured: source !== 'none',
+          keySource: source,
           suggestedModels: p.suggestedModels,
         };
       }),
-    };
+    );
+    return { provider: cfg.provider, model: cfg.model, providers };
   }
 
   /** Chẩn đoán lỗi deploy. Ném lỗi thân thiện nếu tắt / chưa cấu hình / gọi AI thất bại. */
@@ -421,7 +435,7 @@ export class AiService {
 
     const cfg = await this.getConfig();
     const provider = this.providers[cfg.provider];
-    if (!provider.isConfigured()) {
+    if (!(await provider.isConfigured())) {
       throw new BadRequestException(
         `Chưa cấu hình API key cho ${provider.label} trên server. Thêm key vào .env rồi restart, hoặc chọn nhà cung cấp khác ở tab Admin.`,
       );
@@ -454,7 +468,7 @@ export class AiService {
     }
     const cfg = await this.getConfig();
     const provider = this.providers[cfg.provider];
-    if (!provider.isConfigured()) {
+    if (!(await provider.isConfigured())) {
       throw new BadRequestException(
         `Chưa cấu hình API key cho ${provider.label} trên server. Thêm key vào .env rồi restart, hoặc chọn nhà cung cấp khác ở tab Admin.`,
       );
@@ -544,7 +558,7 @@ export class AiService {
     }
     const cfg = await this.getConfig();
     const provider = this.providers[cfg.provider];
-    if (!provider.isConfigured()) {
+    if (!(await provider.isConfigured())) {
       throw new BadRequestException(`Server chưa có API key cho ${provider.label}.`);
     }
     const fileBlocks = Object.entries(input.files)
@@ -600,7 +614,7 @@ export class AiService {
     }
     const cfg = await this.getConfig();
     const provider = this.providers[cfg.provider];
-    if (!provider.isConfigured()) {
+    if (!(await provider.isConfigured())) {
       throw new BadRequestException(
         `Server chưa có API key cho ${provider.label} — admin thêm key hoặc đổi nhà cung cấp.`,
       );
@@ -642,7 +656,7 @@ export class AiService {
     }
     const cfg = await this.getConfig();
     const provider = this.providers[cfg.provider];
-    if (!provider.isConfigured()) {
+    if (!(await provider.isConfigured())) {
       throw new BadRequestException(
         `Server chưa có API key cho ${provider.label} — admin thêm key hoặc đổi nhà cung cấp.`,
       );
