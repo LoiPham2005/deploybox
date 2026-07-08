@@ -8,7 +8,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { randomBytes, randomInt, createHash } from 'crypto';
-import { hashPassword, verifyPassword, needsRehash } from '../../common/password.util';
+import { hashPassword, verifyPassword } from '../../common/password.util';
 import type {
   ApiTokenDto,
   AuthResponse,
@@ -340,19 +340,6 @@ export class AuthService {
       !(await verifyPassword(user.passwordHash, dto.password))
     ) {
       throw new UnauthorizedException('Email hoặc mật khẩu không đúng');
-    }
-    // 🔐 Mật khẩu ĐÚNG → nếu hash còn là bcrypt cũ thì nâng cấp lên argon2 ngay,
-    // âm thầm ghi đè DB (migrate dần, không ai phải đặt lại mật khẩu).
-    if (needsRehash(user.passwordHash)) {
-      try {
-        const upgraded = await hashPassword(dto.password);
-        await this.prisma.user.update({
-          where: { id: user.id },
-          data: { passwordHash: upgraded },
-        });
-      } catch {
-        /* không chặn đăng nhập — lần sau nâng cấp tiếp */
-      }
     }
     // 2FA: user bật + flag hệ thống bật + có SMTP → gửi OTP, chưa cấp token vội.
     // (SMTP hỏng thì cho đăng nhập thẳng — không khoá cửa toàn bộ user vì mail chết.)

@@ -4,9 +4,9 @@ import {
   ForbiddenException,
   UnauthorizedException,
 } from '@nestjs/common';
-import * as bcrypt from 'bcryptjs';
 import { createHash } from 'crypto';
 import { AuthService } from './auth.service';
+import { hashPassword } from '../../common/password.util';
 
 async function userRow(password: string, name: string | null = null) {
   return {
@@ -14,7 +14,7 @@ async function userRow(password: string, name: string | null = null) {
     email: 'a@b.com',
     name,
     avatarUrl: null,
-    passwordHash: await bcrypt.hash(password, 10),
+    passwordHash: await hashPassword(password), // argon2
   };
 }
 

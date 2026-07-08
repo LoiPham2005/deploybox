@@ -1,10 +1,10 @@
 import { PrismaClient } from '../src/generated/prisma';
-import * as bcrypt from 'bcryptjs';
+import { hash as argonHash } from '@node-rs/argon2';
 
 const prisma = new PrismaClient();
 
 async function main() {
-  const passwordHash = await bcrypt.hash('changeme', 10);
+  const passwordHash = await argonHash('changeme'); // argon2id
 
   // ─── 1. OWNER TEST ─────────────────────────────────────────────────────────
   // Có personal team riêng, không phải admin hệ thống
