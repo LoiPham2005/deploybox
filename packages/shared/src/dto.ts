@@ -125,9 +125,18 @@ export interface AuthResponse {
   accessToken: string;
 }
 
+/** Flag mà web owner-facing cần biết — đưa xuống kèm /auth/me. */
+export interface MeFlags {
+  /** Owner (gói FREE) có thấy nút "mua Nâng cấp Pro" không (admin bật/tắt). */
+  billingProUpgrade: boolean;
+  /** Có đang áp giới hạn theo gói không (tắt = mọi thứ không giới hạn, miễn phí). */
+  planLimitsEnabled: boolean;
+}
+
 export interface MeResponse {
   user: UserDto;
   teams: TeamDto[];
+  flags: MeFlags;
 }
 
 export interface ProjectSummary {

@@ -402,6 +402,10 @@ export class AuthService {
         plan: m.team.plan as 'FREE' | 'PRO',
         isPersonal: m.team.isPersonal,
       })),
+      flags: {
+        billingProUpgrade: this.flags.isEnabled('billing_pro_upgrade'),
+        planLimitsEnabled: this.flags.isEnabled('plan_limits_enabled'),
+      },
     };
   }
 

@@ -24,6 +24,9 @@ export function TeamMembersManager({
   myRole,
   initialMembers,
   plan,
+  isAdmin = false,
+  planLimitsEnabled = true,
+  proUpgradeEnabled = true,
   projects,
   initialAccess,
 }: {
@@ -31,6 +34,12 @@ export function TeamMembersManager({
   myRole: 'OWNER' | 'MEMBER';
   initialMembers: TeamMemberDto[];
   plan: TeamDto['plan'];
+  /** Admin hệ thống → không bị giới hạn gói, mời thoải mái. */
+  isAdmin?: boolean;
+  /** Admin đang áp giới hạn theo gói không (tắt = mọi owner mời được). */
+  planLimitsEnabled?: boolean;
+  /** Có cho owner thấy nút mua Nâng cấp Pro không. */
+  proUpgradeEnabled?: boolean;
   projects: ProjectLite[];
   initialAccess: Record<string, string[]>;
 }) {
@@ -51,7 +60,10 @@ export function TeamMembersManager({
   const [savingFor, setSavingFor] = useState<string | null>(null);
 
   const isOwner = myRole === 'OWNER';
-  const canInvite = isOwner && plan === 'PRO';
+  // Admin hệ thống, hoặc admin đã tắt giới hạn gói, hoặc team đã PRO → mời được.
+  const canInvite = isOwner && (isAdmin || !planLimitsEnabled || plan === 'PRO');
+  // Nút mua Pro chỉ hiện khi còn áp giới hạn VÀ admin cho phép mua.
+  const showUpgradeCta = planLimitsEnabled && proUpgradeEnabled;
 
   async function invite() {
     if (!inviteEmail.trim()) return;
@@ -255,14 +267,20 @@ export function TeamMembersManager({
           ) : (
             <div className="rounded-md border border-white/[0.06] bg-white/5 px-4 py-3">
               <p className="text-sm text-white/60">
-                Nâng cấp Pro để mời thêm thành viên vào team.
+                Chỉ gói PRO mới mời thêm được thành viên vào team.
               </p>
-              <a
-                href="/settings/billing"
-                className="mt-1 inline-block text-xs text-indigo-400 hover:underline"
-              >
-                Nâng cấp ngay →
-              </a>
+              {showUpgradeCta ? (
+                <a
+                  href="/settings/billing"
+                  className="mt-1 inline-block text-xs text-indigo-400 hover:underline"
+                >
+                  Nâng cấp Pro ngay →
+                </a>
+              ) : (
+                <p className="mt-1 text-xs text-white/30">
+                  Liên hệ admin để được nâng cấp.
+                </p>
+              )}
             </div>
           )}
           {err && <p className="mt-2 text-xs text-red-400">{err}</p>}

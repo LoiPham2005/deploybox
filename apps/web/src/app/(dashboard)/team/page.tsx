@@ -3,6 +3,7 @@ import { getToken } from '@/lib/auth';
 import { authApi } from '@/lib/api';
 import { serverGet, serverApi } from '@/lib/api-server';
 import { getSelectedTeam } from '@/lib/team';
+import { isAdminRole } from '@deploybox/shared';
 import { Card } from '@/components/ui/card';
 import { TeamMembersManager } from '@/features/teams/team-members-manager';
 
@@ -45,6 +46,9 @@ export default async function TeamPage() {
           myRole={team.role}
           initialMembers={members}
           plan={team.plan}
+          isAdmin={isAdminRole(me.user.role)}
+          planLimitsEnabled={me.flags.planLimitsEnabled}
+          proUpgradeEnabled={me.flags.billingProUpgrade}
           projects={projectAccess.projects}
           initialAccess={projectAccess.access}
         />

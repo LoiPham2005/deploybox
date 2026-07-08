@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import { getToken } from '@/lib/auth';
 import { authApi } from '@/lib/api';
 import { Card } from '@/components/ui/card';
-import { PLAN_LIMITS } from '@deploybox/shared';
+import { PLAN_LIMITS, isAdminRole } from '@deploybox/shared';
 
 export default async function BillingPage() {
   const token = getToken();
@@ -13,7 +13,12 @@ export default async function BillingPage() {
   if (!team) redirect('/dashboard');
 
   const isPro = team.plan === 'PRO';
+  // Admin hệ thống, hoặc admin đã tắt giới hạn gói → coi như không giới hạn.
+  const unlimited = isAdminRole(me.user.role) || !me.flags.planLimitsEnabled;
   const limits = PLAN_LIMITS[team.plan];
+  // Nút mua Pro chỉ hiện khi: chưa Pro, còn áp giới hạn, và admin cho phép mua.
+  const showUpgrade = !isPro && !unlimited && me.flags.billingProUpgrade;
+  const fmt = (n: number) => (unlimited || n === -1 ? '∞' : n);
 
   return (
     <div className="mx-auto max-w-xl space-y-6">
@@ -44,9 +49,9 @@ export default async function BillingPage() {
 
         <div className="mt-4 grid grid-cols-3 gap-3">
           {[
-            { label: 'Projects', value: limits.projects === -1 ? '∞' : limits.projects },
-            { label: 'Servers', value: limits.servers === -1 ? '∞' : limits.servers },
-            { label: 'Thành viên', value: limits.members === -1 ? '∞' : limits.members },
+            { label: 'Projects', value: fmt(limits.projects) },
+            { label: 'Servers', value: fmt(limits.servers) },
+            { label: 'Thành viên', value: fmt(limits.members) },
           ].map((item) => (
             <div key={item.label} className="rounded-lg bg-white/5 p-3 text-center">
               <p className="text-xl font-bold">{item.value}</p>
@@ -54,10 +59,18 @@ export default async function BillingPage() {
             </div>
           ))}
         </div>
+
+        {unlimited && !isPro && (
+          <p className="mt-3 text-xs text-emerald-400/80">
+            {isAdminRole(me.user.role)
+              ? 'Tài khoản admin — không giới hạn toàn bộ chức năng.'
+              : 'Admin đã tắt giới hạn theo gói — bạn đang dùng không giới hạn.'}
+          </p>
+        )}
       </Card>
 
-      {/* Upgrade section */}
-      {!isPro && (
+      {/* Upgrade section — chỉ hiện khi admin cho phép mua & còn áp giới hạn */}
+      {showUpgrade && (
         <Card>
           <h2 className="text-sm font-semibold">Nâng cấp lên Pro</h2>
           <p className="mt-1 text-xs text-white/40">

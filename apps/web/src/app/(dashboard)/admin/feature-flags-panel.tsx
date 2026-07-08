@@ -16,6 +16,7 @@ const AI_MASTER = 'ai_features';
 // Nhóm các cờ (không-AI) cho dễ nhìn — key nào không map thì rơi vào "Khác".
 const CATEGORY: Record<string, string> = {
   plan_limits_enabled: 'Tài khoản & bảo mật',
+  billing_pro_upgrade: 'Tài khoản & bảo mật',
   signup_enabled: 'Tài khoản & bảo mật',
   signup_require_code: 'Tài khoản & bảo mật',
   auth_rate_limit: 'Tài khoản & bảo mật',

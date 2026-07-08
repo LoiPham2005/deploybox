@@ -24,6 +24,13 @@ export const KNOWN_FLAGS: {
     default: true,
   },
   {
+    key: 'billing_pro_upgrade',
+    label: 'Cho phép mua Nâng cấp Pro',
+    description:
+      'Bật: tài khoản owner (gói FREE) thấy nút "Nâng cấp Pro" ở trang Gói dịch vụ và khi mời thành viên. Tắt: ẩn nút mua, chỉ nâng cấp thủ công qua admin. (Tài khoản admin luôn không giới hạn, không bị ảnh hưởng.)',
+    default: true,
+  },
+  {
     key: 'signup_enabled',
     label: 'Cho phép đăng ký mới',
     description:
