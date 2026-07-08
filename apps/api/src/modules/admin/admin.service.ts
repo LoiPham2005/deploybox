@@ -24,7 +24,11 @@ export class AdminService {
   }
 
   async upgradePlan(teamId: string, plan: 'FREE' | 'PRO') {
-    return this.prisma.team.update({ where: { id: teamId }, data: { plan } });
+    // Admin nâng/hạ tay = comp: không đặt hạn (null) → job hết hạn KHÔNG đụng tới.
+    return this.prisma.team.update({
+      where: { id: teamId },
+      data: { plan, planExpiresAt: null, renewRemindedAt: null },
+    });
   }
 
   async stats() {

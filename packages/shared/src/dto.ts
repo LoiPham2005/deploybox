@@ -139,6 +139,42 @@ export interface MeResponse {
   flags: MeFlags;
 }
 
+// ─── Thanh toán / nâng cấp PRO (SePay VietQR) ────────────────────────────────
+export type PaymentStatusValue = 'PENDING' | 'PAID' | 'CANCELED';
+
+/** Trả về khi bấm "Mua Pro" — web dựng QR + thông tin chuyển khoản. */
+export interface CheckoutResponse {
+  orderCode: string; // = nội dung chuyển khoản
+  amount: number; // VND
+  months: number;
+  qrUrl: string; // ảnh VietQR (đã gắn sẵn số tiền + nội dung)
+  bankName: string;
+  bankAccount: string;
+  holder: string;
+  transferContent: string; // = orderCode, để hiện cho khách copy tay
+  /** Cổng redirect (VNPay/MoMo): URL để web điều hướng khách sang trang trả tiền. */
+  redirectUrl?: string;
+}
+
+export interface PaymentDto {
+  id: string;
+  orderCode: string;
+  amount: number;
+  months: number;
+  status: PaymentStatusValue;
+  paidAt: string | null;
+  createdAt: string;
+}
+
+/** Trạng thái gói của 1 team — cho trang Gói dịch vụ. */
+export interface BillingStatusDto {
+  plan: 'FREE' | 'PRO';
+  planExpiresAt: string | null;
+  priceVnd: number; // giá 1 tháng
+  proUpgradeEnabled: boolean; // flag billing_pro_upgrade
+  configured: boolean; // đã cấu hình SePay (số TK + webhook key) chưa
+}
+
 export interface ProjectSummary {
   id: string;
   name: string;

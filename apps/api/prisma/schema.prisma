@@ -71,6 +71,30 @@ enum Plan {
   PRO
 }
 
+enum PaymentStatus {
+  PENDING
+  PAID
+  CANCELED
+}
+
+// Đơn thanh toán nâng cấp PRO (cổng SePay — chuyển khoản VietQR).
+model Payment {
+  id            String        @id @default(cuid())
+  teamId        String
+  team          Team          @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  orderCode     String        @unique // nội dung chuyển khoản duy nhất (vd DBPRO…)
+  amount        Int // VND
+  months        Int           @default(1)
+  status        PaymentStatus @default(PENDING)
+  provider      String        @default("sepay")
+  providerTxnId String?       @unique // id giao dịch SePay — chống xử lý trùng
+  content       String? // nội dung CK thực nhận (để đối soát)
+  paidAt        DateTime?
+  createdAt     DateTime      @default(now())
+
+  @@index([teamId])
+}
+
 enum ServerType {
   LOCAL
   REMOTE
@@ -153,12 +177,17 @@ model Team {
   name      String
   slug      String   @unique
   plan       Plan     @default(FREE)
+  // Mốc hết hạn gói PRO. null = không hết hạn (admin comp / đang FREE).
+  planExpiresAt  DateTime?
+  // Đã gửi nhắc gia hạn cho kỳ hiện tại chưa (reset khi thanh toán mới).
+  renewRemindedAt DateTime?
   isPersonal Boolean  @default(false)
   createdAt  DateTime @default(now())
 
   members  TeamMember[]
   projects Project[]
   servers  Server[]
+  payments Payment[]
 }
 
 model Server {

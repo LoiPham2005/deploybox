@@ -31,6 +31,7 @@ import { OauthModule } from './modules/oauth/oauth.module';
 import { CronModule } from './modules/cron/cron.module';
 import { DatabaseModule } from './modules/database/database.module';
 import { CopilotModule } from './modules/copilot/copilot.module';
+import { BillingModule } from './modules/billing/billing.module';
 
 // Đọc sớm để quyết định có import BullModule không (trước khi NestJS bootstrap)
 const REDIS_URL = process.env.REDIS_URL ?? '';
@@ -95,6 +96,7 @@ const REDIS_URL = process.env.REDIS_URL ?? '';
     DatabaseModule,
     MonitorModule,
     OauthModule,
+    BillingModule,
   ],
 })
 export class AppModule {}

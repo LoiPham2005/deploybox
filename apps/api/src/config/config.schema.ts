@@ -52,6 +52,20 @@ export const envSchema = z.object({
   BITBUCKET_OAUTH_CLIENT_SECRET: z.string().default(''),
   // URL web công khai để OAuth redirect về. Trống = tự suy (PUBLIC_TLS ? https://APP_DOMAIN : http://localhost:3000)
   PUBLIC_WEB_URL: z.string().default(''),
+  // ─── Thanh toán / nâng cấp PRO ──────────────────────────────────────────
+  PRO_PRICE_VND: z.coerce.number().int().positive().default(99000), // giá 1 tháng
+  PAYMENT_PROVIDER_DEFAULT: z.string().default('sepay'), // cổng mặc định khi checkout
+  // SePay — chuyển khoản VietQR (đọc biến động số dư TK ngân hàng). Trống = tắt.
+  SEPAY_ACCOUNT: z.string().default(''), // số tài khoản nhận tiền
+  SEPAY_BANK: z.string().default(''), // mã ngân hàng (vd TPBank, VCB, ACB…)
+  SEPAY_HOLDER: z.string().default(''), // tên chủ TK (chỉ để hiển thị)
+  SEPAY_QR_BASE: z.string().default('https://qr.sepay.vn/img'), // API sinh ảnh VietQR
+  SEPAY_WEBHOOK_APIKEY: z.string().default(''), // key xác thực webhook SePay gửi về
+  // VNPay — điền sau khi đăng ký merchant (xem docs/deploy/payment-vnpay.md). Trống = tắt.
+  VNPAY_TMN_CODE: z.string().default(''),
+  VNPAY_HASH_SECRET: z.string().default(''),
+  VNPAY_PAY_URL: z.string().default('https://sandbox.vnpayment.vn/paymentv2/vpcpay.html'),
+  VNPAY_RETURN_URL: z.string().default(''), // URL web nhận khách quay về sau khi trả
 });
 
 export type AppEnv = z.infer<typeof envSchema>;

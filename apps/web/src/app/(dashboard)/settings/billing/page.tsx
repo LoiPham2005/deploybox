@@ -1,8 +1,21 @@
 import { redirect } from 'next/navigation';
 import { getToken } from '@/lib/auth';
 import { authApi } from '@/lib/api';
+import { serverApi } from '@/lib/api-server';
 import { Card } from '@/components/ui/card';
-import { PLAN_LIMITS, isAdminRole } from '@deploybox/shared';
+import {
+  PLAN_LIMITS,
+  isAdminRole,
+  type BillingStatusDto,
+  type PaymentDto,
+} from '@deploybox/shared';
+import { ProCheckout } from '@/features/billing/pro-checkout';
+
+const STATUS_LABEL: Record<PaymentDto['status'], string> = {
+  PENDING: 'Chờ thanh toán',
+  PAID: 'Đã thanh toán',
+  CANCELED: 'Đã huỷ',
+};
 
 export default async function BillingPage() {
   const token = getToken();
@@ -12,13 +25,23 @@ export default async function BillingPage() {
   const team = me.teams[0];
   if (!team) redirect('/dashboard');
 
+  const [status, payments] = await Promise.all([
+    serverApi<BillingStatusDto>(`/billing/status/${team.id}`).catch(() => null),
+    serverApi<PaymentDto[]>(`/billing/payments/${team.id}`).catch(() => [] as PaymentDto[]),
+  ]);
+
   const isPro = team.plan === 'PRO';
   // Admin hệ thống, hoặc admin đã tắt giới hạn gói → coi như không giới hạn.
   const unlimited = isAdminRole(me.user.role) || !me.flags.planLimitsEnabled;
   const limits = PLAN_LIMITS[team.plan];
+  const priceVnd = status?.priceVnd ?? 99000;
+  const configured = status?.configured ?? false;
+  const expiresAt = status?.planExpiresAt ?? null;
   // Nút mua Pro chỉ hiện khi: chưa Pro, còn áp giới hạn, và admin cho phép mua.
   const showUpgrade = !isPro && !unlimited && me.flags.billingProUpgrade;
   const fmt = (n: number) => (unlimited || n === -1 ? '∞' : n);
+  const vnd = (n: number) => n.toLocaleString('vi-VN');
+  const paidPayments = payments.filter((p) => p.status !== 'PENDING');
 
   return (
     <div className="mx-auto max-w-xl space-y-6">
@@ -60,6 +83,13 @@ export default async function BillingPage() {
           ))}
         </div>
 
+        {isPro && (
+          <p className="mt-3 text-xs text-white/50">
+            {expiresAt
+              ? `Hết hạn: ${new Date(expiresAt).toLocaleDateString('vi-VN')}`
+              : 'Không giới hạn thời gian (admin cấp).'}
+          </p>
+        )}
         {unlimited && !isPro && (
           <p className="mt-3 text-xs text-emerald-400/80">
             {isAdminRole(me.user.role)
@@ -72,7 +102,9 @@ export default async function BillingPage() {
       {/* Upgrade section — chỉ hiện khi admin cho phép mua & còn áp giới hạn */}
       {showUpgrade && (
         <Card>
-          <h2 className="text-sm font-semibold">Nâng cấp lên Pro</h2>
+          <h2 className="text-sm font-semibold">
+            {isPro ? 'Gia hạn Pro' : 'Nâng cấp lên Pro'}
+          </h2>
           <p className="mt-1 text-xs text-white/40">
             Mở khóa không giới hạn project, server và thành viên
           </p>
@@ -82,7 +114,7 @@ export default async function BillingPage() {
               'Không giới hạn projects',
               'Không giới hạn servers (LOCAL + REMOTE)',
               'Không giới hạn thành viên',
-              'Priority support',
+              'Ưu tiên hỗ trợ',
             ].map((feature) => (
               <div key={feature} className="flex items-center gap-2 text-sm">
                 <span className="text-emerald-400">✓</span>
@@ -91,21 +123,47 @@ export default async function BillingPage() {
             ))}
           </div>
 
-          <div className="mt-6 flex items-center gap-4">
-            <div>
-              <span className="text-3xl font-bold">$9</span>
-              <span className="text-sm text-white/40">/tháng</span>
-            </div>
-            <button
-              disabled
-              className="flex-1 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white opacity-60 cursor-not-allowed"
-            >
-              Nâng cấp (sắp ra mắt)
-            </button>
+          <div className="mt-5 border-t border-white/[0.06] pt-4">
+            {configured ? (
+              <ProCheckout teamId={team.id} priceVnd={priceVnd} />
+            ) : (
+              <p className="text-sm text-amber-300/80">
+                Cổng thanh toán chưa được cấu hình. Liên hệ admin để nâng cấp thủ công.
+              </p>
+            )}
           </div>
-          <p className="mt-2 text-xs text-white/30">
-            Liên hệ admin để được nâng cấp thủ công trong thời gian beta.
-          </p>
+        </Card>
+      )}
+
+      {/* Lịch sử thanh toán */}
+      {paidPayments.length > 0 && (
+        <Card>
+          <h2 className="mb-3 text-sm font-semibold text-white/70">
+            Lịch sử thanh toán
+          </h2>
+          <ul className="divide-y divide-white/5 text-sm">
+            {paidPayments.map((p) => (
+              <li key={p.id} className="flex items-center justify-between py-2">
+                <div>
+                  <p className="font-mono text-xs text-white/50">{p.orderCode}</p>
+                  <p className="text-xs text-white/40">
+                    {new Date(p.paidAt ?? p.createdAt).toLocaleString('vi-VN')} ·{' '}
+                    {p.months} tháng
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="font-medium">{vnd(p.amount)}₫</p>
+                  <p
+                    className={`text-xs ${
+                      p.status === 'PAID' ? 'text-emerald-400' : 'text-white/40'
+                    }`}
+                  >
+                    {STATUS_LABEL[p.status]}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ul>
         </Card>
       )}
     </div>
