@@ -77,7 +77,17 @@ export function OverviewTable({ initial }: { initial: OverviewItemDto[] }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-white/[0.04]">
-            {items.map((i) => (
+            {items.map((i) => {
+              // Web tĩnh / mobile không có tiến trình riêng → giải thích khi hover "—"
+              const noMetric =
+                i.type === 'STATIC'
+                  ? 'Web tĩnh — Caddy phục vụ file, không có tiến trình riêng nên không đo RAM/CPU'
+                  : i.type === 'MOBILE'
+                    ? 'App mobile — chỉ build file cài đặt, không chạy trên server'
+                    : i.status !== 'RUNNING'
+                      ? 'App chưa chạy'
+                      : '';
+              return (
               <tr key={i.id} className="transition-colors hover:bg-white/[0.02]">
                 <td className="px-3 py-2.5">
                   <Link href={`/projects/${i.id}`} className="group flex items-center gap-2 min-w-0">
@@ -93,16 +103,16 @@ export function OverviewTable({ initial }: { initial: OverviewItemDto[] }) {
                 <td className="px-3 py-2.5">
                   {i.type === 'BACKEND' && i.status === 'RUNNING'
                     ? <RamBar memMb={i.memMb} memoryMb={i.memoryMb} />
-                    : <span className="text-white/25">—</span>}
+                    : <span className="cursor-help text-white/25" title={noMetric}>—</span>}
                 </td>
                 <td className="px-3 py-2.5 text-[11px] tabular-nums text-white/60">
                   {i.type === 'BACKEND' && i.status === 'RUNNING' && i.cpuPct != null
                     ? `${i.cpuPct.toFixed(1)}%`
-                    : <span className="text-white/25">—</span>}
+                    : <span className="cursor-help text-white/25" title={noMetric}>—</span>}
                 </td>
                 <td className="px-3 py-2.5">
                   {i.type !== 'BACKEND' || i.status !== 'RUNNING' ? (
-                    <span className="text-white/25">—</span>
+                    <span className="cursor-help text-white/25" title={noMetric}>—</span>
                   ) : i.isDown ? (
                     <span className="inline-flex items-center gap-1.5 text-xs text-red-400">
                       <span className="h-1.5 w-1.5 rounded-full bg-red-400" /> Không trả lời
@@ -114,7 +124,8 @@ export function OverviewTable({ initial }: { initial: OverviewItemDto[] }) {
                   )}
                 </td>
               </tr>
-            ))}
+              );
+            })}
             {items.length === 0 && (
               <tr>
                 <td colSpan={5} className="px-3 py-8 text-center text-sm text-white/30">
