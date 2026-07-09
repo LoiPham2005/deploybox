@@ -66,6 +66,16 @@ export const envSchema = z.object({
   VNPAY_HASH_SECRET: z.string().default(''),
   VNPAY_PAY_URL: z.string().default('https://sandbox.vnpayment.vn/paymentv2/vpcpay.html'),
   VNPAY_RETURN_URL: z.string().default(''), // URL web nhận khách quay về sau khi trả
+  // MoMo — điền sau khi đăng ký merchant. Trống = tắt.
+  MOMO_PARTNER_CODE: z.string().default(''),
+  MOMO_ACCESS_KEY: z.string().default(''),
+  MOMO_SECRET_KEY: z.string().default(''),
+  MOMO_ENDPOINT: z.string().default('https://test-payment.momo.vn/v2/gateway/api/create'),
+  // ZaloPay — điền sau khi đăng ký merchant. Trống = tắt.
+  ZALOPAY_APP_ID: z.string().default(''),
+  ZALOPAY_KEY1: z.string().default(''),
+  ZALOPAY_KEY2: z.string().default(''),
+  ZALOPAY_ENDPOINT: z.string().default('https://sb-openapi.zalopay.vn/v2/create'),
 });
 
 export type AppEnv = z.infer<typeof envSchema>;

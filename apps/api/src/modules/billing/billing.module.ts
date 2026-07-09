@@ -11,6 +11,8 @@ import {
 } from './providers/payment-provider';
 import { SepayProvider } from './providers/sepay.provider';
 import { VnpayProvider } from './providers/vnpay.provider';
+import { MomoProvider } from './providers/momo.provider';
+import { ZalopayProvider } from './providers/zalopay.provider';
 
 @Module({
   imports: [AuthModule], // JwtAuthGuard cần JwtService + SessionsService
@@ -28,13 +30,17 @@ import { VnpayProvider } from './providers/vnpay.provider';
     // Lõi BillingService gom mảng này thành registry theo `key` — không sửa gì thêm.
     SepayProvider,
     VnpayProvider,
+    MomoProvider,
+    ZalopayProvider,
     {
       provide: PAYMENT_PROVIDER,
       useFactory: (
         sepay: SepayProvider,
         vnpay: VnpayProvider,
-      ): PaymentProvider[] => [sepay, vnpay],
-      inject: [SepayProvider, VnpayProvider],
+        momo: MomoProvider,
+        zalopay: ZalopayProvider,
+      ): PaymentProvider[] => [sepay, vnpay, momo, zalopay],
+      inject: [SepayProvider, VnpayProvider, MomoProvider, ZalopayProvider],
     },
   ],
   exports: [BillingConfigService], // AdminModule dùng để sửa cấu hình ở UI

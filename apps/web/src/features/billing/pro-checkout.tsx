@@ -201,9 +201,7 @@ export function ProCheckout({
       <Button onClick={buy} disabled={loading}>
         {loading
           ? 'Đang tạo đơn…'
-          : provider === 'sepay'
-            ? 'Mua Pro — chuyển khoản QR'
-            : 'Mua Pro — thanh toán VNPay'}
+          : `Mua Pro — ${providers.find((p) => p.key === provider)?.label ?? 'thanh toán'}`}
       </Button>
       {err && <p className="text-xs text-red-400">{err}</p>}
     </div>

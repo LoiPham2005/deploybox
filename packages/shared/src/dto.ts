@@ -172,6 +172,8 @@ type ConfigSource = 'db' | 'env' | 'none';
 export interface BillingConfigDto {
   priceVnd: number;
   defaultProvider: string;
+  /** Bật/tắt từng cổng (kể cả khi đã cấu hình). */
+  enabled: { sepay: boolean; vnpay: boolean; momo: boolean; zalopay: boolean };
   // SePay
   sepayAccount: string;
   sepayBank: string;
@@ -183,12 +185,26 @@ export interface BillingConfigDto {
   vnpayPayUrl: string;
   vnpayReturnUrl: string;
   vnpayHasHashSecret: boolean; // không trả secret thật về UI
+  // MoMo
+  momoPartnerCode: string;
+  momoAccessKey: string;
+  momoEndpoint: string;
+  momoHasSecret: boolean;
+  // ZaloPay
+  zalopayAppId: string;
+  zalopayEndpoint: string;
+  zalopayHasKey1: boolean;
+  zalopayHasKey2: boolean;
   sources: {
     price: 'db' | 'env';
     account: ConfigSource;
     apikey: ConfigSource;
     vnpayTmn: ConfigSource;
     vnpayHash: ConfigSource;
+    momoPartner: ConfigSource;
+    momoSecret: ConfigSource;
+    zaloAppId: ConfigSource;
+    zaloKey1: ConfigSource;
   };
 }
 
@@ -209,6 +225,21 @@ export interface BillingConfigPatch {
   vnpayReturnUrl?: string;
   vnpayHashSecret?: string; // chỉ đặt khi nhập chuỗi mới
   clearVnpayHashSecret?: boolean;
+  // MoMo
+  momoPartnerCode?: string;
+  momoAccessKey?: string;
+  momoEndpoint?: string;
+  momoSecretKey?: string; // chỉ đặt khi nhập chuỗi mới
+  clearMomoSecret?: boolean;
+  // ZaloPay
+  zalopayAppId?: string;
+  zalopayEndpoint?: string;
+  zalopayKey1?: string; // chỉ đặt khi nhập chuỗi mới
+  zalopayKey2?: string;
+  clearZalopayKey1?: boolean;
+  clearZalopayKey2?: boolean;
+  // Bật/tắt cổng: { sepay?: true, momo?: false, ... }
+  enabled?: Record<string, boolean>;
 }
 
 /** 1 cổng đang bật (đã cấu hình) — cho khách chọn cách trả. */

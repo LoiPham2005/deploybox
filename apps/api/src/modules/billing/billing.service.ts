@@ -33,6 +33,8 @@ const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // bỏ ký tự dễ 
 const PROVIDER_LABELS: Record<string, string> = {
   sepay: 'Chuyển khoản QR (SePay)',
   vnpay: 'Thẻ / Ví (VNPay)',
+  momo: 'Ví MoMo',
+  zalopay: 'ZaloPay',
 };
 
 @Injectable()
@@ -85,10 +87,12 @@ export class BillingService {
     const team = await this.prisma.team.findUniqueOrThrow({ where: { id: teamId } });
     const defKey = await this.defaultProviderKey();
 
-    // Cổng nào đã cấu hình → cho khách chọn (cổng mặc định lên đầu)
+    // Cổng nào ĐÃ BẬT + đã cấu hình → cho khách chọn (cổng mặc định lên đầu)
     const available: BillingProviderInfo[] = [];
     for (const [key, p] of this.registry) {
-      if (await p.isConfigured()) available.push({ key, label: PROVIDER_LABELS[key] ?? key });
+      if ((await this.cfg.isProviderEnabled(key)) && (await p.isConfigured())) {
+        available.push({ key, label: PROVIDER_LABELS[key] ?? key });
+      }
     }
     available.sort((a, b) => Number(b.key === defKey) - Number(a.key === defKey));
 
@@ -114,6 +118,9 @@ export class BillingService {
       throw new ForbiddenException('Tính năng mua Pro đang tắt');
     }
     const provider = this.provider(providerKey || (await this.defaultProviderKey()));
+    if (!(await this.cfg.isProviderEnabled(provider.key))) {
+      throw new ServiceUnavailableException('Cổng thanh toán này đang tắt.');
+    }
     if (!(await provider.isConfigured())) {
       throw new ServiceUnavailableException(
         'Cổng thanh toán chưa được cấu hình. Liên hệ admin.',
