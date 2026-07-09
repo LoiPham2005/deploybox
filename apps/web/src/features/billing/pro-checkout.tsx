@@ -199,7 +199,11 @@ export function ProCheckout({
         <span className="text-xs text-white/40">cho {months} tháng</span>
       </div>
       <Button onClick={buy} disabled={loading}>
-        {loading ? 'Đang tạo đơn…' : 'Mua Pro — chuyển khoản QR'}
+        {loading
+          ? 'Đang tạo đơn…'
+          : provider === 'sepay'
+            ? 'Mua Pro — chuyển khoản QR'
+            : 'Mua Pro — thanh toán VNPay'}
       </Button>
       {err && <p className="text-xs text-red-400">{err}</p>}
     </div>
