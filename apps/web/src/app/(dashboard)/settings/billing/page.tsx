@@ -37,8 +37,10 @@ export default async function BillingPage() {
   const priceVnd = status?.priceVnd ?? 99000;
   const configured = status?.configured ?? false;
   const expiresAt = status?.planExpiresAt ?? null;
-  // Nút mua Pro chỉ hiện khi: chưa Pro, còn áp giới hạn, và admin cho phép mua.
-  const showUpgrade = !isPro && !unlimited && me.flags.billingProUpgrade;
+  // Hiện ô thanh toán khi: admin cho phép mua, còn áp giới hạn, VÀ (chưa PRO =
+  // nâng cấp, HOẶC đang PRO có hạn = cho gia hạn cộng dồn). Admin/comp thì không.
+  const showUpgrade =
+    !unlimited && me.flags.billingProUpgrade && (!isPro || !!expiresAt);
   const fmt = (n: number) => (unlimited || n === -1 ? '∞' : n);
   const vnd = (n: number) => n.toLocaleString('vi-VN');
   const paidPayments = payments.filter((p) => p.status !== 'PENDING');
@@ -83,13 +85,26 @@ export default async function BillingPage() {
           ))}
         </div>
 
-        {isPro && (
-          <p className="mt-3 text-xs text-white/50">
-            {expiresAt
-              ? `Hết hạn: ${new Date(expiresAt).toLocaleDateString('vi-VN')}`
-              : 'Không giới hạn thời gian (admin cấp).'}
-          </p>
-        )}
+        {isPro &&
+          (expiresAt ? (
+            <div className="mt-3 rounded-md border border-white/[0.07] bg-white/[0.02] px-3 py-2 text-xs">
+              <p className="text-white/70">
+                Gói PRO đến hết{' '}
+                <b className="text-white/90">
+                  {new Date(expiresAt).toLocaleDateString('vi-VN')}
+                </b>
+              </p>
+              <p className="mt-1 text-white/40">
+                Tự động về FREE nếu không gia hạn — <b>không tự động trừ tiền</b>.
+                Muốn dừng: chỉ cần không thanh toán đợt sau, hết hạn là tự chuyển FREE
+                (app đang chạy vẫn chạy).
+              </p>
+            </div>
+          ) : (
+            <p className="mt-3 text-xs text-white/50">
+              Không giới hạn thời gian (admin cấp).
+            </p>
+          ))}
         {unlimited && !isPro && (
           <p className="mt-3 text-xs text-emerald-400/80">
             {isAdminRole(me.user.role)
@@ -106,7 +121,9 @@ export default async function BillingPage() {
             {isPro ? 'Gia hạn Pro' : 'Nâng cấp lên Pro'}
           </h2>
           <p className="mt-1 text-xs text-white/40">
-            Mở khóa không giới hạn project, server và thành viên
+            {isPro
+              ? 'Trả thêm để cộng dồn thời gian PRO (nối tiếp hạn hiện tại).'
+              : 'Mở khóa không giới hạn project, server và thành viên'}
           </p>
 
           <div className="mt-4 space-y-2">
