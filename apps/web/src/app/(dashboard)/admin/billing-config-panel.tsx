@@ -46,6 +46,10 @@ export function BillingConfigPanel({ config }: { config: BillingConfigDto }) {
   const [holder, setHolder] = useState(config.sepayHolder);
   const [qrBase, setQrBase] = useState(config.sepayQrBase);
   const [apikey, setApikey] = useState('');
+  const [vnpTmn, setVnpTmn] = useState(config.vnpayTmnCode);
+  const [vnpPayUrl, setVnpPayUrl] = useState(config.vnpayPayUrl);
+  const [vnpReturn, setVnpReturn] = useState(config.vnpayReturnUrl);
+  const [vnpHash, setVnpHash] = useState('');
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -61,22 +65,29 @@ export function BillingConfigPanel({ config }: { config: BillingConfigDto }) {
       sepayHolder: holder,
       sepayQrBase: qrBase,
       sepayApikey: apikey.trim() || undefined, // chỉ gửi khi nhập mới
+      vnpayTmnCode: vnpTmn,
+      vnpayPayUrl: vnpPayUrl,
+      vnpayReturnUrl: vnpReturn,
+      vnpayHashSecret: vnpHash.trim() || undefined,
     });
     setSaving(false);
     if (res.ok) {
       setMsg('Đã lưu — có hiệu lực ngay, không cần restart.');
       setApikey('');
+      setVnpHash('');
       router.refresh();
     } else {
       setErr(res.error);
     }
   }
 
-  async function clearKey() {
+  async function clearKey(which: 'sepay' | 'vnpay') {
     setSaving(true);
     setErr(null);
     setMsg(null);
-    const res = await setBillingConfigAction({ clearApikey: true });
+    const res = await setBillingConfigAction(
+      which === 'sepay' ? { clearApikey: true } : { clearVnpayHashSecret: true },
+    );
     setSaving(false);
     if (res.ok) {
       setMsg('Đã xoá key trong DB — quay về dùng .env.');
@@ -132,12 +143,48 @@ export function BillingConfigPanel({ config }: { config: BillingConfigDto }) {
               className="flex-1"
             />
             {config.sepayHasApikey && config.sources.apikey === 'db' && (
-              <Button variant="ghost" onClick={clearKey} disabled={saving} className="text-red-400 hover:text-red-300">
+              <Button variant="ghost" onClick={() => clearKey('sepay')} disabled={saving} className="text-red-400 hover:text-red-300">
                 Xoá key
               </Button>
             )}
           </div>
         </Field>
+      </div>
+
+      <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-4 space-y-3">
+        <p className="text-sm font-semibold text-white/70">
+          VNPay — thẻ / ví (tuỳ chọn) <SrcBadge s={config.sources.vnpayTmn} />
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Terminal ID (vnp_TmnCode)">
+            <Input value={vnpTmn} onChange={(e) => setVnpTmn(e.target.value)} placeholder="HSOAIX4V" />
+          </Field>
+          <Field label="URL thanh toán (vnp_Url)" hint="Sandbox mặc định — prod đổi sang vpcpay thật">
+            <Input value={vnpPayUrl} onChange={(e) => setVnpPayUrl(e.target.value)} />
+          </Field>
+          <Field label="Return URL" hint="Trang khách quay về sau khi trả">
+            <Input value={vnpReturn} onChange={(e) => setVnpReturn(e.target.value)} placeholder="https://sneakup.io.vn/settings/billing" />
+          </Field>
+          <Field label={<>Hash Secret (vnp_HashSecret) <SrcBadge s={config.sources.vnpayHash} /></>} hint="Chuỗi ký checksum VNPay cấp. Để trống = giữ nguyên.">
+            <div className="flex gap-2">
+              <Input
+                type="password"
+                value={vnpHash}
+                onChange={(e) => setVnpHash(e.target.value)}
+                placeholder={config.vnpayHasHashSecret ? '••••••• (đã lưu)' : 'dán HashSecret VNPay'}
+                className="flex-1"
+              />
+              {config.vnpayHasHashSecret && config.sources.vnpayHash === 'db' && (
+                <Button variant="ghost" onClick={() => clearKey('vnpay')} disabled={saving} className="text-red-400 hover:text-red-300">
+                  Xoá
+                </Button>
+              )}
+            </div>
+          </Field>
+        </div>
+        <p className="text-[11px] text-white/30">
+          IPN URL khai với VNPay: <code className="text-white/50">https://api.sneakup.io.vn/api/v1/billing/webhook/vnpay</code>
+        </p>
       </div>
 
       <div className="flex items-center gap-3">

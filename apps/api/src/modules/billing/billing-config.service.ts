@@ -11,7 +11,11 @@ type Field =
   | 'bank'
   | 'holder'
   | 'qrBase'
-  | 'apikey';
+  | 'apikey'
+  | 'vnpayTmn'
+  | 'vnpayHash'
+  | 'vnpayPayUrl'
+  | 'vnpayReturn';
 
 const SETTING: Record<Field, string> = {
   price: 'billing_price_vnd',
@@ -21,6 +25,10 @@ const SETTING: Record<Field, string> = {
   holder: 'billing_sepay_holder',
   qrBase: 'billing_sepay_qr_base',
   apikey: 'billing_sepay_apikey',
+  vnpayTmn: 'billing_vnpay_tmn_code',
+  vnpayHash: 'billing_vnpay_hash_secret',
+  vnpayPayUrl: 'billing_vnpay_pay_url',
+  vnpayReturn: 'billing_vnpay_return_url',
 };
 const ENV: Record<Field, string> = {
   price: 'PRO_PRICE_VND',
@@ -30,9 +38,14 @@ const ENV: Record<Field, string> = {
   holder: 'SEPAY_HOLDER',
   qrBase: 'SEPAY_QR_BASE',
   apikey: 'SEPAY_WEBHOOK_APIKEY',
+  vnpayTmn: 'VNPAY_TMN_CODE',
+  vnpayHash: 'VNPAY_HASH_SECRET',
+  vnpayPayUrl: 'VNPAY_PAY_URL',
+  vnpayReturn: 'VNPAY_RETURN_URL',
 };
-const SECRET: Field[] = ['apikey'];
+const SECRET: Field[] = ['apikey', 'vnpayHash'];
 const DEFAULT_QR = 'https://qr.sepay.vn/img';
+const DEFAULT_VNPAY_URL = 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html';
 
 /**
  * Cấu hình billing (giá + tài khoản nhận tiền + key cổng): admin sửa ở UI → lưu
@@ -97,17 +110,42 @@ export class BillingConfigService {
     return { account, bank, holder, qrBase: qrBase || DEFAULT_QR, apikey };
   }
 
-  /** Cho admin UI — trả giá trị không bí mật + cờ đã có apikey + nguồn. */
-  async adminView(): Promise<BillingConfigDto> {
-    const [price, provider, account, bank, holder, qrBase, apikey] = await Promise.all([
-      this.resolve('price'),
-      this.resolve('provider'),
-      this.resolve('account'),
-      this.resolve('bank'),
-      this.resolve('holder'),
-      this.resolve('qrBase'),
-      this.resolve('apikey'),
+  async getVnpay(): Promise<{
+    tmnCode: string;
+    hashSecret: string;
+    payUrl: string;
+    returnUrl: string;
+  }> {
+    const [tmnCode, hashSecret, payUrl, returnUrl] = await Promise.all([
+      this.val('vnpayTmn'),
+      this.val('vnpayHash'),
+      this.val('vnpayPayUrl'),
+      this.val('vnpayReturn'),
     ]);
+    return {
+      tmnCode,
+      hashSecret,
+      payUrl: payUrl || DEFAULT_VNPAY_URL,
+      returnUrl,
+    };
+  }
+
+  /** Cho admin UI — trả giá trị không bí mật + cờ đã có secret + nguồn. */
+  async adminView(): Promise<BillingConfigDto> {
+    const [price, provider, account, bank, holder, qrBase, apikey, vnpayTmn, vnpayHash, vnpayPayUrl, vnpayReturn] =
+      await Promise.all([
+        this.resolve('price'),
+        this.resolve('provider'),
+        this.resolve('account'),
+        this.resolve('bank'),
+        this.resolve('holder'),
+        this.resolve('qrBase'),
+        this.resolve('apikey'),
+        this.resolve('vnpayTmn'),
+        this.resolve('vnpayHash'),
+        this.resolve('vnpayPayUrl'),
+        this.resolve('vnpayReturn'),
+      ]);
     return {
       priceVnd: Number(price.value) || 99000,
       defaultProvider: provider.value || 'sepay',
@@ -116,10 +154,16 @@ export class BillingConfigService {
       sepayHolder: holder.value,
       sepayQrBase: qrBase.value || DEFAULT_QR,
       sepayHasApikey: !!apikey.value,
+      vnpayTmnCode: vnpayTmn.value,
+      vnpayPayUrl: vnpayPayUrl.value || DEFAULT_VNPAY_URL,
+      vnpayReturnUrl: vnpayReturn.value,
+      vnpayHasHashSecret: !!vnpayHash.value,
       sources: {
         price: price.source === 'none' ? 'env' : price.source,
         account: account.source,
         apikey: apikey.source,
+        vnpayTmn: vnpayTmn.source,
+        vnpayHash: vnpayHash.source,
       },
     };
   }
@@ -147,11 +191,19 @@ export class BillingConfigService {
     await set('bank', patch.sepayBank);
     await set('holder', patch.sepayHolder);
     await set('qrBase', patch.sepayQrBase);
-    // apikey: chỉ đặt khi có chuỗi mới; xoá khi clearApikey = true
+    await set('vnpayTmn', patch.vnpayTmnCode);
+    await set('vnpayPayUrl', patch.vnpayPayUrl);
+    await set('vnpayReturn', patch.vnpayReturnUrl);
+    // secret: chỉ đặt khi có chuỗi mới; xoá khi clear* = true
     if (patch.clearApikey) {
       await this.prisma.setting.delete({ where: { key: SETTING.apikey } }).catch(() => undefined);
     } else if (patch.sepayApikey && patch.sepayApikey.trim()) {
       await set('apikey', patch.sepayApikey);
+    }
+    if (patch.clearVnpayHashSecret) {
+      await this.prisma.setting.delete({ where: { key: SETTING.vnpayHash } }).catch(() => undefined);
+    } else if (patch.vnpayHashSecret && patch.vnpayHashSecret.trim()) {
+      await set('vnpayHash', patch.vnpayHashSecret);
     }
   }
 }

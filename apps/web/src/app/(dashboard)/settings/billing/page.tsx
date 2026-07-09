@@ -125,7 +125,11 @@ export default async function BillingPage() {
 
           <div className="mt-5 border-t border-white/[0.06] pt-4">
             {configured ? (
-              <ProCheckout teamId={team.id} priceVnd={priceVnd} />
+              <ProCheckout
+                teamId={team.id}
+                priceVnd={priceVnd}
+                providers={status?.availableProviders ?? []}
+              />
             ) : (
               <p className="text-sm text-amber-300/80">
                 Cổng thanh toán chưa được cấu hình. Liên hệ admin để nâng cấp thủ công.

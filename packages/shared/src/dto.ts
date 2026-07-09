@@ -166,19 +166,29 @@ export interface PaymentDto {
   createdAt: string;
 }
 
+type ConfigSource = 'db' | 'env' | 'none';
+
 /** Cấu hình billing cho admin sửa ở UI (giá + TK nhận tiền + key cổng). */
 export interface BillingConfigDto {
   priceVnd: number;
   defaultProvider: string;
+  // SePay
   sepayAccount: string;
   sepayBank: string;
   sepayHolder: string;
   sepayQrBase: string;
   sepayHasApikey: boolean; // không trả key thật về UI
+  // VNPay
+  vnpayTmnCode: string;
+  vnpayPayUrl: string;
+  vnpayReturnUrl: string;
+  vnpayHasHashSecret: boolean; // không trả secret thật về UI
   sources: {
     price: 'db' | 'env';
-    account: 'db' | 'env' | 'none';
-    apikey: 'db' | 'env' | 'none';
+    account: ConfigSource;
+    apikey: ConfigSource;
+    vnpayTmn: ConfigSource;
+    vnpayHash: ConfigSource;
   };
 }
 
@@ -186,12 +196,25 @@ export interface BillingConfigDto {
 export interface BillingConfigPatch {
   priceVnd?: number;
   defaultProvider?: string;
+  // SePay
   sepayAccount?: string;
   sepayBank?: string;
   sepayHolder?: string;
   sepayQrBase?: string;
   sepayApikey?: string; // chỉ đặt khi nhập chuỗi mới
   clearApikey?: boolean; // true = xoá key DB (về .env)
+  // VNPay
+  vnpayTmnCode?: string;
+  vnpayPayUrl?: string;
+  vnpayReturnUrl?: string;
+  vnpayHashSecret?: string; // chỉ đặt khi nhập chuỗi mới
+  clearVnpayHashSecret?: boolean;
+}
+
+/** 1 cổng đang bật (đã cấu hình) — cho khách chọn cách trả. */
+export interface BillingProviderInfo {
+  key: string; // 'sepay' | 'vnpay'
+  label: string;
 }
 
 /** Trạng thái gói của 1 team — cho trang Gói dịch vụ. */
@@ -200,7 +223,8 @@ export interface BillingStatusDto {
   planExpiresAt: string | null;
   priceVnd: number; // giá 1 tháng
   proUpgradeEnabled: boolean; // flag billing_pro_upgrade
-  configured: boolean; // đã cấu hình SePay (số TK + webhook key) chưa
+  configured: boolean; // có ít nhất 1 cổng đã cấu hình
+  availableProviders: BillingProviderInfo[]; // các cổng để khách chọn
 }
 
 export interface ProjectSummary {

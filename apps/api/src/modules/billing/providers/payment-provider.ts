@@ -49,6 +49,15 @@ export interface CallbackResult {
   note?: string;
 }
 
+/** Kết cục xử lý callback (lõi quyết định) → provider dịch sang body ack riêng. */
+export type CallbackOutcome =
+  | 'success'
+  | 'already_paid'
+  | 'not_found'
+  | 'invalid_amount'
+  | 'invalid_sig'
+  | 'ignored';
+
 export interface PaymentProvider {
   readonly key: string; // 'sepay' | 'vnpay' | …
   /** Đã có đủ cấu hình (DB/.env) để dùng chưa. */
@@ -57,4 +66,6 @@ export interface PaymentProvider {
   createCharge(order: PaymentOrder): Promise<ChargeResult>;
   /** Đọc callback từ cổng → chuẩn hoá kết quả cho lõi. */
   parseCallback(input: CallbackInput): Promise<CallbackResult>;
+  /** Body trả về cho cổng theo kết cục (VNPay cần {RspCode,Message}). Không có = {success}. */
+  ack?(outcome: CallbackOutcome): unknown;
 }

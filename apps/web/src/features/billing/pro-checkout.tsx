@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import type { CheckoutResponse } from '@deploybox/shared';
+import type { CheckoutResponse, BillingProviderInfo } from '@deploybox/shared';
 import { Button } from '@/components/ui/button';
 import { checkoutAction, getOrderAction, refreshBillingAction } from './actions';
 
@@ -18,12 +18,15 @@ const fmt = (n: number) => n.toLocaleString('vi-VN');
 export function ProCheckout({
   teamId,
   priceVnd,
+  providers,
 }: {
   teamId: string;
   priceVnd: number;
+  providers: BillingProviderInfo[];
 }) {
   const router = useRouter();
   const [months, setMonths] = useState(1);
+  const [provider, setProvider] = useState(providers[0]?.key ?? 'sepay');
   const [order, setOrder] = useState<CheckoutResponse | null>(null);
   const [status, setStatus] = useState<'idle' | 'pending' | 'paid'>('idle');
   const [loading, setLoading] = useState(false);
@@ -34,7 +37,7 @@ export function ProCheckout({
   async function buy() {
     setLoading(true);
     setErr(null);
-    const res = await checkoutAction(teamId, months);
+    const res = await checkoutAction(teamId, months, provider);
     setLoading(false);
     if (!res.ok) {
       setErr(res.error);
@@ -154,6 +157,27 @@ export function ProCheckout({
   // idle
   return (
     <div className="space-y-3">
+      {providers.length > 1 && (
+        <div>
+          <p className="mb-1.5 text-xs text-white/50">Cách thanh toán</p>
+          <div className="flex flex-wrap gap-2">
+            {providers.map((p) => (
+              <button
+                key={p.key}
+                type="button"
+                onClick={() => setProvider(p.key)}
+                className={`rounded-md border px-3 py-1.5 text-xs transition-colors ${
+                  provider === p.key
+                    ? 'border-indigo-400 bg-indigo-500/15 text-white'
+                    : 'border-white/10 text-white/50 hover:border-white/30'
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="flex flex-wrap gap-2">
         {MONTHS.map(({ m, label }) => (
           <button

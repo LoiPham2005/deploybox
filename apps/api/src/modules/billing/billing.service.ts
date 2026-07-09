@@ -7,9 +7,9 @@ import {
   Logger,
   NotFoundException,
   ServiceUnavailableException,
-  UnauthorizedException,
 } from '@nestjs/common';
 import type {
+  BillingProviderInfo,
   BillingStatusDto,
   CheckoutResponse,
   PaymentDto,
@@ -23,12 +23,17 @@ import type { Payment } from '../../generated/prisma';
 import {
   PAYMENT_PROVIDER,
   type CallbackInput,
+  type CallbackOutcome,
   type CallbackResult,
   type PaymentProvider,
 } from './providers/payment-provider';
 
 const ALLOWED_MONTHS = [1, 3, 6, 12];
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // bỏ ký tự dễ nhầm
+const PROVIDER_LABELS: Record<string, string> = {
+  sepay: 'Chuyển khoản QR (SePay)',
+  vnpay: 'Thẻ / Ví (VNPay)',
+};
 
 @Injectable()
 export class BillingService {
@@ -78,13 +83,22 @@ export class BillingService {
   async status(userId: string, teamId: string): Promise<BillingStatusDto> {
     await this.assertMember(userId, teamId);
     const team = await this.prisma.team.findUniqueOrThrow({ where: { id: teamId } });
-    const provider = this.registry.get(await this.defaultProviderKey());
+    const defKey = await this.defaultProviderKey();
+
+    // Cổng nào đã cấu hình → cho khách chọn (cổng mặc định lên đầu)
+    const available: BillingProviderInfo[] = [];
+    for (const [key, p] of this.registry) {
+      if (await p.isConfigured()) available.push({ key, label: PROVIDER_LABELS[key] ?? key });
+    }
+    available.sort((a, b) => Number(b.key === defKey) - Number(a.key === defKey));
+
     return {
       plan: team.plan as 'FREE' | 'PRO',
       planExpiresAt: team.planExpiresAt?.toISOString() ?? null,
       priceVnd: await this.priceVnd(),
       proUpgradeEnabled: this.flags.isEnabled('billing_pro_upgrade'),
-      configured: provider ? await provider.isConfigured() : false,
+      configured: available.length > 0,
+      availableProviders: available,
     };
   }
 
@@ -167,33 +181,42 @@ export class BillingService {
   async handleCallback(
     providerKey: string,
     input: CallbackInput,
-  ): Promise<{ success: boolean }> {
+  ): Promise<unknown> {
     const provider = this.provider(providerKey);
     const res = await provider.parseCallback(input);
-    if (!res.ok) throw new UnauthorizedException('Callback không hợp lệ');
-    if (!res.paid) return { success: true }; // ack, bỏ qua (tiền ra / sai loại / lỗi)
+    const outcome = await this.processCallback(providerKey, res);
+    // Body trả về theo cổng (VNPay cần {RspCode,Message}; SePay chỉ cần 200)
+    return provider.ack ? provider.ack(outcome) : { success: outcome !== 'invalid_sig' };
+  }
+
+  private async processCallback(
+    providerKey: string,
+    res: CallbackResult,
+  ): Promise<CallbackOutcome> {
+    if (!res.ok) return 'invalid_sig';
+    if (!res.paid) return 'ignored'; // tiền ra / GD thất bại / sai loại
 
     // Chống trùng theo id giao dịch cổng
     if (res.providerTxnId) {
       const dup = await this.prisma.payment.findUnique({
         where: { providerTxnId: res.providerTxnId },
       });
-      if (dup) return { success: true };
+      if (dup) return 'already_paid';
     }
 
     const payment = await this.resolvePayment(res);
     if (!payment) {
       this.log.warn(`Giao dịch không khớp đơn nào (${providerKey}): ${res.rawContent ?? res.orderCode}`);
-      return { success: true }; // giao dịch lạ → ack, không làm gì
+      return 'not_found';
     }
-    if (payment.status === 'PAID') return { success: true };
+    if (payment.status === 'PAID') return 'already_paid';
     if (res.amount != null && res.amount < payment.amount) {
       this.log.warn(`Đơn ${payment.orderCode} trả thiếu: ${res.amount}/${payment.amount}`);
-      return { success: true }; // trả thiếu → không kích hoạt
+      return 'invalid_amount';
     }
 
     await this.activate(payment, res);
-    return { success: true };
+    return 'success';
   }
 
   private async resolvePayment(res: CallbackResult): Promise<Payment | null> {
