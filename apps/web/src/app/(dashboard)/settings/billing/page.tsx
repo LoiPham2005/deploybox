@@ -17,9 +17,27 @@ const STATUS_LABEL: Record<PaymentDto['status'], string> = {
   CANCELED: 'Đã huỷ',
 };
 
-export default async function BillingPage() {
+export default async function BillingPage({
+  searchParams,
+}: {
+  searchParams: { [k: string]: string | string[] | undefined };
+}) {
   const token = getToken();
   if (!token) redirect('/login');
+
+  // VNPay Return URL: khách trả xong redirect về đây kèm tham số + chữ ký.
+  // Tự xác minh + kích hoạt (không phụ thuộc IPN server-to-server), rồi làm sạch URL.
+  const vnpCode =
+    typeof searchParams.vnp_ResponseCode === 'string' ? searchParams.vnp_ResponseCode : undefined;
+  if (vnpCode) {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(searchParams)) {
+      if (k.startsWith('vnp_') && typeof v === 'string') qs.set(k, v);
+    }
+    await serverApi(`/billing/webhook/vnpay?${qs.toString()}`).catch(() => undefined);
+    redirect(`/settings/billing?paid=${vnpCode === '00' ? 'ok' : 'fail'}`);
+  }
+  const paid = typeof searchParams.paid === 'string' ? searchParams.paid : undefined;
 
   const me = await authApi.me(token).catch(() => redirect('/api/session/clear'));
   const team = me.teams[0];
@@ -51,6 +69,17 @@ export default async function BillingPage() {
         <h1 className="text-xl font-semibold">Gói dịch vụ</h1>
         <p className="mt-1 text-sm text-white/40">Quản lý gói và giới hạn của team</p>
       </div>
+
+      {paid === 'ok' && (
+        <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
+          ✓ Thanh toán thành công — gói đã cập nhật. Nếu chưa thấy PRO, tải lại trang sau vài giây.
+        </div>
+      )}
+      {paid === 'fail' && (
+        <div className="rounded-md border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          Thanh toán chưa hoàn tất hoặc đã huỷ — chưa trừ tiền. Bạn thử lại nhé.
+        </div>
+      )}
 
       {/* Current plan */}
       <Card>
