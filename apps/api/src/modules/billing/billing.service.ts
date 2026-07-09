@@ -9,13 +9,13 @@ import {
   ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import type {
   BillingStatusDto,
   CheckoutResponse,
   PaymentDto,
 } from '@deploybox/shared';
 import { PrismaService } from '../../infra/prisma/prisma.service';
+import { BillingConfigService } from './billing-config.service';
 import { FeatureFlagsService } from '../../infra/feature-flags/feature-flags.service';
 import { MailService } from '../../infra/mail/mail.service';
 import { NotifyService } from '../../infra/notify/notify.service';
@@ -37,7 +37,7 @@ export class BillingService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly config: ConfigService,
+    private readonly cfg: BillingConfigService,
     private readonly flags: FeatureFlagsService,
     private readonly mail: MailService,
     private readonly notify: NotifyService,
@@ -46,13 +46,12 @@ export class BillingService {
     for (const p of providers) this.registry.set(p.key, p);
   }
 
-  priceVnd(): number {
-    const v = Number(this.config.get('PRO_PRICE_VND', 99000));
-    return Number.isFinite(v) && v > 0 ? Math.floor(v) : 99000;
+  priceVnd(): Promise<number> {
+    return this.cfg.getPrice();
   }
 
-  private defaultProviderKey(): string {
-    return this.config.get<string>('PAYMENT_PROVIDER_DEFAULT', 'sepay');
+  private defaultProviderKey(): Promise<string> {
+    return this.cfg.getDefaultProvider();
   }
 
   private provider(key: string): PaymentProvider {
@@ -79,13 +78,13 @@ export class BillingService {
   async status(userId: string, teamId: string): Promise<BillingStatusDto> {
     await this.assertMember(userId, teamId);
     const team = await this.prisma.team.findUniqueOrThrow({ where: { id: teamId } });
-    const provider = this.registry.get(this.defaultProviderKey());
+    const provider = this.registry.get(await this.defaultProviderKey());
     return {
       plan: team.plan as 'FREE' | 'PRO',
       planExpiresAt: team.planExpiresAt?.toISOString() ?? null,
-      priceVnd: this.priceVnd(),
+      priceVnd: await this.priceVnd(),
       proUpgradeEnabled: this.flags.isEnabled('billing_pro_upgrade'),
-      configured: !!provider?.isConfigured(),
+      configured: provider ? await provider.isConfigured() : false,
     };
   }
 
@@ -100,14 +99,14 @@ export class BillingService {
     if (!this.flags.isEnabled('billing_pro_upgrade')) {
       throw new ForbiddenException('Tính năng mua Pro đang tắt');
     }
-    const provider = this.provider(providerKey || this.defaultProviderKey());
-    if (!provider.isConfigured()) {
+    const provider = this.provider(providerKey || (await this.defaultProviderKey()));
+    if (!(await provider.isConfigured())) {
       throw new ServiceUnavailableException(
         'Cổng thanh toán chưa được cấu hình. Liên hệ admin.',
       );
     }
     const m = ALLOWED_MONTHS.includes(months) ? months : 1;
-    const amount = this.priceVnd() * m;
+    const amount = (await this.priceVnd()) * m;
     const orderCode = this.genOrderCode();
 
     await this.prisma.payment.create({

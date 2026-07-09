@@ -166,6 +166,34 @@ export interface PaymentDto {
   createdAt: string;
 }
 
+/** Cấu hình billing cho admin sửa ở UI (giá + TK nhận tiền + key cổng). */
+export interface BillingConfigDto {
+  priceVnd: number;
+  defaultProvider: string;
+  sepayAccount: string;
+  sepayBank: string;
+  sepayHolder: string;
+  sepayQrBase: string;
+  sepayHasApikey: boolean; // không trả key thật về UI
+  sources: {
+    price: 'db' | 'env';
+    account: 'db' | 'env' | 'none';
+    apikey: 'db' | 'env' | 'none';
+  };
+}
+
+/** Body admin lưu cấu hình billing (field bỏ trống = không đụng). */
+export interface BillingConfigPatch {
+  priceVnd?: number;
+  defaultProvider?: string;
+  sepayAccount?: string;
+  sepayBank?: string;
+  sepayHolder?: string;
+  sepayQrBase?: string;
+  sepayApikey?: string; // chỉ đặt khi nhập chuỗi mới
+  clearApikey?: boolean; // true = xoá key DB (về .env)
+}
+
 /** Trạng thái gói của 1 team — cho trang Gói dịch vụ. */
 export interface BillingStatusDto {
   plan: 'FREE' | 'PRO';

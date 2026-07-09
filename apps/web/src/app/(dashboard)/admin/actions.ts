@@ -56,6 +56,22 @@ export async function setAiKeyAction(
   }
 }
 
+/** Admin lưu cấu hình thanh toán (giá + TK nhận tiền + key SePay). */
+export async function setBillingConfigAction(
+  patch: import('@deploybox/shared').BillingConfigPatch,
+): Promise<Result> {
+  try {
+    await serverApi('/admin/billing', {
+      method: 'PUT',
+      body: JSON.stringify(patch),
+    });
+    revalidatePath('/admin');
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Lưu cấu hình thanh toán thất bại' };
+  }
+}
+
 /** Admin bật/tắt 1 tính năng hệ thống. */
 export async function toggleFeatureAction(
   key: string,

@@ -6,6 +6,8 @@ import { FeatureFlagsService } from '../../infra/feature-flags/feature-flags.ser
 import { AiService } from '../../infra/ai/ai.service';
 import { AuditService } from '../../infra/audit/audit.service';
 import { ReportService } from '../deployments/report.service';
+import { BillingConfigService } from '../billing/billing-config.service';
+import type { BillingConfigPatch } from '@deploybox/shared';
 
 @UseGuards(JwtAuthGuard, AdminGuard)
 @Controller('admin')
@@ -16,7 +18,19 @@ export class AdminController {
     private readonly ai: AiService,
     private readonly audit: AuditService,
     private readonly report: ReportService,
+    private readonly billing: BillingConfigService,
   ) {}
+
+  /** Cấu hình thanh toán (giá + TK nhận tiền + key SePay) — admin sửa ở UI. */
+  @Get('billing')
+  billingConfig() {
+    return this.billing.adminView();
+  }
+
+  @Put('billing')
+  setBillingConfig(@Body() body: BillingConfigPatch) {
+    return this.billing.save(body ?? {});
+  }
 
   /** 📝 Nhật ký hoạt động: ai làm gì lúc nào (?limit=100&email=lọc). */
   @Get('audit')

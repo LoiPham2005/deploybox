@@ -51,8 +51,8 @@ export interface CallbackResult {
 
 export interface PaymentProvider {
   readonly key: string; // 'sepay' | 'vnpay' | …
-  /** Đã có đủ cấu hình (.env) để dùng chưa. */
-  isConfigured(): boolean;
+  /** Đã có đủ cấu hình (DB/.env) để dùng chưa. */
+  isConfigured(): Promise<boolean>;
   /** Mở phiên thanh toán cho đơn → trả cách khách trả tiền. */
   createCharge(order: PaymentOrder): Promise<ChargeResult>;
   /** Đọc callback từ cổng → chuẩn hoá kết quả cho lõi. */

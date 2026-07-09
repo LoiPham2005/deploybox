@@ -36,9 +36,9 @@ export class VnpayProvider implements PaymentProvider {
     };
   }
 
-  isConfigured(): boolean {
+  isConfigured(): Promise<boolean> {
     const c = this.cfg();
-    return !!(c.tmnCode && c.secret);
+    return Promise.resolve(!!(c.tmnCode && c.secret));
   }
 
   /** Sắp xếp key tăng dần, encode giá trị kiểu x-www-form-urlencoded (space → +). */

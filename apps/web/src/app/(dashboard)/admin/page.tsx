@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { isAdminRole, type AiConfigStatus, type AuditLogDto, type UserRole } from '@deploybox/shared';
+import { isAdminRole, type AiConfigStatus, type AuditLogDto, type BillingConfigDto, type UserRole } from '@deploybox/shared';
 import { getToken } from '@/lib/auth';
 import { authApi } from '@/lib/api';
 import { serverApi } from '@/lib/api-server';
@@ -7,6 +7,7 @@ import { Card } from '@/components/ui/card';
 import { PlanToggle } from './plan-toggle';
 import { FeatureFlagsPanel, type Feature } from './feature-flags-panel';
 import { AiConfigPanel } from './ai-config-panel';
+import { BillingConfigPanel } from './billing-config-panel';
 import { AdminTabs } from './admin-tabs';
 
 interface AiUsageSummary {
@@ -56,6 +57,8 @@ export default async function AdminPage() {
     serverApi<AiUsageSummary>('/admin/ai-usage?days=30').catch(() => null),
     serverApi<AuditLogDto[]>('/admin/audit?limit=50').catch(() => [] as AuditLogDto[]),
   ]);
+
+  const billingConfig = await serverApi<BillingConfigDto>('/admin/billing').catch(() => null);
 
   const statsTab = (
     <div className="grid grid-cols-3 gap-4">
@@ -247,6 +250,22 @@ export default async function AdminPage() {
     </Card>
   );
 
+  const billingTab = (
+    <Card>
+      <h2 className="mb-1 text-sm font-semibold text-white/70">Thanh toán &amp; giá bán</h2>
+      <p className="mb-4 text-xs text-white/40">
+        Chỉnh giá gói PRO, tài khoản nhận tiền và API key SePay ngay tại đây — lưu vào DB,
+        có hiệu lực ngay, không cần sửa .env. Bật/tắt nút mua ở tab Tính năng
+        (&quot;Cho phép mua Nâng cấp Pro&quot;).
+      </p>
+      {billingConfig ? (
+        <BillingConfigPanel config={billingConfig} />
+      ) : (
+        <p className="text-sm text-red-400">Không tải được cấu hình thanh toán.</p>
+      )}
+    </Card>
+  );
+
   return (
     <div className="space-y-6">
       <div>
@@ -258,6 +277,7 @@ export default async function AdminPage() {
           { id: 'overview', label: 'Tổng quan', content: statsTab },
           { id: 'features', label: 'Tính năng', content: featuresTab },
           { id: 'ai', label: 'AI', content: aiTab },
+          { id: 'billing', label: 'Thanh toán', content: billingTab },
           { id: 'users', label: 'Người dùng', content: usersTab },
           { id: 'audit', label: 'Nhật ký', content: auditTab },
         ]}

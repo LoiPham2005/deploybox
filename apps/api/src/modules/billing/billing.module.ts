@@ -3,6 +3,7 @@ import { AuthModule } from '../auth/auth.module';
 import { NotifyService } from '../../infra/notify/notify.service';
 import { BillingController } from './billing.controller';
 import { BillingService } from './billing.service';
+import { BillingConfigService } from './billing-config.service';
 import { BillingExpiryService } from './billing-expiry.service';
 import {
   PAYMENT_PROVIDER,
@@ -16,6 +17,7 @@ import { VnpayProvider } from './providers/vnpay.provider';
   controllers: [BillingController],
   providers: [
     BillingService,
+    BillingConfigService,
     BillingExpiryService,
     NotifyService,
 
@@ -35,5 +37,6 @@ import { VnpayProvider } from './providers/vnpay.provider';
       inject: [SepayProvider, VnpayProvider],
     },
   ],
+  exports: [BillingConfigService], // AdminModule dùng để sửa cấu hình ở UI
 })
 export class BillingModule {}
