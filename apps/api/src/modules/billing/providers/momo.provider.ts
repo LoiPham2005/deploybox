@@ -41,7 +41,9 @@ export class MomoProvider implements PaymentProvider {
     const amount = String(order.amount);
     const orderInfo = order.description;
     const extraData = '';
-    const requestType = 'captureWallet';
+    // payWithMethod = cổng hiện đầy đủ phương thức cho khách CHỌN (ví MoMo / thẻ
+    // ATM nội địa / thẻ quốc tế / QR) — giống VNPay. captureWallet thì vào thẳng QR ví.
+    const requestType = 'payWithMethod';
     // Chuỗi ký theo thứ tự alphabet MoMo quy định
     const raw =
       `accessKey=${c.accessKey}&amount=${amount}&extraData=${extraData}` +
