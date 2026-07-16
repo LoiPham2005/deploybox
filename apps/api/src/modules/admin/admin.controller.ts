@@ -48,6 +48,12 @@ export class AdminController {
     return this.backup.run();
   }
 
+  /** Đổi NƠI NHẬN backup (URL DB phụ) — test kết nối rồi mới lưu (file trên đĩa). */
+  @Put('backup/target')
+  setBackupTarget(@Body() body: { url?: string; clear?: boolean }) {
+    return this.backup.setTarget(body?.url, body?.clear);
+  }
+
   /** Chuyển DB chính ↔ DB dự phòng. Ghi file failover xong RESTART API
    *  (pm2 tự kéo dậy) — trả lời trước, thoát sau 1.2s. */
   @Post('backup/failover')

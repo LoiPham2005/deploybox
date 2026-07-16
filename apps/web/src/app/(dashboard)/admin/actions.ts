@@ -110,6 +110,23 @@ export async function getBackupStatusAction(): Promise<
   }
 }
 
+/** Đổi nơi nhận backup (URL DB phụ) — server test kết nối trước khi lưu. */
+export async function setBackupTargetAction(
+  url: string | undefined,
+  clear?: boolean,
+): Promise<Result> {
+  try {
+    await serverApi('/admin/backup/target', {
+      method: 'PUT',
+      body: JSON.stringify({ url, clear }),
+    });
+    revalidatePath('/admin');
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Lưu DB phụ thất bại' };
+  }
+}
+
 /** Chuyển DB chính ↔ DB dự phòng (API sẽ tự restart). */
 export async function setFailoverAction(useBackup: boolean): Promise<Result> {
   try {

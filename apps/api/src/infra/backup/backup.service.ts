@@ -9,7 +9,13 @@ import { ConfigService } from '@nestjs/config';
 import { spawn } from 'child_process';
 import { mkdir, readdir, rm, stat, writeFile } from 'fs/promises';
 import { join, resolve } from 'path';
-import { PrismaService, failoverFilePath, resolveActiveDb } from '../prisma/prisma.service';
+import {
+  PrismaService,
+  backupTargetFilePath,
+  failoverFilePath,
+  resolveActiveDb,
+  resolveBackupUrl,
+} from '../prisma/prisma.service';
 import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
 import { NotifyService } from '../notify/notify.service';
 
@@ -70,12 +76,56 @@ export class BackupService implements OnApplicationBootstrap, OnModuleDestroy {
     return this.config.get<string>('DATABASE_URL', '');
   }
 
-  /** URL DB phụ cho psql/pg_dump — bỏ "-pooler" (restore DDL nên đi kết nối trực tiếp). */
+  /** URL DB phụ hiệu lực: admin nhập ở UI (file) → fallback .env. */
   private backupUrl(): string {
-    return (this.config.get<string>('DATABASE_URL_BACKUP', '') || '').trim();
+    return resolveBackupUrl().url;
   }
+  /** Bản cho psql/pg_dump — bỏ "-pooler" (restore DDL nên đi kết nối trực tiếp). */
   private backupUrlDirect(): string {
     return this.backupUrl().replace('-pooler.', '.');
+  }
+
+  /** Che mật khẩu + rút gọn để hiện ở UI: host/dbname. */
+  private targetDisplay(url: string): string {
+    try {
+      const u = new URL(url);
+      return `${u.hostname}${u.pathname}`;
+    } catch {
+      return '(URL không đọc được)';
+    }
+  }
+
+  /** Admin đổi NƠI NHẬN backup (DB phụ) ngay ở UI — test kết nối trước khi lưu.
+   *  Lưu vào FILE trên đĩa (không phải DB — failover cần đọc khi DB chính chết).
+   *  clear = xoá cấu hình admin, quay về .env. */
+  async setTarget(url: string | undefined, clear?: boolean): Promise<{ target: string }> {
+    if (resolveActiveDb().usingBackup) {
+      throw new BadRequestException('Đang chạy trên DB phụ — chuyển về DB chính trước khi đổi nơi backup');
+    }
+    if (clear) {
+      await rm(backupTargetFilePath(), { force: true }).catch(() => undefined);
+      const eff = this.backupUrl();
+      return { target: eff ? this.targetDisplay(eff) : '' };
+    }
+    const v = (url ?? '').trim();
+    if (!/^postgres(ql)?:\/\//.test(v)) {
+      throw new BadRequestException('URL phải dạng postgresql://user:pass@host/dbname');
+    }
+    if (v === this.config.get<string>('DATABASE_URL', '')) {
+      throw new BadRequestException('DB phụ không được trùng DB chính');
+    }
+    // Test kết nối thật (SELECT 1, timeout 10s) — sai URL thì báo ngay, không lưu
+    await this.sh('psql "$DST" -tAc "select 1" -o /dev/null', {
+      DST: v.replace('-pooler.', '.'),
+      PGCONNECT_TIMEOUT: '10',
+    }).catch((e) => {
+      throw new BadRequestException(`Không kết nối được DB phụ: ${(e as Error).message.slice(0, 200)}`);
+    });
+    await writeFile(
+      backupTargetFilePath(),
+      JSON.stringify({ url: v, updatedAt: new Date().toISOString() }, null, 2),
+    );
+    return { target: this.targetDisplay(v) };
   }
 
   private async runScheduled(): Promise<void> {
@@ -162,6 +212,7 @@ export class BackupService implements OnApplicationBootstrap, OnModuleDestroy {
     secondaryConfigured: boolean;
     usingBackupDb: boolean;
     running: boolean;
+    target: { display: string; source: 'admin' | 'env' | 'none' };
   }> {
     const row = await this.prisma.setting.findUnique({ where: { key: STATUS_KEY } }).catch(() => null);
     let last: BackupStatus | null = null;
@@ -180,12 +231,14 @@ export class BackupService implements OnApplicationBootstrap, OnModuleDestroy {
       const s = await stat(join(dir, f)).catch(() => null);
       if (s) files.push({ name: f, sizeBytes: s.size });
     }
+    const t = resolveBackupUrl();
     return {
       last,
       files,
-      secondaryConfigured: !!this.backupUrl(),
+      secondaryConfigured: !!t.url,
       usingBackupDb: resolveActiveDb().usingBackup,
       running: this.running,
+      target: { display: t.url ? this.targetDisplay(t.url) : '', source: t.source },
     };
   }
 

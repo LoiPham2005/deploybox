@@ -3,8 +3,14 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { useConfirm } from '@/components/ui/confirm-dialog';
-import { runBackupAction, setFailoverAction, getBackupStatusAction } from './actions';
+import {
+  runBackupAction,
+  setFailoverAction,
+  getBackupStatusAction,
+  setBackupTargetAction,
+} from './actions';
 
 export interface BackupStatusView {
   last: {
@@ -19,6 +25,7 @@ export interface BackupStatusView {
   secondaryConfigured: boolean;
   usingBackupDb: boolean;
   running: boolean;
+  target: { display: string; source: 'admin' | 'env' | 'none' };
 }
 
 const kb = (n: number) => `${Math.max(1, Math.round(n / 1024))}KB`;
@@ -30,6 +37,22 @@ export function BackupPanel({ status }: { status: BackupStatusView }) {
   const [switching, setSwitching] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  // Đổi nơi nhận backup (URL DB phụ) — nhập mới thì mới gửi, trống = giữ nguyên
+  const [targetUrl, setTargetUrl] = useState('');
+  const [savingTarget, setSavingTarget] = useState(false);
+
+  async function saveTarget(clear = false) {
+    setSavingTarget(true);
+    setErr(null);
+    setMsg(null);
+    const res = await setBackupTargetAction(clear ? undefined : targetUrl.trim(), clear);
+    setSavingTarget(false);
+    if (res.ok) {
+      setMsg(clear ? 'Đã xoá cấu hình — quay về DB phụ trong .env (nếu có).' : 'Đã kiểm tra kết nối + lưu DB phụ mới ✓');
+      setTargetUrl('');
+      router.refresh();
+    } else setErr(res.error);
+  }
 
   async function backupNow() {
     setBusy(true);
@@ -120,6 +143,59 @@ export function BackupPanel({ status }: { status: BackupStatusView }) {
             Đang chạy trên bản sao — backup định kỳ tạm dừng. Khắc phục DB chính xong hãy chuyển về.
           </p>
         )}
+      </div>
+
+      {/* Nơi nhận backup (DB phụ) — đổi động, không cần sửa .env */}
+      <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-4 space-y-2">
+        <p className="text-sm font-semibold text-white/70">
+          Nơi nhận backup (DB phụ)
+          {status.target.source !== 'none' && (
+            <span
+              className={`ml-2 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                status.target.source === 'admin'
+                  ? 'bg-emerald-500/15 text-emerald-300'
+                  : 'bg-white/10 text-white/50'
+              }`}
+            >
+              {status.target.source === 'admin' ? 'Admin nhập' : '.env'}
+            </span>
+          )}
+        </p>
+        <p className="text-xs text-white/40">
+          Đang trỏ tới:{' '}
+          {status.target.display ? (
+            <code className="text-white/60">{status.target.display}</code>
+          ) : (
+            <span className="text-amber-300">chưa có</span>
+          )}
+        </p>
+        <div className="flex gap-2">
+          <Input
+            type="password"
+            value={targetUrl}
+            onChange={(e) => setTargetUrl(e.target.value)}
+            placeholder="postgresql://user:pass@host/dbname (Neon/Supabase/PostgreSQL bất kỳ)"
+            className="flex-1"
+          />
+          <Button onClick={() => saveTarget(false)} disabled={savingTarget || !targetUrl.trim() || status.usingBackupDb}>
+            {savingTarget ? 'Đang kiểm tra…' : 'Kiểm tra & lưu'}
+          </Button>
+          {status.target.source === 'admin' && (
+            <Button
+              variant="ghost"
+              onClick={() => saveTarget(true)}
+              disabled={savingTarget || status.usingBackupDb}
+              className="text-red-400 hover:text-red-300"
+            >
+              Xoá
+            </Button>
+          )}
+        </div>
+        <p className="text-[11px] text-white/30">
+          Server tự <b>kiểm tra kết nối</b> trước khi lưu (URL sai sẽ báo lỗi, không lưu). Sau khi
+          đổi, bấm &quot;Backup ngay&quot; để đẩy bản sao đầu tiên sang DB mới.
+          {status.usingBackupDb && ' Đang chạy trên DB phụ — về DB chính trước khi đổi.'}
+        </p>
       </div>
 
       {/* Backup gần nhất */}

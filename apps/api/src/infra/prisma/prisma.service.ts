@@ -15,10 +15,30 @@ export function failoverFilePath(): string {
   return join(dataDir, 'db-failover.json');
 }
 
+/** File chứa URL DB dự phòng do ADMIN nhập ở UI (ưu tiên hơn .env). Cũng phải
+ *  nằm trên ĐĨA vì lý do như trên — failover cần đọc được khi DB chính chết. */
+export function backupTargetFilePath(): string {
+  const dataDir = resolve(process.cwd(), process.env.DATA_DIR || '.deploybox-data');
+  return join(dataDir, 'db-backup-target.json');
+}
+
+/** URL DB dự phòng hiệu lực: admin nhập (file) → fallback .env. */
+export function resolveBackupUrl(): { url: string; source: 'admin' | 'env' | 'none' } {
+  try {
+    const raw = readFileSync(backupTargetFilePath(), 'utf8');
+    const state = JSON.parse(raw) as { url?: string };
+    if (state.url?.trim()) return { url: state.url.trim(), source: 'admin' };
+  } catch {
+    /* chưa có file → xuống .env */
+  }
+  const env = (process.env.DATABASE_URL_BACKUP ?? '').trim();
+  return { url: env, source: env ? 'env' : 'none' };
+}
+
 /** DB đang dùng thật sự lúc boot: chính, hay phụ (nếu failover bật + có URL phụ). */
 export function resolveActiveDb(): { url: string; usingBackup: boolean } {
   const main = process.env.DATABASE_URL ?? '';
-  const backup = (process.env.DATABASE_URL_BACKUP ?? '').trim();
+  const backup = resolveBackupUrl().url;
   try {
     const raw = readFileSync(failoverFilePath(), 'utf8');
     const state = JSON.parse(raw) as { useBackup?: boolean };
