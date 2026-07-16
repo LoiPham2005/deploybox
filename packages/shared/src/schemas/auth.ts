@@ -13,12 +13,14 @@ export const registerSchema = z.object({
   password: z.string().min(8, 'Mật khẩu tối thiểu 8 ký tự'),
   name: z.string().trim().min(1).max(80).optional(),
   signupCode: z.string().optional(),
+  captchaToken: z.string().optional(), // Cloudflare Turnstile (khi admin bật)
 });
 export type RegisterDto = z.infer<typeof registerSchema>;
 
 export const loginSchema = z.object({
   email: emailField,
   password: z.string().min(1, 'Nhập mật khẩu'),
+  captchaToken: z.string().optional(), // Cloudflare Turnstile (khi admin bật)
 });
 export type LoginDto = z.infer<typeof loginSchema>;
 

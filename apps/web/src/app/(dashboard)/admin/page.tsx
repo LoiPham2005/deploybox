@@ -8,6 +8,8 @@ import { PlanToggle } from './plan-toggle';
 import { FeatureFlagsPanel, type Feature } from './feature-flags-panel';
 import { AiConfigPanel } from './ai-config-panel';
 import { BillingConfigPanel } from './billing-config-panel';
+import { BackupPanel, type BackupStatusView } from './backup-panel';
+import { TurnstilePanel, type TurnstileConfigView } from './turnstile-panel';
 import { AdminTabs } from './admin-tabs';
 
 interface AiUsageSummary {
@@ -59,6 +61,8 @@ export default async function AdminPage() {
   ]);
 
   const billingConfig = await serverApi<BillingConfigDto>('/admin/billing').catch(() => null);
+  const backupStatus = await serverApi<BackupStatusView>('/admin/backup').catch(() => null);
+  const captchaConfig = await serverApi<TurnstileConfigView>('/admin/captcha').catch(() => null);
 
   const statsTab = (
     <div className="grid grid-cols-3 gap-4">
@@ -78,13 +82,23 @@ export default async function AdminPage() {
   );
 
   const featuresTab = (
-    <Card>
-      <h2 className="mb-1 text-sm font-semibold text-white/70">Tính năng hệ thống</h2>
-      <p className="mb-4 text-xs text-white/40">
-        Bật/tắt tính năng toàn hệ thống (áp dụng cho mọi người dùng) — vd tắt tạm khi bảo trì.
-      </p>
-      <FeatureFlagsPanel features={features} scope="general" />
-    </Card>
+    <div className="space-y-6">
+      <Card>
+        <h2 className="mb-1 text-sm font-semibold text-white/70">Tính năng hệ thống</h2>
+        <p className="mb-4 text-xs text-white/40">
+          Bật/tắt tính năng toàn hệ thống (áp dụng cho mọi người dùng) — vd tắt tạm khi bảo trì.
+        </p>
+        <FeatureFlagsPanel features={features} scope="general" />
+      </Card>
+      {captchaConfig && (
+        <Card>
+          <h2 className="mb-1 text-sm font-semibold text-white/70">
+            Check người/robot — Cloudflare Turnstile
+          </h2>
+          <TurnstilePanel config={captchaConfig} />
+        </Card>
+      )}
+    </div>
   );
 
   const aiTab = (
@@ -266,6 +280,21 @@ export default async function AdminPage() {
     </Card>
   );
 
+  const backupTab = (
+    <Card>
+      <h2 className="mb-1 text-sm font-semibold text-white/70">Sao lưu &amp; DB dự phòng</h2>
+      <p className="mb-4 text-xs text-white/40">
+        Backup DB nền tảng tự động mỗi 6h (file local + bản sao sang DB phụ). Khi DB chính gặp
+        sự cố: bấm &quot;Chuyển sang DB phụ&quot; để cứu hộ, khắc phục xong chuyển về.
+      </p>
+      {backupStatus ? (
+        <BackupPanel status={backupStatus} />
+      ) : (
+        <p className="text-sm text-red-400">Không tải được trạng thái backup.</p>
+      )}
+    </Card>
+  );
+
   return (
     <div className="space-y-6">
       <div>
@@ -278,6 +307,7 @@ export default async function AdminPage() {
           { id: 'features', label: 'Tính năng', content: featuresTab },
           { id: 'ai', label: 'AI', content: aiTab },
           { id: 'billing', label: 'Thanh toán', content: billingTab },
+          { id: 'backup', label: 'Sao lưu', content: backupTab },
           { id: 'users', label: 'Người dùng', content: usersTab },
           { id: 'audit', label: 'Nhật ký', content: auditTab },
         ]}

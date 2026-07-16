@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Put, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { AdminGuard } from './admin.guard';
 import { AdminService } from './admin.service';
@@ -7,6 +7,8 @@ import { AiService } from '../../infra/ai/ai.service';
 import { AuditService } from '../../infra/audit/audit.service';
 import { ReportService } from '../deployments/report.service';
 import { BillingConfigService } from '../billing/billing-config.service';
+import { BackupService } from '../../infra/backup/backup.service';
+import { CaptchaService } from '../../infra/captcha/captcha.service';
 import type { BillingConfigPatch } from '@deploybox/shared';
 
 @UseGuards(JwtAuthGuard, AdminGuard)
@@ -19,7 +21,41 @@ export class AdminController {
     private readonly audit: AuditService,
     private readonly report: ReportService,
     private readonly billing: BillingConfigService,
+    private readonly backup: BackupService,
+    private readonly captchaSvc: CaptchaService,
   ) {}
+
+  /** 🤖 Turnstile: xem/lưu key (secret mã hoá, không trả về UI). */
+  @Get('captcha')
+  captchaView() {
+    return this.captchaSvc.adminView();
+  }
+
+  @Put('captcha')
+  setCaptcha(@Body() body: { siteKey?: string; secretKey?: string; clearSecret?: boolean }) {
+    return this.captchaSvc.save(body ?? {});
+  }
+
+  /** 💾 Sao lưu: trạng thái backup + DB đang dùng (chính/phụ). */
+  @Get('backup')
+  backupStatus() {
+    return this.backup.status();
+  }
+
+  /** Chạy backup ngay (dump → local + đẩy sang DB phụ). */
+  @Post('backup/run')
+  backupRun() {
+    return this.backup.run();
+  }
+
+  /** Chuyển DB chính ↔ DB dự phòng. Ghi file failover xong RESTART API
+   *  (pm2 tự kéo dậy) — trả lời trước, thoát sau 1.2s. */
+  @Post('backup/failover')
+  async backupFailover(@Body() body: { useBackup: boolean }) {
+    await this.backup.setFailover(!!body?.useBackup);
+    setTimeout(() => process.exit(0), 1200);
+    return { ok: true, restarting: true };
+  }
 
   /** Cấu hình thanh toán (giá + TK nhận tiền + key SePay) — admin sửa ở UI. */
   @Get('billing')

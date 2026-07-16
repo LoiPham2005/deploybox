@@ -7,6 +7,10 @@ import { authApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { TurnstileWidget } from '@/components/turnstile-widget';
+
+const API_BASE_CAPTCHA =
+  (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000') + '/api/v1';
 
 /**
  * Đăng ký 2 bước: (1) nhập thông tin → gửi OTP về email; (2) nhập OTP → tạo tài khoản.
@@ -51,6 +55,18 @@ export default function RegisterPage() {
     return () => clearTimeout(t);
   }, [cooldown]);
 
+  // Turnstile (check người/robot) — admin bật ở Tính năng + có key
+  const [captcha, setCaptcha] = useState<{ enabled: boolean; siteKey: string }>({ enabled: false, siteKey: '' });
+  const [captchaToken, setCaptchaToken] = useState('');
+  useEffect(() => {
+    fetch(`${API_BASE_CAPTCHA}/auth/captcha`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((c: { enabled: boolean; siteKey: string } | null) => {
+        if (c?.enabled) setCaptcha(c);
+      })
+      .catch(() => undefined);
+  }, []);
+
   async function finishLogin(accessToken: string) {
     await fetch('/api/session', {
       method: 'POST',
@@ -66,6 +82,7 @@ export default function RegisterPage() {
     email,
     password,
     signupCode: signupCode || undefined,
+    captchaToken: captchaToken || undefined,
   });
 
   /** Hoàn tất đăng ký OAuth: chỉ cần mã mời (danh tính đã do GitHub xác thực). */
@@ -277,8 +294,15 @@ export default function RegisterPage() {
           placeholder="Để trống nếu instance không yêu cầu"
         />
       </div>
+      {captcha.enabled && (
+        <TurnstileWidget siteKey={captcha.siteKey} onToken={setCaptchaToken} />
+      )}
       {error && <p className="text-sm text-red-400">{error}</p>}
-      <Button type="submit" disabled={loading} className="w-full">
+      <Button
+        type="submit"
+        disabled={loading || (captcha.enabled && !captchaToken)}
+        className="w-full"
+      >
         {loading ? 'Đang gửi mã…' : 'Tiếp tục — nhận mã qua email'}
       </Button>
       <p className="text-center text-sm text-white/50">

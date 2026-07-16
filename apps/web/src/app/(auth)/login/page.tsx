@@ -8,6 +8,7 @@ import { authApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { TurnstileWidget } from '@/components/turnstile-widget';
 
 const API_BASE =
   (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000') + '/api/v1';
@@ -44,6 +45,9 @@ export default function LoginPage() {
   const [otp, setOtp] = useState('');
   // OAuth: các nhà server đã cấu hình + flag bật (github/gitlab/bitbucket)
   const [oauthReady, setOauthReady] = useState<string[]>([]);
+  // Turnstile (check người/robot) — admin bật ở Tính năng + có key
+  const [captcha, setCaptcha] = useState<{ enabled: boolean; siteKey: string }>({ enabled: false, siteKey: '' });
+  const [captchaToken, setCaptchaToken] = useState('');
 
   useEffect(() => {
     // lỗi OAuth do API redirect về (?oauth_error=…)
@@ -55,6 +59,12 @@ export default function LoginPage() {
         if (Array.isArray(list)) {
           setOauthReady(list.filter((p) => p.configured && p.enabled).map((p) => p.provider));
         }
+      })
+      .catch(() => undefined);
+    fetch(`${API_BASE}/auth/captcha`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((c: { enabled: boolean; siteKey: string } | null) => {
+        if (c?.enabled) setCaptcha(c);
       })
       .catch(() => undefined);
   }, []);
@@ -73,7 +83,11 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
     try {
-      const res = await authApi.login({ email: loginEmail, password: loginPassword });
+      const res = await authApi.login({
+        email: loginEmail,
+        password: loginPassword,
+        captchaToken: captchaToken || undefined,
+      });
       if ('requires2fa' in res) {
         // Chưa có token — server đã gửi OTP về email
         setOtpStep(true);
@@ -261,8 +275,15 @@ export default function LoginPage() {
             required
           />
         </div>
+        {captcha.enabled && (
+          <TurnstileWidget siteKey={captcha.siteKey} onToken={setCaptchaToken} />
+        )}
         {error && <p className="text-sm text-red-400">{error}</p>}
-        <Button type="submit" disabled={loading} className="w-full">
+        <Button
+          type="submit"
+          disabled={loading || (captcha.enabled && !captchaToken)}
+          className="w-full"
+        >
           {loading ? 'Đang đăng nhập…' : 'Đăng nhập'}
         </Button>
         <p className="text-center text-sm text-white/50">

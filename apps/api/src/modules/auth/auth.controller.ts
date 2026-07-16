@@ -14,6 +14,7 @@ import {
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { JwtService } from '@nestjs/jwt';
 import type { Request, Response } from 'express';
+import { CaptchaService } from '../../infra/captcha/captcha.service';
 import {
   changePasswordSchema,
   createTokenSchema,
@@ -62,15 +63,23 @@ export class AuthController {
     private readonly sessions: SessionsService,
     private readonly jwtSvc: JwtService,
     private readonly flags: FeatureFlagsService,
+    private readonly captcha: CaptchaService,
   ) {}
+
+  /** Public — trang login/register hỏi có cần Turnstile không + site key. */
+  @Get('captcha')
+  captchaConfig() {
+    return this.captcha.publicConfig();
+  }
 
   @UseGuards(ThrottlerGuard)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('register')
-  register(
+  async register(
     @Body(new ZodValidationPipe(registerSchema)) dto: RegisterDto,
     @Req() req: Request,
   ) {
+    await this.captcha.assertValid(dto.captchaToken, req.ip);
     return this.auth.register(dto, loginMeta(req));
   }
 
@@ -78,7 +87,11 @@ export class AuthController {
   @UseGuards(ThrottlerGuard)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('register/request-otp')
-  requestRegisterOtp(@Body(new ZodValidationPipe(registerSchema)) dto: RegisterDto) {
+  async requestRegisterOtp(
+    @Body(new ZodValidationPipe(registerSchema)) dto: RegisterDto,
+    @Req() req: Request,
+  ) {
+    await this.captcha.assertValid(dto.captchaToken, req.ip);
     return this.auth.requestRegisterOtp(dto);
   }
 
@@ -112,10 +125,11 @@ export class AuthController {
   @UseGuards(ThrottlerGuard)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('login')
-  login(
+  async login(
     @Body(new ZodValidationPipe(loginSchema)) dto: LoginDto,
     @Req() req: Request,
   ) {
+    await this.captcha.assertValid(dto.captchaToken, req.ip);
     return this.auth.login(dto, loginMeta(req));
   }
 

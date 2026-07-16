@@ -4,6 +4,11 @@ export const envSchema = z.object({
   NODE_ENV: z.string().default('development'),
   PORT: z.coerce.number().default(4000),
   DATABASE_URL: z.string().min(1),
+  // DB DỰ PHÒNG (vd Neon): backup định kỳ được đẩy sang đây; admin có thể
+  // "Chuyển sang DB phụ" khi DB chính gặp sự cố. Trống = tắt tính năng.
+  DATABASE_URL_BACKUP: z.string().default(''),
+  // Thư mục chứa file backup .sql.gz (trống = <DATA_DIR>/backups)
+  BACKUP_DIR: z.string().default(''),
   JWT_SECRET: z.string().min(8, 'JWT_SECRET phải >= 8 ký tự'),
   JWT_EXPIRES_IN: z.string().default('7d'),
   // Nếu đặt: chỉ ai có mã này mới đăng ký được (cho instance nội bộ). Rỗng = mở.

@@ -9,6 +9,8 @@ export function middleware(req: NextRequest) {
     pathname === '/login' ||
     pathname === '/register' ||
     pathname === '/forgot-password';
+  // Trang công khai (không cần đăng nhập, cũng không đá về dashboard)
+  if (pathname === '/status') return NextResponse.next();
 
   if (!token && !isAuthPage) {
     const url = req.nextUrl.clone();

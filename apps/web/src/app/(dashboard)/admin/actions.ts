@@ -72,6 +72,57 @@ export async function setBillingConfigAction(
   }
 }
 
+/** 🤖 Lưu key Cloudflare Turnstile (secret mã hoá; rỗng = giữ nguyên). */
+export async function setCaptchaAction(patch: {
+  siteKey?: string;
+  secretKey?: string;
+  clearSecret?: boolean;
+}): Promise<Result> {
+  try {
+    await serverApi('/admin/captcha', { method: 'PUT', body: JSON.stringify(patch) });
+    revalidatePath('/admin');
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Lưu key thất bại' };
+  }
+}
+
+/** 💾 Chạy backup DB nền tảng ngay (local + đẩy sang DB phụ). */
+export async function runBackupAction(): Promise<Result> {
+  try {
+    await serverApi('/admin/backup/run', { method: 'POST' });
+    revalidatePath('/admin');
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Backup thất bại' };
+  }
+}
+
+/** Đọc trạng thái backup (dùng để poll sau failover — API restart). */
+export async function getBackupStatusAction(): Promise<
+  { ok: true; data: unknown } | { ok: false; error: string }
+> {
+  try {
+    const data = await serverApi('/admin/backup');
+    return { ok: true, data };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'API chưa trả lời' };
+  }
+}
+
+/** Chuyển DB chính ↔ DB dự phòng (API sẽ tự restart). */
+export async function setFailoverAction(useBackup: boolean): Promise<Result> {
+  try {
+    await serverApi('/admin/backup/failover', {
+      method: 'POST',
+      body: JSON.stringify({ useBackup }),
+    });
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Chuyển DB thất bại' };
+  }
+}
+
 /** Admin bật/tắt 1 tính năng hệ thống. */
 export async function toggleFeatureAction(
   key: string,

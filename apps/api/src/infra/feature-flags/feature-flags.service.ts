@@ -94,6 +94,20 @@ export const KNOWN_FLAGS: {
     default: true,
   },
   {
+    key: 'turnstile_captcha',
+    label: 'Check người/robot (Cloudflare Turnstile)',
+    description:
+      'Bắt xác minh "không phải robot" ở đăng nhập/đăng ký (miễn phí, đa số không phải bấm gì). Cần nhập Site key + Secret key ở tab Bảo mật — chưa đủ key thì flag bật cũng chưa ép. Lấy key ở dash.cloudflare.com → Turnstile.',
+    default: false,
+  },
+  {
+    key: 'public_status_page',
+    label: 'Trang trạng thái công khai (/status)',
+    description:
+      'Trang /status công khai (không cần đăng nhập) hiện tình trạng các app: đang chạy / ngủ / dừng. Nhìn chuyên nghiệp khi bán dịch vụ. Tắt: trang trả 404.',
+    default: true,
+  },
+  {
     key: 'auth_rate_limit',
     label: 'Rate-limit đăng nhập',
     description:
@@ -130,9 +144,9 @@ export const KNOWN_FLAGS: {
   },
   {
     key: 'db_backup',
-    label: 'Backup DB hằng đêm',
+    label: 'Backup DB nền tảng (6h/lần + DB dự phòng)',
     description:
-      'pg_dump 3h sáng, giữ 7 bản gần nhất (script trên VPS đọc cờ này trước khi chạy). Tắt: bỏ qua backup đêm đó.',
+      'API tự pg_dump DB nền tảng mỗi 6 giờ: lưu file local (giữ 7 bản) + đẩy nguyên bản sao sang DB DỰ PHÒNG (DATABASE_URL_BACKUP, vd Neon). Xem trạng thái / Backup ngay / chuyển DB phụ ở tab Sao lưu. (Cron 3h sáng trên VPS vẫn chạy song song để backup DB user 1-click.)',
     default: true,
   },
   {
