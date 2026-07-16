@@ -745,21 +745,28 @@ export class BuildRunnerService {
     log(`=== THÀNH CÔNG → http://${server.host}:${project.internalPort} ===`, 'stdout');
   }
 
-  /** 🩺 Đoạn health-check chèn sau docker run: container chết → in log + exit 1
-   *  (deploy FAILED thay vì "RUNNING ảo"); có HTTP < 500 → OK sớm. */
+  /** 🩺 Đoạn health-check chèn sau docker run: container chết/chết-lặp → in log
+   *  + DỌN container hỏng + exit 1 (deploy FAILED thay vì "RUNNING ảo");
+   *  có HTTP < 500 → OK sớm. Lưu ý: --restart unless-stopped làm container chết
+   *  nhấp nháy Running=true → phải soi cả RestartCount. */
   private remoteHealthBlock(containerName: string, port: number): string {
     return [
       `echo "🩺 Health check ${containerName} (tối đa 20s)..."`,
       `ok=""`,
       `for i in $(seq 1 10); do`,
       `  sleep 2`,
-      `  if [ "$(docker inspect -f '{{.State.Running}}' "${containerName}" 2>/dev/null)" != "true" ]; then`,
-      `    echo "🛑 App CHẾT ngay sau khi chạy — log container:"`,
+      `  state=$(docker inspect -f '{{.State.Running}} {{.RestartCount}}' "${containerName}" 2>/dev/null || echo "false 0")`,
+      `  running=$(echo "$state" | cut -d" " -f1)`,
+      `  restarts=$(echo "$state" | cut -d" " -f2)`,
+      `  if [ "$running" != "true" ] || [ "$restarts" -ge 2 ]; then`,
+      `    echo "🛑 App CHẾT ngay sau khi chạy (running=$running, tự khởi động lại $restarts lần) — log container:"`,
       `    docker logs --tail 40 "${containerName}" 2>&1 || true`,
+      `    docker rm -f "${containerName}" >/dev/null 2>&1 || true`, // dọn container hỏng — không để chết-lặp ăn CPU máy khách
       `    exit 1`,
       `  fi`,
-      `  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 "http://127.0.0.1:${port}/" 2>/dev/null || echo 000)`,
-      `  if [ "$code" != "000" ] && [ "$code" -lt 500 ]; then echo "✓ Health check OK (HTTP $code)"; ok=1; break; fi`,
+      // curl in http_code (000 khi fail) — KHÔNG nối thêm gì kẻo thành "000000" lọt lưới
+      `  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 "http://127.0.0.1:${port}/" 2>/dev/null || true)`,
+      `  case "$code" in [1-4][0-9][0-9]) echo "✓ Health check OK (HTTP $code)"; ok=1; break;; esac`,
       `done`,
       `if [ -z "$ok" ]; then echo "⚠️ Chưa thấy HTTP trả lời nhưng container còn sống — chấp nhận (app có thể không phải HTTP)"; fi`,
     ].join('\n');
