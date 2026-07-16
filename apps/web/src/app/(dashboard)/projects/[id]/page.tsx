@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { ExternalLink } from 'lucide-react';
 import { notFound } from 'next/navigation';
 import type { ProjectDetailDto } from '@deploybox/shared';
 import { serverGet } from '@/lib/api-server';
@@ -307,9 +308,20 @@ export default async function ProjectDetailPage({
         <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
           <div>
             <h1 className="text-xl font-semibold">{project.name}</h1>
-            <p className="mt-1 text-sm text-white/40">
-              {primary ? `https://${primary.hostname}` : project.slug}
-            </p>
+            {primary ? (
+              <a
+                href={`https://${primary.hostname}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-1 inline-flex items-center gap-1.5 text-sm text-white/40 transition-colors hover:text-indigo-300"
+                title="Mở app ở tab mới"
+              >
+                https://{primary.hostname}
+                <ExternalLink size={13} className="opacity-70" />
+              </a>
+            ) : (
+              <p className="mt-1 text-sm text-white/40">{project.slug}</p>
+            )}
           </div>
           <DeployButton
             projectId={project.id}
