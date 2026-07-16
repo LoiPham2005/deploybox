@@ -1,7 +1,7 @@
 # Ý tưởng tính năng cho DeployBox
 
 > Danh sách tính năng CÒN CÓ THỂ LÀM (đã loại những cái đã có). Cập nhật 03/07/2026.
-> Liên quan: [ke-hoach-tuong-lai.md](ke-hoach-tuong-lai.md) (SaaS/bảo mật/mobile/BYO server) · [../AI.md](../AI.md) (lộ trình AI).
+> Liên quan: [ke-hoach-tuong-lai.md](ke-hoach-tuong-lai.md) (SaaS/bảo mật/mobile/BYO server) · [../AI.md](../AI.md) (lộ trình AI) · [lo-trinh-pc-lam-server.md](lo-trinh-pc-lam-server.md) (🖥️ PC cá nhân làm server — 3 giai đoạn).
 
 ## Đã có rồi (để khỏi gợi ý trùng)
 
