@@ -40,6 +40,7 @@ const CATEGORY: Record<string, string> = {
   app_watchdog: 'Vận hành & giám sát',
   host_ram_limit: 'Vận hành & giám sát',
   host_scale_to_zero: 'Vận hành & giám sát',
+  remote_watchdog: 'Vận hành & giám sát',
   db_backup: 'Vận hành & giám sát',
   app_uptime_monitor: 'Vận hành & giám sát',
   metrics_history: 'Vận hành & giám sát',

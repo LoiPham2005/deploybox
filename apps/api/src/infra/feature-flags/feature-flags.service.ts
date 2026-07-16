@@ -129,6 +129,13 @@ export const KNOWN_FLAGS: {
     default: true,
   },
   {
+    key: 'remote_watchdog',
+    label: 'Watchdog server REMOTE',
+    description:
+      'Mỗi 2 phút SSH kiểm tra container app trên server remote (máy của khách): chết → tự docker start; không cứu được → đánh dấu STOPPED + báo Telegram. Tắt: app remote chết mà web vẫn hiện "Đang chạy".',
+    default: true,
+  },
+  {
     key: 'host_scale_to_zero',
     label: 'Ngủ giải phóng RAM (host-run)',
     description:

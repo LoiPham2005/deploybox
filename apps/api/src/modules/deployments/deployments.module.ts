@@ -9,6 +9,7 @@ import { HostStaticBuilder } from '../../infra/builder/host-static.builder';
 import { DockerBackendEngine } from '../../infra/builder/docker-backend.engine';
 import { HostBackendBuilder } from '../../infra/builder/host-backend.builder';
 import { HostRunReconcilerService } from './host-run-reconciler.service';
+import { RemoteReconcilerService } from './remote-reconciler.service';
 import { MobileBuilder } from '../../infra/builder/mobile.builder';
 import { CleanupService } from '../../infra/cleanup/cleanup.service';
 import { NotifyService } from '../../infra/notify/notify.service';
@@ -43,6 +44,7 @@ const USE_REDIS = !!(process.env.REDIS_URL ?? '');
     DockerBackendEngine,
     HostBackendBuilder,
     HostRunReconcilerService,
+    RemoteReconcilerService,
     NotifyService,
     ReportService,
     MobileBuilder,

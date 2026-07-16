@@ -703,7 +703,7 @@ export class BuildRunnerService {
       installCommand?: string | null; buildCommand?: string | null;
       startCommand?: string | null; outputDir?: string | null;
       internalPort: number; buildImage?: string | null; artifactPath?: string | null;
-      notifyUrl?: string | null;
+      notifyUrl?: string | null; memoryMb: number; cpuLimit: number;
     };
     gitToken: string | null;
     log: BuildLogger;
@@ -727,7 +727,13 @@ export class BuildRunnerService {
     const phase = project.type === 'BACKEND' ? 'runtime' : 'build';
     const envVars = await this.env.resolveForPhase(project.id, phase as 'build' | 'runtime');
 
-    const script = this.generateRemoteScript(project, deploymentId, gitToken, envVars);
+    const script = this.generateRemoteScript(
+      project,
+      deploymentId,
+      gitToken,
+      envVars,
+      this.flags.isEnabled('safe_deploy'), // health-check sau deploy (tắt được ở Admin)
+    );
     log(`=== DEPLOY LÊN SERVER REMOTE: ${server.name} (${server.host}) ===`, 'stdout');
 
     await this.ssh.exec(sshOpts, script, (line) => log(line, 'stdout'));
@@ -739,18 +745,44 @@ export class BuildRunnerService {
     log(`=== THÀNH CÔNG → http://${server.host}:${project.internalPort} ===`, 'stdout');
   }
 
+  /** 🩺 Đoạn health-check chèn sau docker run: container chết → in log + exit 1
+   *  (deploy FAILED thay vì "RUNNING ảo"); có HTTP < 500 → OK sớm. */
+  private remoteHealthBlock(containerName: string, port: number): string {
+    return [
+      `echo "🩺 Health check ${containerName} (tối đa 20s)..."`,
+      `ok=""`,
+      `for i in $(seq 1 10); do`,
+      `  sleep 2`,
+      `  if [ "$(docker inspect -f '{{.State.Running}}' "${containerName}" 2>/dev/null)" != "true" ]; then`,
+      `    echo "🛑 App CHẾT ngay sau khi chạy — log container:"`,
+      `    docker logs --tail 40 "${containerName}" 2>&1 || true`,
+      `    exit 1`,
+      `  fi`,
+      `  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 "http://127.0.0.1:${port}/" 2>/dev/null || echo 000)`,
+      `  if [ "$code" != "000" ] && [ "$code" -lt 500 ]; then echo "✓ Health check OK (HTTP $code)"; ok=1; break; fi`,
+      `done`,
+      `if [ -z "$ok" ]; then echo "⚠️ Chưa thấy HTTP trả lời nhưng container còn sống — chấp nhận (app có thể không phải HTTP)"; fi`,
+    ].join('\n');
+  }
+
   private generateRemoteScript(
     project: {
       slug: string; type: string; gitRepoUrl: string | null; gitBranch: string;
       rootDir: string; installCommand?: string | null; buildCommand?: string | null;
       startCommand?: string | null; outputDir?: string | null; internalPort: number;
       buildImage?: string | null; artifactPath?: string | null;
+      memoryMb: number; cpuLimit: number;
     },
     deploymentId: string,
     gitToken: string | null,
     envVars: Record<string, string>,
+    healthCheck = true,
   ): string {
     const { slug, type, gitBranch, rootDir, internalPort } = project;
+    // Giới hạn tài nguyên container trên máy khách — app hỏng không kéo sập server họ
+    const limits = `--memory ${project.memoryMb || 512}m --cpus ${project.cpuLimit || 0.5}`;
+    const health = (name: string, port: number) =>
+      healthCheck ? `\n${this.remoteHealthBlock(name, port)}` : '';
     const cloneUrl = this.cloneUrl(project.gitRepoUrl ?? '', gitToken);
     const workDir = `/opt/deploybox/projects/${slug}`;
     const cdRoot = rootDir !== '.' ? `cd "${rootDir}"` : '';
@@ -772,10 +804,11 @@ export class BuildRunnerService {
       return `#!/bin/bash\nset -euo pipefail\n${gitBlock}\n${cdRoot}\n${install}\n${build}\n` +
         `docker stop "deploybox-${slug}" 2>/dev/null || true\n` +
         `docker rm "deploybox-${slug}" 2>/dev/null || true\n` +
-        `docker run -d --name "deploybox-${slug}" --restart unless-stopped \\\n` +
+        `docker run -d --name "deploybox-${slug}" --restart unless-stopped ${limits} \\\n` +
         `  -p ${internalPort}:80 \\\n` +
         `  -v "$(pwd)/${out}:/usr/share/nginx/html:ro" \\\n` +
         `  nginx:alpine\n` +
+        health(`deploybox-${slug}`, internalPort) + '\n' +
         `echo "Static site chạy tại port ${internalPort}"\n`;
     }
 
@@ -790,7 +823,7 @@ export class BuildRunnerService {
         `FNAME=$(basename "${artifact}")\n` +
         `docker stop "deploybox-${slug}-art" 2>/dev/null || true\n` +
         `docker rm "deploybox-${slug}-art" 2>/dev/null || true\n` +
-        `docker run -d --name "deploybox-${slug}-art" --restart unless-stopped \\\n` +
+        `docker run -d --name "deploybox-${slug}-art" --restart unless-stopped ${limits} \\\n` +
         `  -p ${internalPort}:80 \\\n` +
         `  -v "${artifactDir}:/usr/share/nginx/html:ro" nginx:alpine\n` +
         `echo "Artifact tại port ${internalPort}/$FNAME"\n`;
@@ -808,13 +841,14 @@ export class BuildRunnerService {
       `docker rm "deploybox-${slug}" 2>/dev/null || true\n` +
       `if [ -f "Dockerfile" ]; then\n` +
       `  docker build -t "deploybox-${slug}" .\n` +
-      `  docker run -d --name "deploybox-${slug}" --restart unless-stopped \\\n` +
+      `  docker run -d --name "deploybox-${slug}" --restart unless-stopped ${limits} \\\n` +
       `    -p ${internalPort}:${internalPort} --env-file "${envFile}" "deploybox-${slug}"\n` +
       `else\n` +
-      `  docker run -d --name "deploybox-${slug}" --restart unless-stopped \\\n` +
+      `  docker run -d --name "deploybox-${slug}" --restart unless-stopped ${limits} \\\n` +
       `    -p ${internalPort}:${internalPort} --env-file "${envFile}" \\\n` +
       `    -v "$(pwd):/app" -w /app node:lts-alpine sh -c "${startCmd}"\n` +
       `fi\n` +
+      health(`deploybox-${slug}`, internalPort) + '\n' +
       `echo "Backend chạy tại port ${internalPort}"\n`;
   }
 
