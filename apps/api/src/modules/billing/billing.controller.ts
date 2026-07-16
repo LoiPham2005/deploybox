@@ -49,6 +49,12 @@ export class BillingController {
     return this.billing.history(u.sub, teamId);
   }
 
+  // ─── PUBLIC — landing page lấy giá hiện hành (admin đổi giá là cập nhật) ──
+  @Get('pricing')
+  async pricing() {
+    return { priceVnd: await this.billing.priceVnd() };
+  }
+
   // ─── PUBLIC — cổng thanh toán gọi về (tự xác thực trong provider) ─────────
   // SePay gửi POST (webhook). VNPay gửi GET (IPN có chữ ký trên query).
   @Post('webhook/:provider')
