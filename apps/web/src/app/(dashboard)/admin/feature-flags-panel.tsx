@@ -38,6 +38,7 @@ const CATEGORY: Record<string, string> = {
   start_autofix: 'Tính năng deploy',
   telegram_notifications: 'Vận hành & giám sát',
   app_watchdog: 'Vận hành & giám sát',
+  docker_cache_prune: 'Vận hành & giám sát',
   host_ram_limit: 'Vận hành & giám sát',
   host_scale_to_zero: 'Vận hành & giám sát',
   remote_watchdog: 'Vận hành & giám sát',

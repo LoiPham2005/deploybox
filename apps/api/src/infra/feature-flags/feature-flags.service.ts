@@ -143,6 +143,13 @@ export const KNOWN_FLAGS: {
     default: true,
   },
   {
+    key: 'docker_cache_prune',
+    label: 'Tự dọn build cache Docker',
+    description:
+      'Mỗi 6h dọn build cache Docker cũ hơn 48h (cache này image/container prune không đụng tới → phình lên GB). Giữ cache mới để build sau vẫn nhanh. Tắt: cache tích lại, thỉnh thoảng phải dọn tay.',
+    default: true,
+  },
+  {
     key: 'app_watchdog',
     label: 'Watchdog tự cứu app',
     description:

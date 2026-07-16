@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { readdir, rm, stat } from 'fs/promises';
 import { join, resolve } from 'path';
 import { PrismaService } from '../prisma/prisma.service';
+import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
 import { capture } from '../process.util';
 
 type ProjectRef = { id: string; type: string; slug: string };
@@ -16,6 +17,7 @@ export class CleanupService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly flags: FeatureFlagsService,
   ) {}
 
   onModuleInit() {
@@ -27,6 +29,15 @@ export class CleanupService implements OnModuleInit {
     this.logger.log('Dọn dẹp định kỳ…');
     await capture('docker', ['image', 'prune', '-f', '--filter', 'until=48h']).catch(() => undefined);
     await capture('docker', ['container', 'prune', '-f']).catch(() => undefined);
+    // 🧹 Build cache: image/container prune KHÔNG đụng cache này → nó phình lên GB.
+    // Dọn cache > 48h (giữ cache mới để build sau vẫn nhanh). Bật/tắt ở Admin.
+    if (this.flags.isEnabled('docker_cache_prune')) {
+      const { stdout } = await capture('docker', [
+        'builder', 'prune', '-f', '--filter', 'until=48h',
+      ]).catch(() => ({ stdout: '' }) as { stdout: string });
+      const freed = /Total:\s*(.+)/.exec(stdout)?.[1]?.trim();
+      if (freed && freed !== '0B') this.logger.log(`Dọn build cache Docker: giải phóng ${freed}`);
+    }
     await this.pruneOrphanLogs().catch(() => undefined);
     this.logger.log('Dọn dẹp xong');
   }
