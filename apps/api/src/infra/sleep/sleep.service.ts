@@ -5,20 +5,31 @@ import { join, resolve } from 'path';
 import { PrismaService } from '../prisma/prisma.service';
 import { DockerService } from '../docker/docker.service';
 import { CaddyService } from '../caddy/caddy.service';
+import { HostBackendBuilder } from '../builder/host-backend.builder';
+import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
+import { EnvService } from '../../modules/env/env.service';
 
 /**
- * Scale-to-zero cho app BACKEND: ngủ (docker stop) khi nhàn rỗi, đánh thức
- * (docker start) khi có request. Idle phát hiện qua access log của Caddy.
+ * Scale-to-zero cho app BACKEND: ngủ khi nhàn rỗi, đánh thức khi có request
+ * (idle phát hiện qua access log của Caddy).
+ * - Docker: ngủ = docker stop, thức = docker start.
+ * - Host-run: ngủ = KILL process (trả RAM cho máy — bật/tắt ở Admin, flag
+ *   host_scale_to_zero), thức = chạy lại từ bản build sẵn trên đĩa (~3-5s).
  */
 @Injectable()
 export class SleepService implements OnModuleInit {
   private readonly logger = new Logger(SleepService.name);
+  /** slug → wake đang chạy dở — request dồn dập chỉ đánh thức 1 lần */
+  private waking = new Map<string, Promise<boolean>>();
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly docker: DockerService,
     private readonly caddy: CaddyService,
     private readonly config: ConfigService,
+    private readonly hostBackend: HostBackendBuilder,
+    private readonly flags: FeatureFlagsService,
+    private readonly env: EnvService,
   ) {}
 
   onModuleInit(): void {
@@ -29,12 +40,21 @@ export class SleepService implements OnModuleInit {
     }, sweepMs).unref();
   }
 
+  private dataDir(): string {
+    return resolve(
+      process.cwd(),
+      this.config.get<string>('DATA_DIR', '.deploybox-data'),
+    );
+  }
+
   async sleep(projectId: string): Promise<boolean> {
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
     });
     if (!project || project.type !== 'BACKEND') return false;
-    await this.docker.stop(`deploybox-${project.slug}`).catch(() => undefined);
+
+    // Đổi trạng thái TRƯỚC khi tắt process: watchdog chỉ soi app RUNNING —
+    // đánh dấu SLEEPING xong mới kill thì không bị watchdog "cứu" nhầm.
     const latest = await this.prisma.deployment.findFirst({
       where: { projectId, status: 'RUNNING' },
       orderBy: { queuedAt: 'desc' },
@@ -45,15 +65,60 @@ export class SleepService implements OnModuleInit {
         data: { status: 'SLEEPING' },
       });
     }
+
+    if (project.useDocker) {
+      await this.docker.stop(`deploybox-${project.slug}`).catch(() => undefined);
+    } else if (this.flags.isEnabled('host_scale_to_zero')) {
+      // Host-run: tắt hẳn process → TRẢ RAM (trước đây chỉ đổi trạng thái, RAM giữ nguyên)
+      await this.hostBackend.stop(this.dataDir(), project.slug).catch(() => undefined);
+    }
+
     await this.caddy.sync().catch(() => undefined);
     this.logger.log(`Ngủ ${project.slug}`);
     return true;
   }
 
   async wake(slug: string): Promise<boolean> {
+    // Nhiều request cùng đập vào app đang ngủ → chỉ 1 lần wake, còn lại chờ chung
+    const inflight = this.waking.get(slug);
+    if (inflight) return inflight;
+    const p = this.doWake(slug).finally(() => this.waking.delete(slug));
+    this.waking.set(slug, p);
+    return p;
+  }
+
+  private async doWake(slug: string): Promise<boolean> {
     const project = await this.prisma.project.findFirst({ where: { slug } });
     if (!project) return false;
-    await this.docker.start(`deploybox-${project.slug}`).catch(() => undefined);
+
+    if (project.useDocker) {
+      await this.docker.start(`deploybox-${project.slug}`).catch(() => undefined);
+    } else if (!(await this.hostBackend.isRunning(this.dataDir(), slug))) {
+      // Host-run đã bị tắt lúc ngủ → chạy lại từ bản build sẵn trên đĩa
+      try {
+        const runtimeEnv = await this.env.resolveForPhase(project.id, 'runtime');
+        await this.hostBackend.restart(
+          {
+            slug: project.slug,
+            rootDir: project.rootDir,
+            startCommand: project.startCommand,
+            internalPort: project.internalPort,
+            env: runtimeEnv,
+            dataDir: this.dataDir(),
+            memoryMb: project.memoryMb,
+            cpuLimit: project.cpuLimit,
+          },
+          (line) => this.logger.debug(`[wake:${slug}] ${line}`),
+        );
+      } catch (e) {
+        // Không dậy được (vd bản build đã bị dọn) → giữ SLEEPING, báo lỗi
+        this.logger.warn(
+          `Wake ${slug} thất bại: ${e instanceof Error ? e.message : e}`,
+        );
+        return false;
+      }
+    }
+
     const latest = await this.prisma.deployment.findFirst({
       where: { projectId: project.id, status: 'SLEEPING' },
       orderBy: { queuedAt: 'desc' },
@@ -65,7 +130,7 @@ export class SleepService implements OnModuleInit {
       });
     }
     await this.caddy.sync().catch(() => undefined);
-    this.logger.log(`Đánh thức ${project.slug}`);
+    this.logger.log(`Đánh thức ${slug}`);
     return true;
   }
 
@@ -111,12 +176,8 @@ export class SleepService implements OnModuleInit {
 
   private async readLastAccess(): Promise<Map<string, number>> {
     const map = new Map<string, number>();
-    const dataDir = resolve(
-      process.cwd(),
-      this.config.get<string>('DATA_DIR', '.deploybox-data'),
-    );
     const content = await readFile(
-      join(dataDir, 'caddy', 'access.log'),
+      join(this.dataDir(), 'caddy', 'access.log'),
       'utf8',
     ).catch(() => '');
     if (!content) return map;

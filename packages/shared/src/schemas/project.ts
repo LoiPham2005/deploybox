@@ -80,6 +80,8 @@ export const updateProjectSchema = z.object({
   preDeployCommand: z.string().max(1000).optional().or(z.literal('')),
   postDeployCommand: z.string().max(1000).optional().or(z.literal('')),
   internalPort: z.number().int().positive().max(65535).optional(),
+  // RAM tối đa cho app (MB) — Docker: docker --memory; host-run: cgroup v2
+  memoryMb: z.number().int().min(128).max(8192).optional(),
   buildImage: z.string().optional(),
   artifactPath: z.string().optional(),
   sleepEnabled: z.boolean().optional(),

@@ -86,6 +86,10 @@ export function EditProjectForm({ project }: { project: ProjectDetailDto }) {
         type === 'BACKEND' && s('internalPort')
           ? Number(s('internalPort'))
           : undefined,
+      memoryMb:
+        type === 'BACKEND' && s('memoryMb')
+          ? Number(s('memoryMb'))
+          : undefined,
       buildImage: type === 'MOBILE' ? (s('buildImage') ?? '') : undefined,
       artifactPath: type === 'MOBILE' ? (s('artifactPath') ?? '') : undefined,
       // gitToken: undefined = không đổi (chưa đụng ô), '' = xóa (gõ rồi xoá), giá trị = cập nhật
@@ -258,6 +262,20 @@ export function EditProjectForm({ project }: { project: ProjectDetailDto }) {
               type="number"
               defaultValue={project.internalPort}
             />
+          </div>
+          <div>
+            <Label htmlFor="memoryMb">RAM tối đa (MB)</Label>
+            <Input
+              id="memoryMb"
+              name="memoryMb"
+              type="number"
+              min={128}
+              max={8192}
+              defaultValue={project.memoryMb}
+            />
+            <p className="mt-1 text-[11px] text-white/30">
+              App vượt mức này sẽ bị dừng + tự chạy lại (không kéo sập cả máy). Mặc định 512.
+            </p>
           </div>
           {/* Toggle: dùng Docker hay chạy thẳng node trên máy */}
           <div className="sm:col-span-2 rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">

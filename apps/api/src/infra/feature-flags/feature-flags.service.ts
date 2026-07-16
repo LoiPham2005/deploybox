@@ -108,6 +108,20 @@ export const KNOWN_FLAGS: {
     default: true,
   },
   {
+    key: 'host_ram_limit',
+    label: 'Giới hạn RAM từng app (host-run)',
+    description:
+      'Nhốt mỗi app host-run vào cgroup theo "RAM tối đa" của project (mặc định 512MB) — app rò rỉ bộ nhớ chỉ tự chết (watchdog chạy lại), KHÔNG kéo sập cả máy. Áp dụng từ lần deploy/restart kế tiếp. Chỉ có tác dụng trên Linux.',
+    default: true,
+  },
+  {
+    key: 'host_scale_to_zero',
+    label: 'Ngủ giải phóng RAM (host-run)',
+    description:
+      'App host-run bật "ngủ khi nhàn rỗi" sẽ TẮT HẲN process khi ngủ → trả RAM cho máy; có request thì tự chạy lại từ bản build sẵn (mất ~3-5s lần đầu). Tắt: ngủ chỉ ngừng nhận request, process vẫn chiếm RAM như cũ.',
+    default: true,
+  },
+  {
     key: 'app_watchdog',
     label: 'Watchdog tự cứu app',
     description:

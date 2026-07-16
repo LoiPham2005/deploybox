@@ -41,6 +41,8 @@ interface WatchedProject {
   startCommand: string | null;
   outputDir: string | null;
   internalPort: number;
+  memoryMb: number;
+  cpuLimit: number;
 }
 
 /**
@@ -72,6 +74,8 @@ export class HostRunReconcilerService
   private rssHistory = new Map<string, { t: number; mb: number }[]>();
   /** projectId → lần cảnh báo RAM gần nhất (cooldown 6h) */
   private rssWarnedAt = new Map<string, number>();
+  /** projectId → số lần cgroup OOM-kill lúc app còn sống (so sánh khi crash) */
+  private oomBaseline = new Map<string, number>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -125,13 +129,15 @@ export class HostRunReconcilerService
           id: true, slug: true, name: true, teamId: true, type: true,
           useDocker: true, rootDir: true, installCommand: true,
           buildCommand: true, startCommand: true, outputDir: true,
-          internalPort: true,
+          internalPort: true, memoryMb: true, cpuLimit: true,
         },
       });
 
       for (const project of projects) {
         if (await this.hostBackend.isRunning(dataDir, project.slug)) {
-          // App còn sống → soi lỗi mới trong runtime log (cảnh báo sớm trước khi chết)
+          // App còn sống → ghi mốc oom_kill (để lúc crash biết có phải bị giết vì vượt RAM)
+          this.oomBaseline.set(project.id, await this.readOomKills(project.slug));
+          // Soi lỗi mới trong runtime log (cảnh báo sớm trước khi chết)
           await this.checkErrorSpike(project, dataDir).catch(() => undefined);
           // 📈 + lấy mẫu RAM để phát hiện tăng đều (memory leak)
           await this.checkMemoryTrend(project, dataDir).catch(() => undefined);
@@ -249,11 +255,30 @@ export class HostRunReconcilerService
     );
   }
 
+  /** Đọc số lần kernel OOM-kill trong cgroup của app (0 nếu không có cgroup). */
+  private async readOomKills(slug: string): Promise<number> {
+    const raw = await readFile(`/sys/fs/cgroup/deploybox/${slug}/memory.events`, 'utf8').catch(() => '');
+    const m = raw.match(/^oom_kill (\d+)$/m);
+    return m ? parseInt(m[1], 10) : 0;
+  }
+
   private async handleCrash(project: WatchedProject, dataDir: string): Promise<void> {
     // 1) Đọc đuôi log TRƯỚC khi restart (restart mở log mode 'w' → mất log cũ)
     const logPath = this.hostBackend.runtimeLog(dataDir, project.slug);
     const fullLog = await readFile(logPath, 'utf8').catch(() => '');
-    const crashLog = fullLog.slice(-12_000);
+    let crashLog = fullLog.slice(-12_000);
+
+    // 🧠 App chết vì vượt giới hạn RAM (cgroup OOM)? So oom_kill với mốc lúc còn sống —
+    // báo THẲNG nguyên nhân thay vì để người dùng đoán mò (log thường trống trơn khi bị kill -9).
+    const oomNow = await this.readOomKills(project.slug);
+    const oomKilled = oomNow > (this.oomBaseline.get(project.id) ?? 0);
+    if (oomKilled) this.oomBaseline.set(project.id, oomNow);
+    const oomNote = oomKilled
+      ? `⚠️ App bị kernel giết vì VƯỢT GIỚI HẠN RAM ${project.memoryMb}MB (cgroup OOM). ` +
+        `Nếu app thật sự cần nhiều RAM hơn, tăng "RAM tối đa (MB)" trong Cấu hình project rồi Deploy lại; ` +
+        `còn nếu RAM chỉ tăng dần theo thời gian thì nhiều khả năng app bị rò rỉ bộ nhớ.`
+      : '';
+    if (oomNote) crashLog = `${oomNote}\n${crashLog}`;
 
     // 2) Đếm crash trong cửa sổ chống loop
     const now = Date.now();
@@ -266,7 +291,7 @@ export class HostRunReconcilerService
     const giveUp = crashCount > MAX_CRASHES;
 
     this.logger.warn(
-      `Watchdog: ${project.slug} chết (lần ${crashCount}/${MAX_CRASHES} trong 10ph)` +
+      `Watchdog: ${project.slug} chết${oomKilled ? ' (bị giết vì vượt giới hạn RAM)' : ''} (lần ${crashCount}/${MAX_CRASHES} trong 10ph)` +
         (giveUp ? ' → DỪNG hẳn (crash loop)' : ' → khởi động lại…'),
     );
 
@@ -283,6 +308,8 @@ export class HostRunReconcilerService
             internalPort: project.internalPort,
             env: runtimeEnv,
             dataDir,
+            memoryMb: project.memoryMb,
+            cpuLimit: project.cpuLimit,
           },
           (line) => this.logger.debug(`[${project.slug}] ${line}`),
         );
@@ -295,19 +322,20 @@ export class HostRunReconcilerService
       }
     }
     if (action === 'stopped') {
+      const base = giveUp
+        ? `App crash ${crashCount} lần trong 10 phút — watchdog đã dừng`
+        : 'App crash và không khởi động lại được';
       await this.prisma.deployment.updateMany({
         where: { projectId: project.id, status: 'RUNNING' },
         data: {
           status: 'STOPPED',
-          errorMessage: giveUp
-            ? `App crash ${crashCount} lần trong 10 phút — watchdog đã dừng`
-            : 'App crash và không khởi động lại được',
+          errorMessage: oomNote ? `${base}. ${oomNote}` : base,
         },
       });
     }
 
     // 4) AI chẩn đoán (best-effort, chống trùng theo chữ ký lỗi) + Telegram
-    void this.diagnoseAndNotify(project, crashLog, action, crashCount).catch((e) =>
+    void this.diagnoseAndNotify(project, crashLog, action, crashCount, oomNote).catch((e) =>
       this.warn(e),
     );
   }
@@ -317,6 +345,7 @@ export class HostRunReconcilerService
     crashLog: string,
     action: 'restarted' | 'stopped',
     crashCount: number,
+    oomNote = '',
   ): Promise<void> {
     // Tắt flag → không AI, không nhắn (watchdog vẫn restart app như thường)
     if (!this.flags.aiEnabled('ai_watchdog_diagnosis')) return;
@@ -362,7 +391,9 @@ export class HostRunReconcilerService
     const recipients = members
       .map((m) => m.user.telegramChatId)
       .filter((x): x is string => !!x);
-    const tip = this.flags.aiEnabled('ai_ops_tips') ? opsTip(crashLog) : '';
+    const aiTip = this.flags.aiEnabled('ai_ops_tips') ? opsTip(crashLog) : '';
+    // OOM note đặt TRƯỚC tip AI — nguyên nhân chắc chắn (đo từ kernel) ưu tiên hơn đoán
+    const tip = [oomNote, aiTip].filter(Boolean).join('\n');
     await this.notify.runtimeCrash(
       { projectName: project.name, action, crashCount, diagnosis, tip },
       recipients,

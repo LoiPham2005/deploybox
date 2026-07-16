@@ -1,6 +1,6 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { spawn } from 'child_process';
-import { access, mkdir, readFile, rm, writeFile } from 'fs/promises';
+import { access, mkdir, readFile, rm, rmdir, writeFile } from 'fs/promises';
 import { openSync, closeSync } from 'fs';
 import { join } from 'path';
 import type { BuildLogger } from './host-static.builder';
@@ -23,6 +23,10 @@ export interface HostBackendInput {
   env?: Record<string, string>;
   dataDir: string;
   signal?: AbortSignal;
+  /** Giới hạn RAM (MB) qua cgroup v2 — vượt là kernel giết app đó, KHÔNG lan cả máy. */
+  memoryMb?: number;
+  /** Giới hạn CPU (số core, vd 0.5) — best-effort, máy không hỗ trợ thì bỏ qua. */
+  cpuLimit?: number;
 }
 
 /**
@@ -141,6 +145,38 @@ export class HostBackendBuilder {
     return Math.min(64000, Math.max(1024, alt));
   }
 
+  /**
+   * 🧠 Giới hạn RAM/CPU bằng cgroup v2 (không cần Docker): shell tự tạo group
+   * /sys/fs/cgroup/deploybox/<name>, đặt memory.max rồi CHUI VÀO ($$ → cgroup.procs)
+   * → node fork ra thừa kế group. App vượt RAM → kernel OOM-kill ĐÚNG app đó
+   * (oom.group=1: giết cả cụm cho sạch), các app khác + DeployBox không bị lan.
+   * Mọi lệnh bọc 2>/dev/null: máy không có cgroup v2 (macOS/dev) → lặng lẽ bỏ qua.
+   */
+  private cgroupPrefix(name: string, memoryMb: number, cpuLimit?: number): string {
+    const base = '/sys/fs/cgroup';
+    const cg = `${base}/deploybox/${name}`;
+    const bytes = Math.max(64, Math.floor(memoryMb)) * 1024 * 1024;
+    const cmds = [
+      `mkdir -p ${base}/deploybox`,
+      // bật controller cho cây con (thường đã bật sẵn — thử lại không hại gì)
+      `echo +memory > ${base}/cgroup.subtree_control`,
+      `echo +memory > ${base}/deploybox/cgroup.subtree_control`,
+      `mkdir -p ${cg}`,
+      `echo ${bytes} > ${cg}/memory.max`,
+      `echo ${bytes} > ${cg}/memory.swap.max`, // chặn tràn sang swap làm cả máy ì
+      `echo 1 > ${cg}/memory.oom.group`,
+    ];
+    if (cpuLimit && cpuLimit > 0) {
+      cmds.push(
+        `echo +cpu > ${base}/cgroup.subtree_control`,
+        `echo +cpu > ${base}/deploybox/cgroup.subtree_control`,
+        `echo "${Math.round(cpuLimit * 100_000)} 100000" > ${cg}/cpu.max`,
+      );
+    }
+    cmds.push(`echo $$ > ${cg}/cgroup.procs`); // chui vào group — PHẢI là lệnh cuối
+    return `{ ${cmds.join('; ')}; } 2>/dev/null; `;
+  }
+
   /** Spawn 1 process detached chạy startCmd (ghi log ra logPath). Trả pid. */
   private launch(workDir: string, env: NodeJS.ProcessEnv, startCmd: string, logPath: string): number {
     const logFd = openSync(logPath, 'w'); // ghi mới mỗi lần chạy
@@ -193,7 +229,7 @@ export class HostBackendBuilder {
   private async spawnApp(
     workDir: string,
     runEnv: NodeJS.ProcessEnv,
-    input: Pick<HostBackendInput, 'slug' | 'startCommand' | 'internalPort' | 'dataDir'>,
+    input: Pick<HostBackendInput, 'slug' | 'startCommand' | 'internalPort' | 'dataDir' | 'memoryMb' | 'cpuLimit'>,
     log: BuildLogger,
   ): Promise<{ pid: number; port: number }> {
     let startCmd = input.startCommand || 'node dist/main.js';
@@ -212,6 +248,15 @@ export class HostBackendBuilder {
     if (this.flags?.isEnabled('oom_protect_apps') ?? true) {
       startCmd = `echo -900 > /proc/self/oom_score_adj 2>/dev/null; ${startCmd}`;
     }
+    // 🧠 Giới hạn RAM/CPU (cgroup v2) — bật/tắt ở Admin (host_ram_limit). Bản thử
+    // (candidate) dùng group RIÊNG "<slug>-cand" để không ăn chung quota với bản cũ
+    // đang chạy trong group "<slug>" (chung group → health-gate có thể OOM oan bản cũ).
+    const ramOn = (this.flags?.isEnabled('host_ram_limit') ?? true) && (input.memoryMb ?? 0) > 0;
+    const wrapCg = (name: string) =>
+      ramOn ? this.cgroupPrefix(name, input.memoryMb!, input.cpuLimit) + startCmd : startCmd;
+    if (ramOn) {
+      log(`🧠 Giới hạn RAM ${input.memoryMb}MB (+swap ${input.memoryMb}MB)${input.cpuLimit ? `, CPU ${input.cpuLimit} core` : ''} — vượt là app tự bị giết + watchdog chạy lại, không lan cả máy.`, 'stdout');
+    }
     await mkdir(join(input.dataDir, 'runtime-logs'), { recursive: true });
     await mkdir(join(input.dataDir, 'run'), { recursive: true });
 
@@ -221,10 +266,11 @@ export class HostBackendBuilder {
       const tempPort = this.altPort(input.internalPort);
       const candLog = this.runtimeLog(input.dataDir, input.slug) + '.candidate';
       log(`🩺 Health-gate: chạy thử bản mới ở cổng tạm ${tempPort} (bản cũ vẫn phục vụ)…`, 'stdout');
-      const candPid = this.launch(workDir, { ...runEnv, PORT: String(tempPort) }, startCmd, candLog);
+      const candPid = this.launch(workDir, { ...runEnv, PORT: String(tempPort) }, wrapCg(`${input.slug}-cand`), candLog);
       const verdict = await this.healthProbe(tempPort, candPid);
       this.killTree(candPid); // dọn bản thử dù đạt hay không
       await new Promise((r) => setTimeout(r, 500)); // cho cổng tạm giải phóng
+      await rmdir(`/sys/fs/cgroup/deploybox/${input.slug}-cand`).catch(() => undefined); // dọn group thử (rỗng mới xoá được)
       if (verdict === 'unhealthy') {
         const errLog = await readFile(candLog, 'utf8').catch(() => '');
         if (/eaddrinuse|address already in use|listen eacces/i.test(errLog)) {
@@ -245,7 +291,7 @@ export class HostBackendBuilder {
     await this.stop(input.dataDir, input.slug, log);
     log(`$ ${startCmd}  (PORT=${input.internalPort})`, 'stdout');
     const logPath = this.runtimeLog(input.dataDir, input.slug);
-    const pid = this.launch(workDir, runEnv, startCmd, logPath);
+    const pid = this.launch(workDir, runEnv, wrapCg(input.slug), logPath);
     await writeFile(this.pidFile(input.dataDir, input.slug), String(pid));
 
     // Đợi 2.5s rồi kiểm tra process còn sống

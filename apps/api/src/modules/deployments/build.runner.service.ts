@@ -333,6 +333,8 @@ export class BuildRunnerService {
             env: runtimeEnv,
             dataDir,
             signal: controller.signal,
+            memoryMb: project.memoryMb,
+            cpuLimit: project.cpuLimit,
           },
           log,
         );
