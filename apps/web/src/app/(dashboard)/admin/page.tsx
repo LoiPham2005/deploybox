@@ -10,6 +10,7 @@ import { AiConfigPanel } from './ai-config-panel';
 import { BillingConfigPanel } from './billing-config-panel';
 import { BackupPanel, type BackupStatusView } from './backup-panel';
 import { TurnstilePanel, type TurnstileConfigView } from './turnstile-panel';
+import { DiskPanel, type DiskInfo } from './disk-panel';
 import { AdminTabs } from './admin-tabs';
 
 interface AiUsageSummary {
@@ -63,21 +64,30 @@ export default async function AdminPage() {
   const billingConfig = await serverApi<BillingConfigDto>('/admin/billing').catch(() => null);
   const backupStatus = await serverApi<BackupStatusView>('/admin/backup').catch(() => null);
   const captchaConfig = await serverApi<TurnstileConfigView>('/admin/captcha').catch(() => null);
+  const disk = await serverApi<DiskInfo>('/admin/disk').catch(() => null);
 
   const statsTab = (
-    <div className="grid grid-cols-3 gap-4">
-      <Card>
-        <p className="text-xs text-white/40">Tổng người dùng</p>
-        <p className="mt-1 text-3xl font-bold">{stats.users}</p>
-      </Card>
-      <Card>
-        <p className="text-xs text-white/40">Teams cá nhân</p>
-        <p className="mt-1 text-3xl font-bold">{stats.teams}</p>
-      </Card>
-      <Card>
-        <p className="text-xs text-white/40">Tổng project</p>
-        <p className="mt-1 text-3xl font-bold">{stats.projects}</p>
-      </Card>
+    <div className="space-y-4">
+      <div className="grid grid-cols-3 gap-4">
+        <Card>
+          <p className="text-xs text-white/40">Tổng người dùng</p>
+          <p className="mt-1 text-3xl font-bold">{stats.users}</p>
+        </Card>
+        <Card>
+          <p className="text-xs text-white/40">Teams cá nhân</p>
+          <p className="mt-1 text-3xl font-bold">{stats.teams}</p>
+        </Card>
+        <Card>
+          <p className="text-xs text-white/40">Tổng project</p>
+          <p className="mt-1 text-3xl font-bold">{stats.projects}</p>
+        </Card>
+      </div>
+      {disk && (
+        <Card>
+          <h2 className="mb-3 text-sm font-semibold text-white/70">💽 Dung lượng đĩa VPS</h2>
+          <DiskPanel disk={disk} />
+        </Card>
+      )}
     </div>
   );
 

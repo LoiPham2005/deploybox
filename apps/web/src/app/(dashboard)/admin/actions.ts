@@ -72,6 +72,22 @@ export async function setBillingConfigAction(
   }
 }
 
+/** 🧹 Dọn dung lượng đĩa ngay (docker prune + build cache + work tạm + log rác). */
+export async function cleanDiskAction(): Promise<
+  { ok: true; data: { freedMb: number; freeGb: number; totalGb: number } } | { ok: false; error: string }
+> {
+  try {
+    const data = await serverApi<{ freedMb: number; freeGb: number; totalGb: number }>(
+      '/admin/disk/clean',
+      { method: 'POST' },
+    );
+    revalidatePath('/admin');
+    return { ok: true, data };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Dọn dung lượng thất bại' };
+  }
+}
+
 /** 🤖 Lưu key Cloudflare Turnstile (secret mã hoá; rỗng = giữ nguyên). */
 export async function setCaptchaAction(patch: {
   siteKey?: string;

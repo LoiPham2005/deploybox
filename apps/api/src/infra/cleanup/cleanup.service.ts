@@ -1,6 +1,6 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { readdir, rm, stat } from 'fs/promises';
+import { readdir, rm, stat, statfs } from 'fs/promises';
 import { join, resolve } from 'path';
 import { PrismaService } from '../prisma/prisma.service';
 import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
@@ -38,8 +38,47 @@ export class CleanupService implements OnModuleInit {
       const freed = /Total:\s*(.+)/.exec(stdout)?.[1]?.trim();
       if (freed && freed !== '0B') this.logger.log(`Dọn build cache Docker: giải phóng ${freed}`);
     }
+    await this.pruneWorkDirs().catch(() => undefined);
     await this.pruneOrphanLogs().catch(() => undefined);
     this.logger.log('Dọn dẹp xong');
+  }
+
+  /** 🧹 Xoá thư mục build tạm (work/) cũ hơn 2 ngày — leftover clone/build không ai dùng. */
+  private async pruneWorkDirs(): Promise<void> {
+    const dataDir = resolve(process.cwd(), this.config.get<string>('DATA_DIR', '.deploybox-data'));
+    const workDir = join(dataDir, 'work');
+    const entries = await readdir(workDir).catch(() => [] as string[]);
+    const cutoff = Date.now() - 2 * 24 * 60 * 60_000;
+    let n = 0;
+    for (const e of entries) {
+      const s = await stat(join(workDir, e)).catch(() => null);
+      if (s && s.mtimeMs < cutoff) {
+        await rm(join(workDir, e), { recursive: true, force: true }).catch(() => undefined);
+        n++;
+      }
+    }
+    if (n) this.logger.log(`Dọn ${n} thư mục build tạm (work/) cũ`);
+  }
+
+  /** Đĩa còn/tổng (GB) + % dùng — cho Admin xem. */
+  async diskInfo(): Promise<{ freeGb: number; totalGb: number; usedPct: number }> {
+    const s = await statfs('/');
+    const total = s.blocks * s.bsize;
+    const free = s.bavail * s.bsize;
+    return {
+      freeGb: +(free / 1e9).toFixed(1),
+      totalGb: +(total / 1e9).toFixed(1),
+      usedPct: total ? Math.round((1 - free / total) * 100) : 0,
+    };
+  }
+
+  /** Admin bấm "Dọn dung lượng ngay" → chạy dọn toàn bộ + đo dung lượng giải phóng. */
+  async cleanNow(): Promise<{ freedMb: number; freeGb: number; totalGb: number }> {
+    const before = await this.diskInfo();
+    await this.globalPrune();
+    const after = await this.diskInfo();
+    const freedMb = Math.max(0, Math.round((after.freeGb - before.freeGb) * 1000));
+    return { freedMb, freeGb: after.freeGb, totalGb: after.totalGb };
   }
 
   private async pruneOrphanLogs(): Promise<void> {

@@ -9,6 +9,7 @@ import { ReportService } from '../deployments/report.service';
 import { BillingConfigService } from '../billing/billing-config.service';
 import { BackupService } from '../../infra/backup/backup.service';
 import { CaptchaService } from '../../infra/captcha/captcha.service';
+import { CleanupService } from '../../infra/cleanup/cleanup.service';
 import type { BillingConfigPatch } from '@deploybox/shared';
 
 @UseGuards(JwtAuthGuard, AdminGuard)
@@ -23,7 +24,20 @@ export class AdminController {
     private readonly billing: BillingConfigService,
     private readonly backup: BackupService,
     private readonly captchaSvc: CaptchaService,
+    private readonly cleanup: CleanupService,
   ) {}
+
+  /** 💽 Dung lượng đĩa (còn/tổng). */
+  @Get('disk')
+  diskInfo() {
+    return this.cleanup.diskInfo();
+  }
+
+  /** 🧹 Dọn dung lượng ngay: docker prune + build cache + work/ tạm + log rác. */
+  @Post('disk/clean')
+  cleanDisk() {
+    return this.cleanup.cleanNow();
+  }
 
   /** 🤖 Turnstile: xem/lưu key (secret mã hoá, không trả về UI). */
   @Get('captcha')
