@@ -27,8 +27,8 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 
   return (
     <div className="flex min-h-screen bg-[#09090b] text-white">
-      {/* Desktop Sidebar */}
-      <aside className="hidden lg:flex w-[220px] shrink-0 flex-col border-r border-white/[0.07]">
+      {/* Desktop Sidebar — sticky: đứng yên khi cuộn nội dung bên phải */}
+      <aside className="hidden lg:flex sticky top-0 self-start h-screen w-[220px] shrink-0 flex-col border-r border-white/[0.07]">
         {/* Brand */}
         <div className="flex items-center gap-2.5 px-4 py-3.5 border-b border-white/[0.07]">
           <LogoMark size={24} className="shadow-lg shadow-indigo-900/50 rounded-md" />
