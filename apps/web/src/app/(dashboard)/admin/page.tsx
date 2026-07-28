@@ -8,6 +8,7 @@ import { PlanToggle } from './plan-toggle';
 import { FeatureFlagsPanel, type Feature } from './feature-flags-panel';
 import { AiConfigPanel } from './ai-config-panel';
 import { BillingConfigPanel } from './billing-config-panel';
+import { BackupConfigPanel } from './backup-config-panel';
 import { BackupPanel, type BackupStatusView } from './backup-panel';
 import { TurnstilePanel, type TurnstileConfigView } from './turnstile-panel';
 import { DiskPanel, type DiskInfo } from './disk-panel';
@@ -62,6 +63,7 @@ export default async function AdminPage() {
   ]);
 
   const billingConfig = await serverApi<BillingConfigDto>('/admin/billing').catch(() => null);
+  const backupConfig = await serverApi<import('@deploybox/shared').BackupConfigDto>('/admin/backup-config').catch(() => null);
   const backupStatus = await serverApi<BackupStatusView>('/admin/backup').catch(() => null);
   const captchaConfig = await serverApi<TurnstileConfigView>('/admin/captcha').catch(() => null);
   const disk = await serverApi<DiskInfo>('/admin/disk').catch(() => null);
@@ -305,6 +307,21 @@ export default async function AdminPage() {
     </Card>
   );
 
+  const dbBackupTab = (
+    <Card>
+      <h2 className="mb-1 text-sm font-semibold text-white/70">Sao lưu CSDL &amp; nơi lưu (S3)</h2>
+      <p className="mb-4 text-xs text-white/40">
+        Cấu hình S3 (Vietnix) làm nơi lưu backup database. Bật/tắt backup tự động từng DB ở
+        project → tab Dịch vụ → Sao lưu.
+      </p>
+      {backupConfig ? (
+        <BackupConfigPanel config={backupConfig} />
+      ) : (
+        <p className="text-sm text-red-400">Không tải được cấu hình backup.</p>
+      )}
+    </Card>
+  );
+
   return (
     <div className="space-y-6">
       <div>
@@ -318,6 +335,7 @@ export default async function AdminPage() {
           { id: 'ai', label: 'AI', content: aiTab },
           { id: 'billing', label: 'Thanh toán', content: billingTab },
           { id: 'backup', label: 'Sao lưu', content: backupTab },
+          { id: 'dbbackup', label: 'Backup DB', content: dbBackupTab },
           { id: 'users', label: 'Người dùng', content: usersTab },
           { id: 'audit', label: 'Nhật ký', content: auditTab },
         ]}

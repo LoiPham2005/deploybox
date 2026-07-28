@@ -8,9 +8,10 @@ import { AuditService } from '../../infra/audit/audit.service';
 import { ReportService } from '../deployments/report.service';
 import { BillingConfigService } from '../billing/billing-config.service';
 import { BackupService } from '../../infra/backup/backup.service';
+import { BackupConfigService } from '../backup/backup-config.service';
 import { CaptchaService } from '../../infra/captcha/captcha.service';
 import { CleanupService } from '../../infra/cleanup/cleanup.service';
-import type { BillingConfigPatch } from '@deploybox/shared';
+import type { BillingConfigPatch, BackupConfigPatch } from '@deploybox/shared';
 
 @UseGuards(JwtAuthGuard, AdminGuard)
 @Controller('admin')
@@ -23,9 +24,21 @@ export class AdminController {
     private readonly report: ReportService,
     private readonly billing: BillingConfigService,
     private readonly backup: BackupService,
+    private readonly backupCfg: BackupConfigService,
     private readonly captchaSvc: CaptchaService,
     private readonly cleanup: CleanupService,
   ) {}
+
+  /** Cấu hình nơi lưu backup DB (S3 Vietnix) — admin sửa ở UI. */
+  @Get('backup-config')
+  backupConfig() {
+    return this.backupCfg.adminView();
+  }
+
+  @Put('backup-config')
+  setBackupConfig(@Body() body: BackupConfigPatch) {
+    return this.backupCfg.save(body ?? {});
+  }
 
   /** 💽 Dung lượng đĩa (còn/tổng). */
   @Get('disk')

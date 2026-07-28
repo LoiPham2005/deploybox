@@ -310,9 +310,26 @@ model ManagedDatabase {
   dbName        String
   envKey        String // env đã bơm (DATABASE_URL / REDIS_URL)
   status        String   @default("running")
+  backupEnabled Boolean  @default(false) // bật sao lưu tự động hằng đêm
   createdAt     DateTime @default(now())
 
+  backups Backup[]
+
   @@index([projectId])
+}
+
+// 1 bản sao lưu CSDL (dump .sql.gz) đã upload lên S3.
+model Backup {
+  id         String          @id @default(cuid())
+  database   ManagedDatabase @relation(fields: [databaseId], references: [id], onDelete: Cascade)
+  databaseId String
+  filename   String // vd hotfarm365_2026-07-27_07-23-28.sql.gz
+  s3Key      String // key trên bucket S3
+  sizeBytes  Int             @default(0)
+  status     String          @default("done") // done | failed
+  createdAt  DateTime        @default(now())
+
+  @@index([databaseId])
 }
 
 // Lịch chạy lệnh định kỳ cho app (như cron của Railway/Render).

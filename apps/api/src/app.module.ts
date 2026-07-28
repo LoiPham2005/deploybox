@@ -32,6 +32,7 @@ import { CronModule } from './modules/cron/cron.module';
 import { DatabaseModule } from './modules/database/database.module';
 import { CopilotModule } from './modules/copilot/copilot.module';
 import { BillingModule } from './modules/billing/billing.module';
+import { BackupModule as DbBackupModule } from './modules/backup/backup.module';
 import { BackupModule } from './infra/backup/backup.module';
 import { CaptchaModule } from './infra/captcha/captcha.module';
 
@@ -100,6 +101,7 @@ const REDIS_URL = process.env.REDIS_URL ?? '';
     OauthModule,
     BillingModule,
     BackupModule,
+    DbBackupModule,
     CaptchaModule,
   ],
 })

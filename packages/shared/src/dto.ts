@@ -430,6 +430,51 @@ export interface ManagedDatabaseDto {
   status: string;
   createdAt: string;
   connectionString?: string; // CHỈ trả 1 lần lúc mới tạo (không lưu plaintext)
+  backupEnabled?: boolean; // sao lưu tự động hằng đêm
+}
+
+/** 1 bản sao lưu CSDL đã lên S3. */
+export interface BackupDto {
+  id: string;
+  filename: string;
+  sizeBytes: number;
+  status: string; // done | failed
+  createdAt: string;
+}
+
+/** Thống kê + trạng thái backup của 1 database (cho tab Sao lưu). */
+export interface BackupStatsDto {
+  autoEnabled: boolean;
+  scheduleText: string; // vd "00:00 (UTC) mỗi đêm"
+  retentionDays: number;
+  total: number;
+  configured: boolean; // đã cấu hình S3 chưa
+  destinationText: string; // vd "Vietnix Cloud Storage · bucket keytest"
+}
+
+/** Cấu hình S3 nơi lưu backup (admin) — không trả secret thật. */
+export interface BackupConfigDto {
+  endpoint: string;
+  region: string;
+  bucket: string;
+  pathStyle: boolean;
+  retentionDays: number;
+  hasAccessKey: boolean;
+  hasSecretKey: boolean;
+  configured: boolean;
+  source: 'db' | 'env' | 'none';
+}
+
+export interface BackupConfigPatch {
+  endpoint?: string;
+  region?: string;
+  bucket?: string;
+  pathStyle?: boolean;
+  retentionDays?: number;
+  accessKey?: string; // chỉ đặt khi nhập mới
+  secretKey?: string; // chỉ đặt khi nhập mới
+  clearAccessKey?: boolean;
+  clearSecretKey?: boolean;
 }
 
 /** 1 preview deploy đang sống cho 1 Pull Request. */

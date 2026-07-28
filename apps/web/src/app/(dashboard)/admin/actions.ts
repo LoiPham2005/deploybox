@@ -156,6 +156,22 @@ export async function setFailoverAction(useBackup: boolean): Promise<Result> {
   }
 }
 
+/** Admin lưu cấu hình nơi backup DB (S3 Vietnix). */
+export async function setBackupConfigAction(
+  patch: import('@deploybox/shared').BackupConfigPatch,
+): Promise<Result> {
+  try {
+    await serverApi('/admin/backup-config', {
+      method: 'PUT',
+      body: JSON.stringify(patch),
+    });
+    revalidatePath('/admin');
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Lưu cấu hình backup thất bại' };
+  }
+}
+
 /** Admin bật/tắt 1 tính năng hệ thống. */
 export async function toggleFeatureAction(
   key: string,

@@ -81,6 +81,14 @@ export const envSchema = z.object({
   ZALOPAY_KEY1: z.string().default(''),
   ZALOPAY_KEY2: z.string().default(''),
   ZALOPAY_ENDPOINT: z.string().default('https://sb-openapi.zalopay.vn/v2/create'),
+  // ─── Backup DB → S3 (Vietnix Cloud Storage). Admin cấu hình ở UI, đây là fallback.
+  BACKUP_S3_ENDPOINT: z.string().default(''),
+  BACKUP_S3_REGION: z.string().default(''),
+  BACKUP_S3_BUCKET: z.string().default(''),
+  BACKUP_S3_ACCESS_KEY: z.string().default(''),
+  BACKUP_S3_SECRET_KEY: z.string().default(''),
+  BACKUP_S3_PATH_STYLE: z.string().default('false'),
+  BACKUP_RETENTION_DAYS: z.coerce.number().int().positive().default(30),
 });
 
 export type AppEnv = z.infer<typeof envSchema>;

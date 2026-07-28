@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { createDatabaseAction, deleteDatabaseAction } from './database-actions';
+import { DatabaseBackupPanel } from './database-backup-panel';
 
 export function DatabasePanel({
   projectId,
@@ -25,6 +26,7 @@ export function DatabasePanel({
   const [busy, setBusy] = useState<string | null>(null);
   // connection string vừa tạo (chỉ hiện 1 lần)
   const [justCreated, setJustCreated] = useState<ManagedDatabaseDto | null>(null);
+  const [openBackup, setOpenBackup] = useState<string | null>(null);
 
   function add(e: React.FormEvent) {
     e.preventDefault();
@@ -85,33 +87,51 @@ export function DatabasePanel({
           {dbs.map((db) => (
             <div
               key={db.id}
-              className="flex items-center justify-between gap-2 rounded-lg border border-white/[0.06] bg-white/[0.02] p-3 text-sm"
+              className="rounded-lg border border-white/[0.06] bg-white/[0.02]"
             >
-              <div className="min-w-0">
-                <span className="font-medium text-white/85">{db.name}</span>
-                <span
-                  className={`ml-2 rounded px-1.5 py-0.5 text-[10px] ${
-                    db.engine === 'POSTGRES'
-                      ? 'bg-sky-500/15 text-sky-300'
-                      : db.engine === 'MYSQL'
-                        ? 'bg-amber-500/15 text-amber-300'
-                        : 'bg-red-500/15 text-red-300'
-                  }`}
-                >
-                  {db.engine}
-                </span>
-                <span className="ml-2 text-[11px] text-white/40">
-                  env <code className="text-white/60">{db.envKey}</code> · cổng {db.hostPort}
-                </span>
+              <div className="flex items-center justify-between gap-2 p-3 text-sm">
+                <div className="min-w-0">
+                  <span className="font-medium text-white/85">{db.name}</span>
+                  <span
+                    className={`ml-2 rounded px-1.5 py-0.5 text-[10px] ${
+                      db.engine === 'POSTGRES'
+                        ? 'bg-sky-500/15 text-sky-300'
+                        : db.engine === 'MYSQL'
+                          ? 'bg-amber-500/15 text-amber-300'
+                          : 'bg-red-500/15 text-red-300'
+                    }`}
+                  >
+                    {db.engine}
+                  </span>
+                  <span className="ml-2 text-[11px] text-white/40">
+                    env <code className="text-white/60">{db.envKey}</code> · cổng {db.hostPort}
+                  </span>
+                </div>
+                <div className="flex shrink-0 items-center gap-3">
+                  {(db.engine === 'POSTGRES' || db.engine === 'MYSQL') && (
+                    <button
+                      type="button"
+                      onClick={() => setOpenBackup((o) => (o === db.id ? null : db.id))}
+                      className="text-xs text-emerald-300 hover:underline"
+                    >
+                      {openBackup === db.id ? 'Ẩn sao lưu' : '🗄 Sao lưu'}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => del(db)}
+                    disabled={pending && busy === db.id}
+                    className="text-xs text-red-400 hover:underline disabled:opacity-40"
+                  >
+                    {busy === db.id ? '…' : 'Xoá'}
+                  </button>
+                </div>
               </div>
-              <button
-                type="button"
-                onClick={() => del(db)}
-                disabled={pending && busy === db.id}
-                className="shrink-0 text-xs text-red-400 hover:underline disabled:opacity-40"
-              >
-                {busy === db.id ? '…' : 'Xoá'}
-              </button>
+              {openBackup === db.id && (
+                <div className="border-t border-white/[0.06] p-3">
+                  <DatabaseBackupPanel projectId={projectId} dbId={db.id} dbName={db.name} />
+                </div>
+              )}
             </div>
           ))}
         </div>

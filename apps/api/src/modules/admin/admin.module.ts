@@ -2,13 +2,14 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { DeploymentsModule } from '../deployments/deployments.module';
 import { BillingModule } from '../billing/billing.module';
+import { BackupModule as DbBackupModule } from '../backup/backup.module';
 import { BackupModule } from '../../infra/backup/backup.module';
 import { AdminController } from './admin.controller';
 import { AdminGuard } from './admin.guard';
 import { AdminService } from './admin.service';
 
 @Module({
-  imports: [AuthModule, DeploymentsModule, BillingModule, BackupModule],
+  imports: [AuthModule, DeploymentsModule, BillingModule, BackupModule, DbBackupModule],
   controllers: [AdminController],
   providers: [AdminGuard, AdminService],
 })
