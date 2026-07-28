@@ -22,6 +22,7 @@ const CATEGORY: Record<string, string> = {
   signup_enabled: 'Tài khoản & bảo mật',
   signup_require_code: 'Tài khoản & bảo mật',
   auth_rate_limit: 'Tài khoản & bảo mật',
+  env_reveal_secrets: 'Tài khoản & bảo mật',
   two_factor_auth: 'Tài khoản & bảo mật',
   session_management: 'Tài khoản & bảo mật',
   audit_log: 'Tài khoản & bảo mật',

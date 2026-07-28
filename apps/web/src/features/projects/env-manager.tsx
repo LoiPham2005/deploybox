@@ -8,6 +8,7 @@ import { deleteEnvAction, upsertEnvAction } from './actions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 
 const KEY_RE = /^[A-Z_][A-Z0-9_]*$/;
 const SECRET_RE = /SECRET|TOKEN|PASSWORD|PASSWD|PRIVATE|CREDENTIAL|API_?KEY|_KEY$|DATABASE_URL|DSN/i;
@@ -68,6 +69,7 @@ export function EnvManager({
   const [bulkTarget, setBulkTarget] = useState<EnvTarget>('RUNTIME');
   const [dragOver, setDragOver] = useState(false);
   const [importing, setImporting] = useState(false);
+  const { confirm, dialog } = useConfirm();
 
   const parsed = useMemo(() => parseEnv(bulkText), [bulkText]);
   const validVars = parsed.filter((p) => p.valid);
@@ -127,10 +129,11 @@ export function EnvManager({
   }
 
   /** Đổ TẤT CẢ biến hiện tại về dạng .env trong textarea để sửa hàng loạt.
-   * Secret không lộ giá trị → để dạng comment, giữ nguyên khi lưu (upsert là merge). */
+   * Secret bị ẩn → để dạng comment (giữ nguyên khi "Gộp"). Nếu admin đã bật
+   * "hiện secret" (value có sẵn) thì điền giá trị thật để "Thay thế toàn bộ" an toàn. */
   function editAll() {
     const lines = vars.map((v) =>
-      v.isSecret
+      v.isSecret && !v.value
         ? `# ${v.key}=  (secret — giữ nguyên; bỏ # và điền giá trị nếu muốn đổi)`
         : `${v.key}=${v.value}`,
     );
@@ -176,8 +179,47 @@ export function EnvManager({
     }
   }
 
+  /** Thay thế TOÀN BỘ: xoá mọi biến cũ không có trong bộ vừa dán, set đúng bộ mới. */
+  async function onReplaceAll() {
+    if (validVars.length === 0) return;
+    const removed = vars.filter((cur) => !validVars.some((n) => n.key === cur.key));
+    const ok = await confirm({
+      title: 'Thay thế toàn bộ biến môi trường?',
+      message:
+        `Sẽ set đúng ${validVars.length} biến vừa dán và XOÁ ${removed.length} biến cũ không có trong đó` +
+        (removed.length
+          ? ` (${removed.slice(0, 8).map((v) => v.key).join(', ')}${removed.length > 8 ? '…' : ''})`
+          : '') +
+        '.\n\n⚠️ Secret không nằm trong nội dung dán sẽ bị xoá — hãy dán ĐẦY ĐỦ (gồm cả giá trị secret thật).',
+      confirmText: `Thay thế (xoá ${removed.length})`,
+      danger: true,
+    });
+    if (!ok) return;
+    setImporting(true);
+    setError(null);
+    const res = await upsertEnvAction(
+      projectId,
+      validVars.map((v) => ({
+        key: v.key,
+        value: v.value,
+        isSecret: v.isSecret,
+        target: bulkTarget,
+      })),
+      true, // replaceAll
+    );
+    setImporting(false);
+    if (res.ok) {
+      setBulkText('');
+      setBulkOpen(false);
+      router.refresh();
+    } else {
+      setError(res.error);
+    }
+  }
+
   return (
     <div className="space-y-3">
+      {dialog}
       {vars.length === 0 ? (
         <p className="text-sm text-white/40">Chưa có biến môi trường.</p>
       ) : (
@@ -221,7 +263,12 @@ export function EnvManager({
                     {/* value thu gọn — cắt ngắn, secret thì ẩn */}
                     {!isEditing && (
                       <span className="max-w-[120px] truncate sm:max-w-[200px]">
-                        {v.isSecret ? '••••• (secret)' : v.value || '(rỗng)'}
+                        {v.isSecret && !v.value
+                          ? '••••• (secret)'
+                          : v.value || '(rỗng)'}
+                        {v.isSecret && v.value && (
+                          <span className="ml-1 text-[9px] text-amber-400/70">🔓</span>
+                        )}
                       </span>
                     )}
                     <span className="rounded bg-white/10 px-1.5">{v.target}</span>
@@ -400,9 +447,18 @@ export function EnvManager({
             </div>
           )}
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button type="button" onClick={onImport} disabled={importing || validVars.length === 0}>
-              {importing ? 'Đang import…' : `Import ${validVars.length} biến`}
+              {importing ? 'Đang xử lý…' : `Gộp ${validVars.length} biến`}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={onReplaceAll}
+              disabled={importing || validVars.length === 0}
+              className="border border-red-500/30 text-red-300 hover:bg-red-500/10"
+            >
+              Thay thế toàn bộ
             </Button>
             <button
               type="button"
@@ -412,6 +468,10 @@ export function EnvManager({
               Xóa nội dung
             </button>
           </div>
+          <p className="text-[11px] text-white/30">
+            <b>Gộp</b>: thêm/ghi đè các biến đã dán, giữ biến khác.{' '}
+            <b className="text-red-300/80">Thay thế toàn bộ</b>: set đúng bộ vừa dán, xoá hết biến còn lại.
+          </p>
         </div>
       )}
 

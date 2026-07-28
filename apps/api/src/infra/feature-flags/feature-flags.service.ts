@@ -115,6 +115,13 @@ export const KNOWN_FLAGS: {
     default: true,
   },
   {
+    key: 'env_reveal_secrets',
+    label: 'Hiện giá trị secret (env)',
+    description:
+      'Bật: TÀI KHOẢN ADMIN xem được giá trị thật của biến môi trường secret (để kiểm tra key). Tắt: ẩn hết (••••). Chỉ bật tạm khi cần rồi tắt lại — mặc định TẮT.',
+    default: false,
+  },
+  {
     key: 'oom_protect_apps',
     label: 'Bảo vệ app khỏi OOM khi build',
     description:

@@ -33,6 +33,8 @@ export const upsertEnvSchema = z.object({
       target: z.enum(['BUILD', 'RUNTIME', 'BOTH']).default('RUNTIME'),
     }),
   ),
+  // true = thay thế toàn bộ: xoá mọi biến cũ KHÔNG có trong `vars` (đồng bộ đúng bộ này).
+  replaceAll: z.boolean().optional(),
 });
 export type UpsertEnvDto = z.infer<typeof upsertEnvSchema>;
 

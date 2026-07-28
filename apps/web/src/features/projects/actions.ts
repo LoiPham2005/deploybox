@@ -283,8 +283,9 @@ export async function diagnoseDeploymentAction(
 export async function upsertEnvAction(
   projectId: string,
   vars: UpsertEnvDto['vars'],
+  replaceAll = false,
 ): Promise<ActionResult> {
-  const parsed = upsertEnvSchema.safeParse({ vars });
+  const parsed = upsertEnvSchema.safeParse({ vars, replaceAll });
   if (!parsed.success) return { ok: false, error: 'Dữ liệu env không hợp lệ' };
   try {
     await serverApi(`/projects/${projectId}/env`, {
