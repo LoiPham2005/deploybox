@@ -142,6 +142,22 @@ export function EnvManager({
     setError(null);
   }
 
+  /** Xoá TẤT CẢ biến môi trường (replaceAll với danh sách rỗng). */
+  async function deleteAll() {
+    if (vars.length === 0) return;
+    const ok = await confirm({
+      title: 'Xoá TẤT CẢ biến môi trường?',
+      message: `Sẽ xoá sạch ${vars.length} biến (kể cả secret). Không hoàn tác được — nhớ backup .env trước nếu cần.`,
+      confirmText: `Xoá hết (${vars.length})`,
+      danger: true,
+    });
+    if (!ok) return;
+    setError(null);
+    const res = await upsertEnvAction(projectId, [], true);
+    if (res.ok) router.refresh();
+    else setError(res.error);
+  }
+
   async function readFiles(files: FileList | File[]) {
     const texts: string[] = [];
     for (const f of Array.from(files)) {
@@ -234,14 +250,26 @@ export function EnvManager({
               {listOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
               {vars.length} biến môi trường
             </button>
-            <button
-              type="button"
-              onClick={editAll}
-              className="flex items-center gap-1 rounded-md border border-white/[0.06] px-2 py-1 text-xs text-indigo-400 hover:border-indigo-500/40 hover:text-indigo-300"
-              title="Đổ tất cả về dạng .env để sửa hàng loạt"
-            >
-              <Pencil size={12} /> Sửa tất cả (.env)
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={editAll}
+                className="flex items-center gap-1 rounded-md border border-white/[0.06] px-2 py-1 text-xs text-indigo-400 hover:border-indigo-500/40 hover:text-indigo-300"
+                title="Đổ tất cả về dạng .env để sửa hàng loạt"
+              >
+                <Pencil size={12} /> Sửa tất cả (.env)
+              </button>
+              {vars.length > 0 && (
+                <button
+                  type="button"
+                  onClick={deleteAll}
+                  className="flex items-center gap-1 rounded-md border border-white/[0.06] px-2 py-1 text-xs text-red-400 hover:border-red-500/40 hover:text-red-300"
+                  title="Xoá sạch tất cả biến môi trường"
+                >
+                  <X size={12} /> Xoá tất cả
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Danh sách — cuộn được, chỉ hiện khi mở */}
