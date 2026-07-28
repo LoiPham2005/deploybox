@@ -3,6 +3,7 @@ import { access, mkdir, rm, writeFile } from 'fs/promises';
 import { join } from 'path';
 import { runStreaming, type LogFn } from '../process.util';
 import { DockerService } from '../docker/docker.service';
+import { writeSecretFiles, type SecretFileInput } from './secret-files.util';
 
 export interface BackendBuildInput {
   deploymentId: string;
@@ -20,6 +21,8 @@ export interface BackendBuildInput {
   signal?: AbortSignal;
   /** Repo không có Dockerfile → gọi hook này (AI sinh); trả null = chịu, báo lỗi như cũ. */
   onMissingDockerfile?: (appDir: string) => Promise<string | null>;
+  /** Tệp bí mật ghi vào build context trước docker build (COPY vào image). */
+  secretFiles?: SecretFileInput[];
 }
 
 /**
@@ -65,6 +68,9 @@ export class DockerBackendEngine {
         );
       }
     }
+
+    // Ghi tệp bí mật vào build context TRƯỚC docker build (COPY . . sẽ gói vào image).
+    await writeSecretFiles(appDir, input.secretFiles, log);
 
     const image = `deploybox-${input.slug}:${input.deploymentId.slice(-8)}`;
     await this.docker.buildImage(image, appDir, log, input.signal);

@@ -56,6 +56,10 @@ export const serverGet = {
   deployment: (id: string) => serverApi<DeploymentView>(`/deployments/${id}`),
   env: (projectId: string) =>
     serverApi<EnvVarDto[]>(`/projects/${projectId}/env`),
+  secretFiles: (projectId: string) =>
+    serverApi<import('@deploybox/shared').SecretFileDto[]>(
+      `/projects/${projectId}/secret-files`,
+    ),
   members: (teamId: string) =>
     serverApi<TeamMemberDto[]>(`/teams/${teamId}/members`),
   tokens: () => serverApi<ApiTokenDto[]>('/auth/tokens'),

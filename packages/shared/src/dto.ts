@@ -482,6 +482,13 @@ export interface EnvVarDto {
   target: EnvTarget;
 }
 
+/** Tệp bí mật (service account, cert…) — không trả nội dung, chỉ path + kích thước. */
+export interface SecretFileDto {
+  path: string;
+  size: number; // số byte
+  updatedAt: string;
+}
+
 export interface WebhookEventDto {
   id: string;
   source: string;

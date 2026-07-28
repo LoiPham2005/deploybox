@@ -281,6 +281,7 @@ model Project {
   deployments    Deployment[]
   domains        Domain[]
   envVars        EnvVar[]
+  secretFiles    SecretFile[]
   webhookEvents  WebhookEvent[]
   members        ProjectMember[]
   cronJobs       CronJob[]
@@ -396,6 +397,20 @@ model EnvVar {
   target    EnvTarget @default(RUNTIME)
 
   @@unique([projectId, key])
+}
+
+// Tệp bí mật: file không đẩy git được (service account JSON, cert…). Lưu mã hoá,
+// khi deploy ghi vào <appDir>/<path> (sau clone) để app đọc.
+model SecretFile {
+  id        String   @id @default(cuid())
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId String
+  path      String // đường dẫn tương đối trong app, vd storage/app/google-service-account.json
+  content   String // nội dung file (mã hoá at-rest)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, path])
 }
 
 model WebhookEvent {

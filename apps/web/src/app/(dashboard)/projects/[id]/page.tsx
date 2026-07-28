@@ -9,6 +9,7 @@ import { Tabs, type TabItem } from '@/components/ui/tabs';
 import { DeleteProjectButton } from '@/features/projects/delete-project-button';
 import { DeployButton } from '@/features/deployments/deploy-button';
 import { EnvManager } from '@/features/projects/env-manager';
+import { SecretFilesManager } from '@/features/projects/secret-files-manager';
 import { CronPanel } from '@/features/projects/cron-panel';
 import { DatabasePanel } from '@/features/projects/database-panel';
 import { PreviewPanel } from '@/features/projects/preview-panel';
@@ -38,7 +39,7 @@ export default async function ProjectDetailPage({
     notFound();
   }
 
-  const [me, env, webhookEvents, cron, databases, previews, metricsHistory, uptime] =
+  const [me, env, webhookEvents, cron, databases, previews, metricsHistory, uptime, secretFiles] =
     await Promise.all([
       serverGet.me().catch(() => null),
       serverGet.env(project.id).catch(() => []),
@@ -58,6 +59,9 @@ export default async function ProjectDetailPage({
       project.type === 'BACKEND'
         ? serverGet.uptime(project.id).catch(() => null)
         : Promise.resolve(null),
+      project.type === 'BACKEND'
+        ? serverGet.secretFiles(project.id).catch(() => [])
+        : Promise.resolve([]),
     ]);
 
   const userRole = me?.teams.find((t) => t.id === project.teamId)?.role ?? 'MEMBER';
@@ -208,6 +212,21 @@ export default async function ProjectDetailPage({
         </h2>
         <EnvManager projectId={project.id} vars={env} />
       </Card>
+
+      {project.type === 'BACKEND' && (
+        <Card>
+          <h2 className="mb-1 text-sm font-semibold text-white/70">Tệp bí mật</h2>
+          <p className="mb-3 text-xs text-white/40">
+            File không đẩy git được (service account JSON, cert…). Upload ở đây →
+            khi deploy tự ghi vào app.
+          </p>
+          <SecretFilesManager
+            projectId={project.id}
+            rootDir={project.rootDir}
+            files={secretFiles}
+          />
+        </Card>
+      )}
 
       <Card>
         <h2 className="mb-3 text-sm font-semibold text-white/70">

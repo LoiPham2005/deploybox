@@ -38,6 +38,19 @@ export const upsertEnvSchema = z.object({
 });
 export type UpsertEnvDto = z.infer<typeof upsertEnvSchema>;
 
+/** Tải/ghi 1 tệp bí mật vào project (ghi vào appDir khi deploy). */
+export const upsertSecretFileSchema = z.object({
+  // Đường dẫn tương đối trong app (không '/' đầu, không '..').
+  path: z
+    .string()
+    .min(1)
+    .max(300)
+    .regex(/^[^/\\]/, 'Đường dẫn phải tương đối (không bắt đầu bằng /)')
+    .refine((p) => !p.split(/[/\\]/).includes('..'), 'Không được chứa ".."'),
+  content: z.string().max(512 * 1024, 'File tối đa 512KB'),
+});
+export type UpsertSecretFileDto = z.infer<typeof upsertSecretFileSchema>;
+
 export const createDatabaseSchema = z.object({
   engine: z.enum(['POSTGRES', 'REDIS']),
   name: z.string().min(1).max(60),

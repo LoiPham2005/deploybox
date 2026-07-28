@@ -19,6 +19,7 @@ import { LogBroadcastService } from '../../infra/log-broadcast/log-broadcast.ser
 import { CryptoService } from '../../common/crypto/crypto.service';
 import { SshService } from '../../infra/ssh/ssh.service';
 import { EnvService } from '../env/env.service';
+import { SecretFileService } from '../env/secret-file.service';
 import { buildGitAuthUrl } from '../../common/git-auth.util';
 import { maskSecrets, opsTip } from '../git/secret-scan.util';
 import { lintEnvValues } from './env-lint.util';
@@ -42,6 +43,7 @@ export class BuildRunnerService {
     private readonly caddy: CaddyService,
     private readonly cleanup: CleanupService,
     private readonly env: EnvService,
+    private readonly secretFiles: SecretFileService,
     private readonly broadcast: LogBroadcastService,
     private readonly crypto: CryptoService,
     private readonly ssh: SshService,
@@ -335,6 +337,7 @@ export class BuildRunnerService {
             signal: controller.signal,
             memoryMb: project.memoryMb,
             cpuLimit: project.cpuLimit,
+            secretFiles: await this.secretFiles.resolveForDeploy(project.id),
           },
           log,
         );
@@ -360,6 +363,7 @@ export class BuildRunnerService {
             postDeployCommand: hooksEnabled ? project.postDeployCommand : null,
             dataDir,
             signal: controller.signal,
+            secretFiles: await this.secretFiles.resolveForDeploy(project.id),
             // 🤖 Repo không có Dockerfile → AI sinh (flag ai_dockerfile_gen)
             onMissingDockerfile: this.flags.aiEnabled('ai_dockerfile_gen')
               ? async (appDir) => {

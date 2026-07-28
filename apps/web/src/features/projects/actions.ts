@@ -315,6 +315,40 @@ export async function deleteEnvAction(
   }
 }
 
+/** Tải/ghi 1 tệp bí mật (service account, cert…). */
+export async function upsertSecretFileAction(
+  projectId: string,
+  path: string,
+  content: string,
+): Promise<ActionResult> {
+  try {
+    await serverApi(`/projects/${projectId}/secret-files`, {
+      method: 'PUT',
+      body: JSON.stringify({ path, content }),
+    });
+    revalidatePath(`/projects/${projectId}`);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Lưu tệp thất bại' };
+  }
+}
+
+export async function deleteSecretFileAction(
+  projectId: string,
+  path: string,
+): Promise<ActionResult> {
+  try {
+    await serverApi(
+      `/projects/${projectId}/secret-files?path=${encodeURIComponent(path)}`,
+      { method: 'DELETE' },
+    );
+    revalidatePath(`/projects/${projectId}`);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Xóa tệp thất bại' };
+  }
+}
+
 export async function addDomainAction(
   projectId: string,
   hostname: string,

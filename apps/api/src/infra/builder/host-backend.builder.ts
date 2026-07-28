@@ -1,6 +1,7 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { spawn } from 'child_process';
 import { access, mkdir, readFile, rm, rmdir, writeFile } from 'fs/promises';
+import { writeSecretFiles, type SecretFileInput } from './secret-files.util';
 import { openSync, closeSync } from 'fs';
 import { join } from 'path';
 import type { BuildLogger } from './host-static.builder';
@@ -27,6 +28,8 @@ export interface HostBackendInput {
   memoryMb?: number;
   /** Giới hạn CPU (số core, vd 0.5) — best-effort, máy không hỗ trợ thì bỏ qua. */
   cpuLimit?: number;
+  /** Tệp bí mật ghi vào appDir sau clone (service account, cert…). */
+  secretFiles?: SecretFileInput[];
 }
 
 /**
@@ -67,6 +70,8 @@ export class HostBackendBuilder {
     await this.exec('git', ['clone', '--depth', '1', '--branch', input.branch, input.repoUrl, appDir], input.dataDir, log, undefined, input.signal);
 
     const workDir = join(appDir, input.rootDir || '.');
+    // Ghi tệp bí mật (không đẩy git được) vào app trước khi build/chạy.
+    await writeSecretFiles(workDir, input.secretFiles, log);
     // Env lúc BUILD: production (Next.js/Vite bắt buộc, chạy ở development sẽ lẫn runtime dev/prod
     // → React null → useContext lỗi). devDeps vẫn được cài nhờ `--include=dev` bên dưới (flag này
     // override NODE_ENV=production, vẫn cài rimraf/nest-cli/tsc...).
