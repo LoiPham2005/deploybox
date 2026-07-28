@@ -8,7 +8,7 @@ type Result<T = undefined> = { ok: true; data?: T } | { ok: false; error: string
 
 export async function createDatabaseAction(
   projectId: string,
-  input: { engine: 'POSTGRES' | 'REDIS'; name: string; envKey?: string },
+  input: { engine: 'POSTGRES' | 'MYSQL' | 'REDIS'; name: string; envKey?: string },
 ): Promise<Result<ManagedDatabaseDto>> {
   try {
     const db = await serverApi<ManagedDatabaseDto>(

@@ -108,6 +108,7 @@ enum ServerStatus {
 
 enum DbEngine {
   POSTGRES
+  MYSQL
   REDIS
 }
 

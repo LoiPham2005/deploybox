@@ -14,7 +14,14 @@ import { capture } from '../../infra/process.util';
 
 const IMAGE: Record<string, string> = {
   POSTGRES: 'postgres:16-alpine',
+  MYSQL: 'mariadb:11', // MySQL-compatible (Laravel driver mysql chạy tốt), nhẹ hơn mysql:8
   REDIS: 'redis:7-alpine',
+};
+// MariaDB cần nhiều RAM hơn postgres-alpine/redis một chút.
+const MEMORY: Record<string, string> = {
+  POSTGRES: '256m',
+  MYSQL: '384m',
+  REDIS: '256m',
 };
 const PORT_BASE = 6000;
 const PORT_MAX = 6999;
@@ -86,26 +93,39 @@ export class DatabaseService {
       'run', '-d',
       '--name', containerName,
       '--restart', 'unless-stopped',
-      '--memory', '256m',
+      '--memory', MEMORY[engine] ?? '256m',
     ];
-    const args =
-      engine === 'POSTGRES'
-        ? [
-            ...common,
-            '-p', `${port}:5432`,
-            '-e', `POSTGRES_USER=${username}`,
-            '-e', `POSTGRES_PASSWORD=${password}`,
-            '-e', `POSTGRES_DB=${dbName}`,
-            '-v', `${containerName}-data:/var/lib/postgresql/data`,
-            image,
-          ]
-        : [
-            ...common,
-            '-p', `${port}:6379`,
-            '-v', `${containerName}-data:/data`,
-            image,
-            'redis-server', '--requirepass', password,
-          ];
+    let args: string[];
+    if (engine === 'POSTGRES') {
+      args = [
+        ...common,
+        '-p', `${port}:5432`,
+        '-e', `POSTGRES_USER=${username}`,
+        '-e', `POSTGRES_PASSWORD=${password}`,
+        '-e', `POSTGRES_DB=${dbName}`,
+        '-v', `${containerName}-data:/var/lib/postgresql/data`,
+        image,
+      ];
+    } else if (engine === 'MYSQL') {
+      args = [
+        ...common,
+        '-p', `${port}:3306`,
+        '-e', `MARIADB_USER=${username}`,
+        '-e', `MARIADB_PASSWORD=${password}`,
+        '-e', `MARIADB_DATABASE=${dbName}`,
+        '-e', `MARIADB_ROOT_PASSWORD=${password}`,
+        '-v', `${containerName}-data:/var/lib/mysql`,
+        image,
+      ];
+    } else {
+      args = [
+        ...common,
+        '-p', `${port}:6379`,
+        '-v', `${containerName}-data:/data`,
+        image,
+        'redis-server', '--requirepass', password,
+      ];
+    }
 
     const { code, stderr } = await capture('docker', args);
     if (code !== 0) {
@@ -120,11 +140,13 @@ export class DatabaseService {
     const host = (project as { useDocker?: boolean }).useDocker === false
       ? 'localhost'
       : 'host.docker.internal';
-    const envKey = dto.envKey || (engine === 'POSTGRES' ? 'DATABASE_URL' : 'REDIS_URL');
+    const envKey = dto.envKey || (engine === 'REDIS' ? 'REDIS_URL' : 'DATABASE_URL');
     const conn =
       engine === 'POSTGRES'
         ? `postgresql://${username}:${password}@${host}:${port}/${dbName}`
-        : `redis://:${password}@${host}:${port}`;
+        : engine === 'MYSQL'
+          ? `mysql://${username}:${password}@${host}:${port}/${dbName}`
+          : `redis://:${password}@${host}:${port}`;
 
     // Bơm connection string vào env (mã hoá, dùng cả build + runtime cho migrate)
     await this.prisma.envVar.upsert({
@@ -184,7 +206,7 @@ export class DatabaseService {
   }): ManagedDatabaseDto {
     return {
       id: d.id,
-      engine: d.engine as 'POSTGRES' | 'REDIS',
+      engine: d.engine as 'POSTGRES' | 'MYSQL' | 'REDIS',
       name: d.name,
       envKey: d.envKey,
       hostPort: d.hostPort,

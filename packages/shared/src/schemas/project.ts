@@ -52,7 +52,7 @@ export const upsertSecretFileSchema = z.object({
 export type UpsertSecretFileDto = z.infer<typeof upsertSecretFileSchema>;
 
 export const createDatabaseSchema = z.object({
-  engine: z.enum(['POSTGRES', 'REDIS']),
+  engine: z.enum(['POSTGRES', 'MYSQL', 'REDIS']),
   name: z.string().min(1).max(60),
   envKey: z
     .string()

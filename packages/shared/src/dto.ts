@@ -423,7 +423,7 @@ export interface ProjectDetailDto {
 /** Database 1-click gắn với project. */
 export interface ManagedDatabaseDto {
   id: string;
-  engine: 'POSTGRES' | 'REDIS';
+  engine: 'POSTGRES' | 'MYSQL' | 'REDIS';
   name: string;
   envKey: string; // biến env đã bơm (DATABASE_URL / REDIS_URL)
   hostPort: number;

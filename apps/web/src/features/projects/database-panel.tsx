@@ -17,7 +17,7 @@ export function DatabasePanel({
 }) {
   const router = useRouter();
   const [dbs, setDbs] = useState<ManagedDatabaseDto[]>(initial);
-  const [engine, setEngine] = useState<'POSTGRES' | 'REDIS'>('POSTGRES');
+  const [engine, setEngine] = useState<'POSTGRES' | 'MYSQL' | 'REDIS'>('POSTGRES');
   const [name, setName] = useState('');
   const [envKey, setEnvKey] = useState('');
   const [err, setErr] = useState<string | null>(null);
@@ -61,7 +61,7 @@ export function DatabasePanel({
   return (
     <div className="space-y-4">
       <p className="text-xs text-white/40">
-        Tạo Postgres/Redis bằng 1 nút — connection string tự bơm vào biến env của project. Nhớ{' '}
+        Tạo Postgres/MySQL/Redis bằng 1 nút — connection string tự bơm vào biến env của project. Nhớ{' '}
         <b>Deploy lại</b> để app nhận env mới.
       </p>
 
@@ -93,7 +93,9 @@ export function DatabasePanel({
                   className={`ml-2 rounded px-1.5 py-0.5 text-[10px] ${
                     db.engine === 'POSTGRES'
                       ? 'bg-sky-500/15 text-sky-300'
-                      : 'bg-red-500/15 text-red-300'
+                      : db.engine === 'MYSQL'
+                        ? 'bg-amber-500/15 text-amber-300'
+                        : 'bg-red-500/15 text-red-300'
                   }`}
                 >
                   {db.engine}
@@ -123,10 +125,11 @@ export function DatabasePanel({
             <select
               id="dbEngine"
               value={engine}
-              onChange={(e) => setEngine(e.target.value as 'POSTGRES' | 'REDIS')}
+              onChange={(e) => setEngine(e.target.value as 'POSTGRES' | 'MYSQL' | 'REDIS')}
               className="w-full rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-2 text-sm text-white/85 outline-none focus:border-sky-400/50"
             >
               <option value="POSTGRES">PostgreSQL 16</option>
+              <option value="MYSQL">MySQL (MariaDB 11)</option>
               <option value="REDIS">Redis 7</option>
             </select>
           </div>
@@ -146,7 +149,7 @@ export function DatabasePanel({
               id="dbEnvKey"
               value={envKey}
               onChange={(e) => setEnvKey(e.target.value.toUpperCase())}
-              placeholder={engine === 'POSTGRES' ? 'DATABASE_URL' : 'REDIS_URL'}
+              placeholder={engine === 'REDIS' ? 'REDIS_URL' : 'DATABASE_URL'}
             />
           </div>
         </div>
