@@ -2,12 +2,37 @@
 
 import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
+import { ExternalLink } from 'lucide-react';
 import type { ProjectDetailDto, UpdateProjectDto } from '@deploybox/shared';
 import { updateProjectAction, fetchProjectBranchesAction, type RemoteBranch } from './actions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
+
+const TOKEN_GUIDES = [
+  {
+    id: 'github',
+    emoji: '🐙',
+    name: 'GitHub',
+    url: 'https://github.com/settings/personal-access-tokens/new',
+    scope: 'Fine-grained → Repository access → Contents: Read',
+  },
+  {
+    id: 'gitlab',
+    emoji: '🦊',
+    name: 'GitLab',
+    url: 'https://gitlab.com/-/user_settings/personal_access_tokens',
+    scope: 'Scope: read_repository',
+  },
+  {
+    id: 'bitbucket',
+    emoji: '🪣',
+    name: 'Bitbucket',
+    url: 'https://bitbucket.org/account/settings/app-passwords/',
+    scope: 'App password → Repositories: Read',
+  },
+] as const;
 
 /** "2 ngày trước"… từ ISO date */
 function relativeVi(iso: string | null): string {
@@ -161,6 +186,35 @@ export function EditProjectForm({ project }: { project: ProjectDetailDto }) {
         {project.hasGitToken && (
           <p className="mt-1 text-xs text-white/30">Nhập khoảng trắng rồi xóa để clear token.</p>
         )}
+
+        {/* Hướng dẫn lấy token — bấm mở thẳng trang tạo của từng provider */}
+        <div className="mt-2.5">
+          <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-white/25">
+            Chưa có token? Bấm để lấy:
+          </p>
+          <div className="grid gap-1.5 sm:grid-cols-3">
+            {TOKEN_GUIDES.map((g) => (
+              <a
+                key={g.id}
+                href={g.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group flex items-start gap-2 rounded-lg border border-white/[0.06] bg-white/[0.02] px-2.5 py-2 transition hover:border-white/20 hover:bg-white/[0.04]"
+              >
+                <span className="mt-0.5 shrink-0 text-sm">{g.emoji}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-1 text-xs font-medium text-white/70 group-hover:text-white">
+                    {g.name}
+                    <ExternalLink size={10} className="text-white/30 group-hover:text-white/50" />
+                  </span>
+                  <span className="mt-0.5 block text-[10px] leading-tight text-white/30">
+                    {g.scope}
+                  </span>
+                </span>
+              </a>
+            ))}
+          </div>
+        </div>
       </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
